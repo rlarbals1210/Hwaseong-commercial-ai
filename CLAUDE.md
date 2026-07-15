@@ -54,7 +54,7 @@
 | 백엔드 | FastAPI + Uvicorn (포트 8000) |
 | ML | LightGBM (이진분류: 성장/폐업 예측) |
 | DB | PostgreSQL + SQLAlchemy |
-| 지도 | Kakao Maps JS SDK (CDN) |
+| 지도 | Naver Maps JS API v3 (CDN, NCP 다이나믹 맵) |
 | 시각화 | matplotlib (choropleth 그리드, 4분면 매트릭스, 파이프라인 다이어그램) |
 | AI 텍스트 | 없음 — LightGBM 예측값으로 대체 |
 
@@ -82,16 +82,17 @@ npm run dev
 **루트 `.env`**
 ```
 DATABASE_URL=postgresql://postgres:password@localhost:5432/hwaseong_db
-KAKAO_REST_API_KEY=
 RAW_DATA_DIR=data/raw            ← 팀원별 원본 데이터 위치가 다를 수 있어 경로를 .env로 분리 (데이터 수령 후 적용 예정)
 PROCESSED_DATA_DIR=data/processed
 ```
 
 **`frontend/.env`**
 ```
-VITE_KAKAO_APP_KEY=       ← Kakao Maps JS SDK 키
+VITE_NAVER_MAP_CLIENT_ID=       ← NCP Maps(Dynamic Map) Client ID
 VITE_API_BASE=http://localhost:8000
 ```
+
+네이버 지도 API 키 보관 위치·발급 방법·흔한 실수는 [README.md](README.md) 참고.
 
 ---
 
@@ -125,7 +126,7 @@ hwaseong-commercial-ai/
 │       ├── main.jsx
 │       └── pages/
 │           ├── DashboardPage.jsx   # 조기경보 Top 10 카드
-│           ├── MapPage.jsx         # Kakao Maps choropleth
+│           ├── MapPage.jsx         # Naver Maps choropleth
 │           ├── PolicyPage.jsx      # 4분면 정책자금 매트릭스
 │           └── ConsultPage.jsx     # 창업 상담 조회
 │

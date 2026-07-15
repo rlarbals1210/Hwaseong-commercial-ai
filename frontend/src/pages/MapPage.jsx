@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { API } from "../lib/api";
 
-const KAKAO_KEY = import.meta.env.VITE_KAKAO_APP_KEY || "";
+const NAVER_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "";
 
-function loadKakaoMap(callback) {
-  if (window.kakao?.maps) { callback(); return; }
+function loadNaverMap(callback) {
+  if (window.naver?.maps) { callback(); return; }
   const script = document.createElement("script");
-  script.src = `//dapi.kakao.com/v2/maps/sdk.js?appkey=${KAKAO_KEY}&autoload=false`;
-  script.onload = () => window.kakao.maps.load(callback);
+  script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_CLIENT_ID}`;
+  script.onload = callback;
   document.head.appendChild(script);
 }
 
@@ -41,25 +41,24 @@ export default function MapPage() {
         : feat.geometry.coordinates;
 
       coords.forEach((rings) => {
-        const path = rings[0].map(([lng, lat]) => new window.kakao.maps.LatLng(lat, lng));
-        const polygon = new window.kakao.maps.Polygon({
-          path, fillColor: color, fillOpacity: 0.5,
+        const path = rings[0].map(([lng, lat]) => new window.naver.maps.LatLng(lat, lng));
+        const polygon = new window.naver.maps.Polygon({
+          map, paths: [path], fillColor: color, fillOpacity: 0.5,
           strokeColor: "#fff", strokeWeight: 1,
         });
-        polygon.setMap(map);
 
-        window.kakao.maps.event.addListener(polygon, "mouseover", (e) => {
+        window.naver.maps.Event.addListener(polygon, "mouseover", (e) => {
           polygon.setOptions({ fillOpacity: 0.8 });
-          setTooltip({ name, score, color, x: e.clientX, y: e.clientY });
+          setTooltip({ name, score, color, x: e.pointerEvent.clientX, y: e.pointerEvent.clientY });
         });
-        window.kakao.maps.event.addListener(polygon, "mousemove", (e) => {
-          setTooltip((t) => t ? { ...t, x: e.clientX, y: e.clientY } : null);
+        window.naver.maps.Event.addListener(polygon, "mousemove", (e) => {
+          setTooltip((t) => t ? { ...t, x: e.pointerEvent.clientX, y: e.pointerEvent.clientY } : null);
         });
-        window.kakao.maps.event.addListener(polygon, "mouseout", () => {
+        window.naver.maps.Event.addListener(polygon, "mouseout", () => {
           polygon.setOptions({ fillOpacity: 0.5 });
           setTooltip(null);
         });
-        window.kakao.maps.event.addListener(polygon, "click", () => {
+        window.naver.maps.Event.addListener(polygon, "click", () => {
           setSelected(risk ? { name, ...risk } : { name });
         });
 
@@ -69,15 +68,15 @@ export default function MapPage() {
   }, []);
 
   useEffect(() => {
-    if (!KAKAO_KEY || riskData.length === 0) return;
+    if (!NAVER_CLIENT_ID) return;
     const riskMap = Object.fromEntries(riskData.map((r) => [r.dong, r]));
 
-    loadKakaoMap(() => {
+    loadNaverMap(() => {
       if (!mapRef.current) return;
       if (!mapInstanceRef.current) {
-        mapInstanceRef.current = new window.kakao.maps.Map(mapRef.current, {
-          center: new window.kakao.maps.LatLng(37.1997, 126.8312),
-          level: 9,
+        mapInstanceRef.current = new window.naver.maps.Map(mapRef.current, {
+          center: new window.naver.maps.LatLng(37.1997, 126.8312),
+          zoom: 11,
         });
       }
       fetch("/hwaseong_emd.geojson")
@@ -106,10 +105,10 @@ export default function MapPage() {
 
       <div style={{ display: "flex", gap: 16 }}>
         <div ref={mapRef} style={{ flex: 1, height: 580, borderRadius: 12, overflow: "hidden", border: "1px solid #E5E7EB" }}>
-          {!KAKAO_KEY && (
+          {!NAVER_CLIENT_ID && (
             <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "#9CA3AF", flexDirection: "column", gap: 8 }}>
               <span style={{ fontSize: 32 }}>🗺</span>
-              <span style={{ fontSize: 14 }}>frontend/.env에 VITE_KAKAO_APP_KEY를 설정하세요</span>
+              <span style={{ fontSize: 14 }}>frontend/.env에 VITE_NAVER_MAP_CLIENT_ID를 설정하세요</span>
             </div>
           )}
         </div>
