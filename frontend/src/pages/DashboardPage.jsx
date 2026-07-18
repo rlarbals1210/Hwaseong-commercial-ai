@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { API } from "../lib/api";
+import { apiFetch } from "../lib/api";
 
 const RISK_COLOR = { 위험: "#EF4444", 주의: "#F59E0B", 안전: "#10B981" };
 const RISK_BG = { 위험: "#FEF2F2", 주의: "#FFFBEB", 안전: "#F0FDF4" };
@@ -63,7 +63,7 @@ export default function DashboardPage() {
   const [categories, setCategories] = useState([]);
 
   useEffect(() => {
-    fetch(`${API}/api/analysis/categories`)
+    apiFetch(`/api/analysis/categories`)
       .then((r) => r.json())
       .then((d) => setCategories(d.categories || []))
       .catch(() => {});
@@ -73,7 +73,7 @@ export default function DashboardPage() {
     setLoading(true);
     const params = new URLSearchParams({ limit: 10 });
     if (category) params.set("category", category);
-    fetch(`${API}/api/alerts/closure-risk?${params}`)
+    apiFetch(`/api/alerts/closure-risk?${params}`)
       .then((r) => r.json())
       .then(setData)
       .catch(() => setData([]))

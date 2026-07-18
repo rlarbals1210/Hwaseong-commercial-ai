@@ -44,6 +44,31 @@ VITE_NAVER_MAP_CLIENT_ID=
 VITE_API_BASE=http://localhost:8000
 ```
 
+**루트 `.env`에 추가 (인증용)**
+```
+JWT_SECRET_KEY=       ← openssl rand -hex 32 로 각자 생성. 절대 커밋 금지
+JWT_ALGORITHM=HS256
+JWT_EXPIRE_MINUTES=480
+```
+
+## 로그인 계정 — 팀원 필독
+
+로그인 전 "공무원/시민" 선택 화면이 뜬다. 두 로그인 방식은 완전히 다르게 동작한다.
+
+### 공무원 로그인
+- 아이디+비밀번호 방식. **계정은 각 팀원의 로컬 PostgreSQL DB에 저장되는 데이터라 git에 올라가지 않는다** — pull만 받으면 테이블(`officials`)은 생기지만 계정 데이터는 비어있음.
+- 최초 1회 아래 명령으로 직접 계정을 만들어야 함:
+  ```bash
+  python -m backend.scripts.create_official <아이디> <비밀번호> [표시이름]
+  # 예: python -m backend.scripts.create_official admin demo1234 "테스트관리자"
+  ```
+- 배포 서버에도 별도로 최소 1개 계정을 시딩해야 함 (배포 체크리스트에 포함시킬 것).
+
+### 시민(사업자) 로그인
+- 회원가입/비밀번호 없이 **사업자등록번호(10자리)만 입력**하면 로그인됨.
+- 실제 사업자 DB와 대조하는 게 아니라 **국세청 공개 체크섬 알고리즘으로 형식만 검증**함 (`backend/utils/business_number.py`) — 데이터가 읍면동×업종 집계 단위라 개별 사업자 레코드 자체가 없기 때문. 테스트용 유효 번호: `123-45-67891`.
+- 주민등록번호는 배포 URL이 공개되는 특성상 법적 리스크가 있어 절대 사용하지 않음.
+
 ## 네이버 지도 API 키 — 팀원 필독
 
 ### 키 보관 위치

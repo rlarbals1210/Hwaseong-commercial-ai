@@ -65,6 +65,15 @@ class ScoreData(Base):
     업종내_전체동수 = Column(Integer, nullable=True)
 
 
+class Official(Base):
+    __tablename__ = "officials"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    password_hash = Column(String, nullable=False)
+    name = Column(String(50), nullable=True)
+
+
 class RiskIndex(Base):
     __tablename__ = "risk_index"
     __table_args__ = (

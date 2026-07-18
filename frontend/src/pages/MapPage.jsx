@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { API } from "../lib/api";
+import { apiFetch } from "../lib/api";
 
 const NAVER_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "";
 
@@ -20,7 +20,7 @@ export default function MapPage() {
   const [tooltip, setTooltip] = useState(null);
 
   useEffect(() => {
-    fetch(`${API}/api/alerts/vacancy-risk/map`)
+    apiFetch(`/api/alerts/vacancy-risk/map`)
       .then((r) => r.json())
       .then(setRiskData)
       .catch(() => {});

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { API } from "../lib/api";
+import { apiFetch } from "../lib/api";
 
 const GRADE_COLOR = { A: "#10B981", B: "#3B82F6", C: "#F59E0B", D: "#EF4444" };
 const GRADE_LABEL = { A: "매우 우수", B: "우수", C: "보통", D: "주의 필요" };
@@ -46,11 +46,11 @@ export default function ConsultPage() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    fetch(`${API}/api/analysis/dongs`)
+    apiFetch(`/api/analysis/dongs`)
       .then((r) => r.json())
       .then((d) => setDongs(d.dongs || []))
       .catch(() => {});
-    fetch(`${API}/api/analysis/categories`)
+    apiFetch(`/api/analysis/categories`)
       .then((r) => r.json())
       .then((d) => setCategories(d.categories || []))
       .catch(() => {});
@@ -62,7 +62,7 @@ export default function ConsultPage() {
     setLoading(true);
     setResult(null);
     try {
-      const r = await fetch(`${API}/api/consultation/startup?dong=${encodeURIComponent(dong)}&category=${encodeURIComponent(category)}`);
+      const r = await apiFetch(`/api/consultation/startup?dong=${encodeURIComponent(dong)}&category=${encodeURIComponent(category)}`);
       if (!r.ok) throw new Error("데이터 없음");
       setResult(await r.json());
     } catch {

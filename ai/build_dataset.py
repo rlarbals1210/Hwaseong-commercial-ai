@@ -1,79 +1,158 @@
 """
 화성시 소상공인 데이터셋 구축
-소상공인진흥공단 상권분석서비스 데이터(시군구코드=41590)를 받아
-LightGBM 학습용 final_dataset.csv 생성
+
+소상공인시장진흥공단 "상가(상권)정보" 21개 분기 스냅샷(2020년4분기~2025년4분기)을
+화성시(시군구코드=41590)로 필터링하고, 상가업소번호가 분기 간 존재하는지를 비교(diff)해
+행정동×업종×분기 단위 점포수/개업율/폐업율을 산출한다.
+
+원본에는 매출·유동인구 수치가 없다(소상공인진흥공단의 별도 상품인 "상권분석서비스" API로만
+얻을 수 있음, 이번엔 미확보) — 그래서 "성장여부" 라벨은 매출 증가 대신 다음 분기 점포수
+증가 여부로 정의한다. 다운스트림(train_model.py, build_risk_index.py, DB 스키마)이 참조하는
+컬럼명(성장여부/성장확률 등)은 그대로 유지해 영향 범위를 최소화했다.
 
 사용법:
-    python ai/build_dataset.py --input data/raw/ --output data/processed/final_dataset.csv
+    python ai/build_dataset.py [--output data/processed/final_dataset.csv]
 """
 import argparse
-import pandas as pd
-import numpy as np
+import io
+import os
+import re
+import zipfile
 from pathlib import Path
+
+import numpy as np
+import pandas as pd
+from dotenv import load_dotenv
+
+load_dotenv(".env")
 
 HWASEONG_SGG = "41590"
 
-CATEGORY_MAP = {}  # 원본 업종코드 → 통합카테고리 (데이터 수령 후 채울 것)
+RAW_DATA_DIR = Path(os.getenv("RAW_DATA_DIR", "data/raw"))
+PROCESSED_DATA_DIR = Path(os.getenv("PROCESSED_DATA_DIR", "data/processed"))
+STORE_ZIP_DIR = (
+    RAW_DATA_DIR / "Hwaseong-commercial-ai-main-dataset" / "소상공인시장진흥공단_상가(상권)정보_분기별데이터"
+)
 
-FEATURE_COLS = [
-    "당월매출합", "총_유동인구_수", "점포수", "폐업_률_평균", "개업_율_평균",
-    "업종_포화도", "경쟁강도", "업종_점포당매출", "업종_매출점유율",
-    "총_직장_인구_수", "주거인구", "월_평균_소득_금액",
-    "매출_20대합", "매출_30대합", "매출_40대합", "매출_50대합", "매출_60대이상합",
-    "월요일매출합", "화요일매출합", "수요일매출합", "목요일매출합",
-    "금요일매출합", "토요일매출합", "일요일매출합",
-    "유동_20대", "유동_30대", "유동_40대", "유동_50대", "유동_60대이상",
-]
+# 원본 상권업종대분류명(데이터 파일 내 축약형 — 별도 코드표 파일의 정식 명칭과 다름, 실제 값
+# 기준으로 확인함) → 통합카테고리. 현재는 1:1 매핑, 필요시 세분화.
+CATEGORY_MAP = {
+    "소매": "소매",
+    "숙박": "숙박",
+    "음식": "음식",
+    "부동산": "부동산",
+    "과학·기술": "과학·기술",
+    "시설관리·임대": "시설관리·임대",
+    "교육": "교육",
+    "보건의료": "보건의료",
+    "예술·스포츠": "예술·스포츠",
+    "수리·개인": "수리·개인",
+}
+
+QUARTER_MONTH = {"03": 1, "06": 2, "09": 3, "12": 4}
+
+# 정규 분기말(0930) 파일이 없는 대신 발간된 비정규 날짜 — 파일명 날짜 → 기준_년분기_코드 직접 매핑
+QUARTER_OVERRIDE = {"20251031": 20253}
+
+USECOLS = ["상가업소번호", "시군구코드", "행정동명", "상권업종대분류명"]
+
+FEATURE_COLS = ["점포수", "개업_율_평균", "폐업_률_평균", "업종_포화도", "경쟁강도"]
 
 
-def load_raw(input_dir: Path) -> pd.DataFrame:
-    dfs = []
-    for f in sorted(input_dir.glob("*.csv")):
-        df = pd.read_csv(f, encoding="utf-8-sig", low_memory=False)
-        # 화성시 필터
-        if "시군구_코드" in df.columns:
-            df = df[df["시군구_코드"].astype(str).str.startswith(HWASEONG_SGG)]
-        dfs.append(df)
-    if not dfs:
-        raise FileNotFoundError(f"CSV 없음: {input_dir}")
-    return pd.concat(dfs, ignore_index=True)
+def quarter_code(zip_path: Path) -> int:
+    m = re.search(r"(\d{8})", zip_path.stem)
+    if not m:
+        raise ValueError(f"파일명에서 날짜를 찾을 수 없음: {zip_path.name}")
+    date_str = m.group(1)
+    if date_str in QUARTER_OVERRIDE:
+        return QUARTER_OVERRIDE[date_str]
+    year, month = date_str[:4], date_str[4:6]
+    return int(f"{year}{QUARTER_MONTH[month]}")
+
+
+def _read_gyeonggi_csv(zf: zipfile.ZipFile) -> pd.DataFrame:
+    name = next(n for n in zf.namelist() if "경기" in n and n.endswith(".csv"))
+    with zf.open(name) as f:
+        return pd.read_csv(f, encoding="utf-8", usecols=USECOLS, dtype={"시군구코드": str}, low_memory=False)
+
+
+def load_snapshot(zip_path: Path) -> pd.DataFrame:
+    with zipfile.ZipFile(zip_path, metadata_encoding="cp949") as outer:
+        nested = [n for n in outer.namelist() if n.endswith(".zip")]
+        if nested:
+            # 2020Q4~2022Q4: zip 안에 zip이 한 겹 더 있는 구조
+            with zipfile.ZipFile(io.BytesIO(outer.read(nested[0])), metadata_encoding="cp949") as inner:
+                df = _read_gyeonggi_csv(inner)
+        else:
+            df = _read_gyeonggi_csv(outer)
+
+    df = df[df["시군구코드"] == HWASEONG_SGG].copy()
+    df["통합카테고리"] = df["상권업종대분류명"].map(CATEGORY_MAP).fillna(df["상권업종대분류명"])
+    return df[["상가업소번호", "행정동명", "통합카테고리"]]
+
+
+def load_all_snapshots() -> dict[int, pd.DataFrame]:
+    zip_paths = sorted(p for p in STORE_ZIP_DIR.glob("*.zip") if not p.name.startswith("._"))
+    if not zip_paths:
+        raise FileNotFoundError(f"상가정보 zip 없음: {STORE_ZIP_DIR}")
+    snapshots = {}
+    for zp in zip_paths:
+        q = quarter_code(zp)
+        print(f"  {q} 분기 로드 중... ({zp.name})")
+        snapshots[q] = load_snapshot(zp)
+    return snapshots
+
+
+def build_dong_category_stats(snapshots: dict[int, pd.DataFrame]) -> pd.DataFrame:
+    quarters = sorted(snapshots)
+    rows = []
+    prev_sets: dict[tuple, set] = {}
+    for q in quarters:
+        store_sets = snapshots[q].groupby(["행정동명", "통합카테고리"])["상가업소번호"].apply(set)
+        for key, store_set in store_sets.items():
+            prev_set = prev_sets.get(key)
+            row = {
+                "행정동명": key[0],
+                "통합카테고리": key[1],
+                "기준_년분기_코드": q,
+                "점포수": len(store_set),
+            }
+            if prev_set:
+                row["개업_율_평균"] = len(store_set - prev_set) / len(prev_set)
+                row["폐업_률_평균"] = len(prev_set - store_set) / len(prev_set)
+            rows.append(row)
+        prev_sets = dict(store_sets.items())
+    return pd.DataFrame(rows)
 
 
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
-    # 파생 지표
-    df["업종_점포당매출"] = df["당월매출합"] / df["점포수"].replace(0, np.nan)
-    행정동_전체매출 = df.groupby(["행정동명", "기준_년분기_코드"])["당월매출합"].transform("sum")
-    df["업종_매출점유율"] = df["당월매출합"] / 행정동_전체매출.replace(0, np.nan)
-    행정동_전체점포 = df.groupby(["행정동명", "기준_년분기_코드"])["점포수"].transform("sum")
-    df["업종_포화도"] = df["점포수"] / df["총_유동인구_수"].replace(0, np.nan)
-    df["경쟁강도"] = (행정동_전체점포 - df["점포수"]) / df["점포수"].replace(0, np.nan)
-
-    # 결측 채우기
-    for col in FEATURE_COLS:
-        if col not in df.columns:
-            df[col] = 0
-    df[FEATURE_COLS] = df[FEATURE_COLS].fillna(0)
-
+    dong_total = df.groupby(["행정동명", "기준_년분기_코드"])["점포수"].transform("sum")
+    df["업종_포화도"] = (df["점포수"] / dong_total.replace(0, np.nan)).round(4)
+    df["경쟁강도"] = ((dong_total - df["점포수"]) / df["점포수"].replace(0, np.nan)).round(4)
     return df
 
 
 def label_growth(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.dropna(subset=["개업_율_평균", "폐업_률_평균"])  # 직전 분기 없는 첫 분기는 제외
     df = df.sort_values(["행정동명", "통합카테고리", "기준_년분기_코드"])
-    df["next_sales"] = df.groupby(["행정동명", "통합카테고리"])["당월매출합"].shift(-1)
-    df["성장여부"] = (df["next_sales"] > df["당월매출합"]).astype(int)
-    df = df.dropna(subset=["next_sales"])
-    return df
+    df["next_점포수"] = df.groupby(["행정동명", "통합카테고리"])["점포수"].shift(-1)
+    df["성장여부"] = (df["next_점포수"] > df["점포수"]).astype(int)
+    df = df.dropna(subset=["next_점포수"])
+    return df.drop(columns=["next_점포수"])
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("--input", default="data/raw", type=Path)
-    parser.add_argument("--output", default="data/processed/final_dataset.csv", type=Path)
+    parser.add_argument("--output", default=PROCESSED_DATA_DIR / "final_dataset.csv", type=Path)
     args = parser.parse_args()
 
-    print("데이터 로드 중...")
-    df = load_raw(args.input)
-    print(f"  원본 행 수: {len(df):,}")
+    print(f"원본 데이터 위치: {STORE_ZIP_DIR}")
+    print("분기별 스냅샷 로드 중...")
+    snapshots = load_all_snapshots()
+
+    print("행정동×업종×분기 집계 중...")
+    df = build_dong_category_stats(snapshots)
+    print(f"  집계 행 수: {len(df):,}")
 
     print("피처 계산 중...")
     df = build_features(df)

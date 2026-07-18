@@ -63,6 +63,22 @@ class ScoreResponse(BaseModel):
     risk_score: float
 
 
+class OfficialLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class CitizenLoginRequest(BaseModel):
+    business_number: str
+
+
+class TokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    role: str
+    verification_type: str
+
+
 class ConsultationResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

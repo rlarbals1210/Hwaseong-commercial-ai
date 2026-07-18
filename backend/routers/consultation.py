@@ -1,11 +1,12 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
+from ..auth.dependencies import get_current_citizen
 from ..database import get_db
 from ..models import CommercialData, ScoreData
 from ..schemas import ConsultationResponse
 
-router = APIRouter(prefix="/api/consultation", tags=["consultation"])
+router = APIRouter(prefix="/api/consultation", tags=["consultation"], dependencies=[Depends(get_current_citizen)])
 
 
 def _level(value: float, low: float, high: float) -> str:

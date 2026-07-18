@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { API } from "../lib/api";
+import { apiFetch } from "../lib/api";
 
 const QUADRANT_META = {
-  Q1: { label: "1순위 — 즉시 지원", color: "#EF4444", bg: "#FEF2F2", desc: "위험 높고 성장 가능성도 있어 지원 효과 최대" },
-  Q2: { label: "2순위 — 긴급 모니터링", color: "#F59E0B", bg: "#FFFBEB", desc: "위험 높지만 성장 어려움. 구조조정 지원 우선" },
-  Q3: { label: "3순위 — 성장 육성", color: "#3B82F6", bg: "#EFF6FF", desc: "위험 낮고 성장 가능. 추가 확장 지원 적합" },
+  Q1: { label: "1순위 — 즉시 지원", color: "#EF4444", bg: "#FEF2F2", desc: "위험 높고 수혜 점포 많아 지원 효과 최대" },
+  Q2: { label: "2순위 — 긴급 모니터링", color: "#F59E0B", bg: "#FFFBEB", desc: "위험 높지만 수혜 점포 적음. 개별 밀착 지원 우선" },
+  Q3: { label: "3순위 — 예방적 지원 검토", color: "#3B82F6", bg: "#EFF6FF", desc: "위험 낮지만 수혜 점포 많음. 확산 방지 차원 검토" },
   Q4: { label: "4순위 — 일반 관찰", color: "#10B981", bg: "#F0FDF4", desc: "안정적 상권. 정기 모니터링 유지" },
 };
 
@@ -32,7 +32,7 @@ function QuadrantCard({ qKey, items }) {
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ borderBottom: "1px solid #E5E7EB" }}>
-                  {["읍면동", "업종", "위험점수", "성장확률"].map((h) => (
+                  {["읍면동", "업종", "위험점수", "점포수(수혜규모)"].map((h) => (
                     <th key={h} style={{ textAlign: "left", padding: "6px 8px", color: "#6B7280", fontWeight: 600 }}>{h}</th>
                   ))}
                 </tr>
@@ -43,7 +43,7 @@ function QuadrantCard({ qKey, items }) {
                     <td style={{ padding: "7px 8px", fontWeight: 600 }}>{item.dong}</td>
                     <td style={{ padding: "7px 8px", color: "#374151" }}>{item.category}</td>
                     <td style={{ padding: "7px 8px", color: meta.color, fontWeight: 700 }}>{item.risk_score}</td>
-                    <td style={{ padding: "7px 8px", color: "#374151" }}>{item.growth_prob}%</td>
+                    <td style={{ padding: "7px 8px", color: "#374151" }}>{item.growth_prob}개</td>
                   </tr>
                 ))}
                 {items.length > 10 && (
@@ -65,7 +65,7 @@ export default function PolicyPage() {
   const [categories, setCategories] = useState([]);
 
   useEffect(() => {
-    fetch(`${API}/api/analysis/categories`)
+    apiFetch(`/api/analysis/categories`)
       .then((r) => r.json())
       .then((d) => setCategories(d.categories || []))
       .catch(() => {});
@@ -75,7 +75,7 @@ export default function PolicyPage() {
     setLoading(true);
     const params = new URLSearchParams();
     if (category) params.set("category", category);
-    fetch(`${API}/api/policy/fund-priority?${params}`)
+    apiFetch(`/api/policy/fund-priority?${params}`)
       .then((r) => r.json())
       .then(setData)
       .catch(() => {})
@@ -88,7 +88,7 @@ export default function PolicyPage() {
     <div>
       <h1 style={{ fontSize: 22, fontWeight: 800, color: "#111827", margin: "0 0 8px" }}>정책자금 우선순위</h1>
       <p style={{ fontSize: 14, color: "#6B7280", marginBottom: 20 }}>
-        폐업위험도 × 성장잠재력 기반 4단계 지원 우선순위 매트릭스
+        폐업위험도 × 정책잠재력(점포수 기준 수혜규모) 기반 4단계 지원 우선순위 매트릭스
       </p>
 
       <div style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "center" }}>

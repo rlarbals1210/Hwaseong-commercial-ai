@@ -1,12 +1,15 @@
+import statistics
+
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, tuple_
 from typing import Optional
+from ..auth.dependencies import get_current_official
 from ..database import get_db
-from ..models import RiskIndex, ScoreData
+from ..models import CommercialData, RiskIndex, ScoreData
 from ..schemas import PolicyPriorityItem
 
-router = APIRouter(prefix="/api/policy", tags=["policy"])
+router = APIRouter(prefix="/api/policy", tags=["policy"], dependencies=[Depends(get_current_official)])
 
 
 @router.get("/fund-priority")
@@ -39,15 +42,32 @@ def get_fund_priority(
         if key not in score_map:
             score_map[key] = s
 
+    all_comms = (
+        db.query(CommercialData)
+        .filter(tuple_(CommercialData.행정동명, CommercialData.통합카테고리).in_(pairs))
+        .order_by(CommercialData.기준_년분기_코드.desc())
+        .all()
+    )
+    commercial_map: dict = {}
+    for c in all_comms:
+        key = (c.행정동명, c.통합카테고리)
+        if key not in commercial_map:
+            commercial_map[key] = c
+
+    # 정책잠재력(y축) = 점포수(수혜규모). 성장확률 재사용 시 x축(폐업위험점수, 성장확률 60% 반영)과
+    # 자기모순적 음의 상관관계가 생겨 결과셋 내 점포수 중위값 기준 상/하위 분류로 대체함.
+    store_counts = [c.점포수 or 0 for c in commercial_map.values()]
+    median_stores = statistics.median(store_counts) if store_counts else 0
+
     result: dict[str, list] = {"Q1": [], "Q2": [], "Q3": [], "Q4": []}
     for r in risks:
         key = (r.행정동명, r.통합카테고리)
-        score_row = score_map.get(key)
-        growth = score_row.성장확률 if score_row else 50.0
+        comm_row = commercial_map.get(key)
+        benefit_scale = comm_row.점포수 if comm_row and comm_row.점포수 else 0
         risk = r.폐업위험점수
 
         high_risk = risk >= 50
-        high_growth = growth >= 50
+        high_growth = benefit_scale >= median_stores
         if high_risk and high_growth:
             quadrant = 1
         elif high_risk:
@@ -62,7 +82,7 @@ def get_fund_priority(
                 dong=r.행정동명,
                 category=r.통합카테고리,
                 risk_score=round(risk, 1),
-                growth_prob=round(growth, 1),
+                growth_prob=benefit_scale,
                 quadrant=quadrant,
             )
         )

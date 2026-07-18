@@ -8,16 +8,11 @@ from ..schemas import AnalysisDongResponse, ScoreResponse
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
-HWASEONG_DONGS = [
-    "우정읍", "향남읍", "남양읍", "팔탄면", "장안면", "양감면", "정남면",
-    "비봉면", "마도면", "송산면", "서신면", "매송면", "봉담읍",
-    "동탄1동", "동탄2동", "동탄3동", "동탄4동", "동탄5동", "동탄6동", "동탄7동", "동탄8동",
-]
-
 
 @router.get("/dongs")
-def list_dongs():
-    return {"dongs": HWASEONG_DONGS}
+def list_dongs(db: Session = Depends(get_db)):
+    dongs = db.query(CommercialData.행정동명).distinct().order_by(CommercialData.행정동명).all()
+    return {"dongs": [d[0] for d in dongs]}
 
 
 @router.get("/dong", response_model=AnalysisDongResponse)

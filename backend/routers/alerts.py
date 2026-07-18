@@ -2,12 +2,13 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func, tuple_
 from typing import Optional
+from ..auth.dependencies import get_current_official
 from ..database import get_db
 from ..models import ScoreData, CommercialData, RiskIndex
 from ..schemas import ClosureRiskItem, VacancyRiskItem
 from ..services.risk import action_message, risk_level
 
-router = APIRouter(prefix="/api/alerts", tags=["alerts"])
+router = APIRouter(prefix="/api/alerts", tags=["alerts"], dependencies=[Depends(get_current_official)])
 
 
 @router.get("/closure-risk", response_model=list[ClosureRiskItem])
