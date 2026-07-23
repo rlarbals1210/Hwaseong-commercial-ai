@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback } from "react";
-import { getStoredAuth, setStoredAuth } from "../lib/api";
+import { getStoredAuth, setStoredAuth, decodeJwtPayload } from "../lib/api";
 
 const AuthContext = createContext(null);
 
@@ -22,6 +22,7 @@ export function AuthProvider({ children }) {
         isAuthenticated: !!auth?.token,
         role: auth?.role ?? null,
         verificationType: auth?.verificationType ?? null,
+        username: auth?.token ? decodeJwtPayload(auth.token)?.username ?? null : null,
         login,
         logout,
       }}

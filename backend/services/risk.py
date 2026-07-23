@@ -1,6 +1,6 @@
 def risk_level(score: float) -> tuple[str, str]:
     if score >= 70:
-        return "위험", "#EF4444"
+        return "위험", "#D51B4C"
     if score >= 50:
         return "주의", "#F59E0B"
     return "안전", "#10B981"
