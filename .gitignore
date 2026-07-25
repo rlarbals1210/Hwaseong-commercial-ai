@@ -6,8 +6,13 @@ node_modules/
 dist/
 data/raw/
 data/processed/
+archive/
+Hwaseong-commercial-ai-main-dataset/
+models/
+ai/*.log
 *.csv
 *.pkl
 *.model
 .DS_Store
 study.md
+Hwaseong-commercial-ai-main-dataset
