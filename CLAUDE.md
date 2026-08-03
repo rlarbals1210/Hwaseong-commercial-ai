@@ -162,11 +162,19 @@ hwaseong-commercial-ai/
 │           ├── PolicyPage.jsx      # 4분면 정책자금 매트릭스 (공무원)
 │           └── ConsultPage.jsx     # 창업 상담 조회 (시민)
 │
-├── ai/                         # ML 파이프라인 (순서대로 실행)
-│   ├── build_dataset.py        # raw CSV → final_dataset.csv
-│   ├── train_model.py          # LightGBM 학습 → scores.csv
-│   ├── build_risk_index.py     # 폐업위험점수 + 이상탐지 → risk_index.csv
-│   └── import_to_db.py        # CSV → PostgreSQL
+├── eda/                         # EDA→전처리→모델링 재작업 노트북 (ai/ 파이프라인의 로직 근거)
+│   ├── paths.py                 # 원본/산출물 경로 상수 (ai/build_dataset.py, train_model.py가 import)
+│   ├── 00_inventory.md          # 원본 데이터·구버전 스크립트 인벤토리
+│   ├── 01_eda.ipynb             # 원본 데이터 함정 재현 검증
+│   ├── 02_preprocessing.ipynb   # 갭필링 라벨링(label_h2) + feature 결합 로직 (ai/build_dataset.py 근거)
+│   └── 03_modeling.ipynb        # 모델 학습·평가 로직 (ai/train_model.py 근거)
+│
+├── ai/                          # ML 파이프라인 (순서대로 실행)
+│   ├── build_dataset.py         # raw zip → 갭필링 패널 → label_h2 → final_dataset.csv/store_train_table.csv/cell_train_table.csv
+│   ├── train_model.py           # LightGBM 학습(셀단위 중분류 주력 + 점포단위 참고) → scores.csv
+│   ├── build_risk_index.py      # 폐업위험점수 + 이상탐지 → risk_index.csv
+│   ├── import_to_db.py          # CSV → PostgreSQL
+│   └── archive/                 # 구버전 파이프라인 4개 + 팀원 실험 스크립트 23개 (Phase 4에서 정리, 기록 보존용)
 │
 └── data/
     ├── raw/                    # 소상공인진흥공단 + 화성시 제공 데이터
@@ -201,13 +209,21 @@ hwaseong-commercial-ai/
 
 ## DB 모델 (backend/models.py)
 
+**`통합카테고리` 컬럼(3개 테이블 공통, 조인 키)은 2026-08-03부터 상권업종중분류 74개** 값이 들어간다
+(이전엔 대분류 10개 — Phase 4에서 검증된 최고 성능 모델의 grain을 그대로 채택, 컬럼명·타입은 안 바뀜).
+
 ### CommercialData
-읍면동×업종×분기 상권 지표 (소상공인진흥공단 원본 기반)
+행정동×업종×분기 상권 지표 (소상공인진흥공단 원본, 갭필링 패널 기준 트레일링 통계)
 - 주요 컬럼: `행정동명`, `통합카테고리`, `기준_년분기_코드`, `당월매출합`, `점포수`, `총_유동인구_수`, `폐업_률_평균`, `개업_율_평균`, `업종_포화도`, `경쟁강도`, `업종_점포당매출`
+- `당월매출합`·`총_유동인구_수` 등 매출·유동인구 계열 컬럼은 원본 데이터 미확보로 항상 NULL(구버전과 동일)
 
 ### ScoreData
-행정동×업종 AI 성장확률 점수 (train_model.py 출력)
-- 주요 컬럼: `행정동명`, `통합카테고리`, `기준_년분기_코드`, `성장확률` (0~100), `등급` (A/B/C/D), `업종내_순위`, `상위_퍼센트`
+행정동×업종 AI 성장확률 점수 (train_model.py 출력, 셀단위 중분류 LightGBM 회귀 기반)
+- 주요 컬럼: `행정동명`, `통합카테고리`, `기준_년분기_코드`, `성장확률`(0~100, `(1-예측폐업률)×100`), `등급`(A/B/C/D),
+  `업종내_순위`, `상위_퍼센트`
+- `등급`은 고정 임계값이 아니라 **매 스코어링 배치 내 성장확률 분위수**(상위 25%=A ~ 하위 25%=D) 기준 —
+  폐업은 분기당 원래 드문 사건이라 성장확률이 대부분 70~100 사이에 몰려서, 구버전 고정 임계값(A≥70 등)을
+  그대로 쓰면 거의 전부 A가 나와 변별력이 없어짐(train_model.py `grade_series()` 참고)
 
 ### RiskIndex
 폐업위험지수 + 트렌드 이상탐지 (build_risk_index.py 출력)
@@ -215,6 +231,10 @@ hwaseong-commercial-ai/
 - `트렌드_기울기`: 최근 4분기 폐업률 선형회귀 기울기
 - `이상탐지_플래그`: 기울기 > 전체 기울기 1 std → True
 - `공실위험지수`: 읍면동 내 업종별 평균 폐업위험점수 × 0.7 + 이상탐지 비율 × 0.3
+- ⚠️ 알려진 이슈: `폐업_률_평균`이 0~1 비율(퍼센트 아님)인데 `성장확률`은 0~100 스케일이라 단위가
+  안 맞음 — 구버전부터 있던 문제라 Phase 4에서는 그대로 유지(산식 변경은 범위 밖으로 명시적으로 뒀음).
+  실측 결과 `폐업위험점수`가 0~100 전 구간이 아니라 0~20 근처로 좁게 나옴(상대적 순위는 정상, Top10·
+  4분면 분류에는 문제 없지만 choropleth 색상 대비가 약할 수 있음) — 대시보드 시각화 다듬을 때 재검토 필요
 
 ### Official
 공무원 계정 (로그인용, ML 파이프라인과 무관 — `backend/scripts/create_official.py`로 시딩)
@@ -262,13 +282,19 @@ hwaseong-commercial-ai/
 
 ## ML 파이프라인 실행 순서
 
-데이터 수령 후 아래 순서로 실행:
+Phase 4(2026-08-03)에서 `eda/02_preprocessing.ipynb`·`03_modeling.ipynb`에서 검증된 로직으로
+전면 재작성됨(구버전은 `ai/archive/`에 보존). 라벨은 "다음분기 점포수 증가 여부"에서 **`label_h2`
+(관측분기 기준 +2분기 시점 폐업 여부, 갭필링 threshold=11 패널 기준)**로, `통합카테고리` grain은
+상권업종대분류 10개에서 **상권업종중분류 74개**로 바뀌었다(3개 DB 테이블이 전부 이 컬럼으로 조인되므로
+하나로 통일 — DB 컬럼명 자체는 안 바뀜). 프로덕션 스코어는 셀단위(중분류) LightGBM 회귀가 주력이고,
+점포단위 분류기는 참고용으로만 `model_store_results.json`에 결과를 남긴다.
 
 ```bash
-# 1. 화성시 raw 데이터(시군구코드=41590) → final_dataset.csv (RAW_DATA_DIR 환경변수 사용, --input 없음)
+# 1. 화성시 raw 데이터(시군구코드=41590) + 인허가데이터 → 갭필링 패널 → label_h2 →
+#    final_dataset.csv(CommercialData 원천) / store_train_table.csv / cell_train_table.csv(모델 학습용)
 python ai/build_dataset.py
 
-# 2. LightGBM 학습 → scores.csv (AUC ≥ 0.60 목표, 0.55 수용)
+# 2. LightGBM 학습(셀단위 중분류 주력, 스피어만 0.42 / 점포단위 참고, ROC-AUC 0.555) → scores.csv
 python ai/train_model.py
 
 # 3. 폐업위험지수 계산 → risk_index.csv
@@ -278,11 +304,20 @@ python ai/build_risk_index.py
 python ai/import_to_db.py --table all
 ```
 
+`ai/build_dataset.py`는 raw zip 로딩 + 인허가 매칭 부분이 외장 SSD(`RAW_DATA_DIR`)에 의존한다 — SSD가
+마운트 안 된 상태에서는 실행할 수 없다(다른 3개 스크립트는 `data/processed/`의 기존 CSV만 있으면
+SSD 없이도 실행 가능).
+
 ---
 
-## GeoJSON 준비 (선행 작업)
+## GeoJSON 준비 (완료 — 29개 행정동 기준)
 
-화성시 읍면동 경계 shapefile → GeoJSON 변환:
+`frontend/public/hwaseong_emd.geojson` 생성 완료. 소진공 상가정보·KOSIS 등 실제 원본 데이터가
+**29개 행정동**(동탄 신도시 등 최신 행정구역 분리 반영) 기준으로 되어 있는 것을 EDA 재작업 중
+확인(2026-07-29)하여, 아래 21개 구버전 목록 대신 **29개로 통일**하기로 결정(2026-08-03). GeoJSON은
+이미 29개 feature로 만들어져 있어 재생성 불필요 — DB(`행정동명 VARCHAR`, 개수 제약 없음)·백엔드·
+프론트(`/api/analysis/dongs` 동적 조회, 하드코딩 없음)도 전부 그대로 호환됨. 재생성이 필요할 경우를
+대비해 원본 변환 커맨드만 남겨둠:
 
 ```bash
 pip install geopandas
@@ -299,10 +334,10 @@ print(hw['dong_name'].tolist())
 
 다운로드: SGIS 포털 (sgis.kostat.go.kr) → 행정구역경계 → 읍면동 → 경기도 화성시
 
-### 화성시 읍면동 목록 (21개, 코드 앞 5자리 41590)
+### 화성시 행정동 목록 (29개, 코드 앞 5자리 41590)
 읍 4개: 우정읍, 향남읍, 남양읍, 봉담읍
 면 9개: 팔탄면, 장안면, 양감면, 정남면, 비봉면, 마도면, 송산면, 서신면, 매송면
-동 8개: 동탄1동, 동탄2동, 동탄3동, 동탄4동, 동탄5동, 동탄6동, 동탄7동, 동탄8동
+동 16개: 동탄1동~동탄9동, 병점1동, 병점2동, 화산동, 진안동, 새솔동, 반월동, 기배동
 
 ---
 
@@ -375,7 +410,7 @@ print(hw['dong_name'].tolist())
 |------|---------------|----------------|
 | 위치 | `~/Desktop/Developer/commercial-area-analysis-ai/` | `~/Desktop/Developer/hwaseong-commercial-ai/` |
 | 백엔드 | Django 5 | FastAPI |
-| 행정구역 | 서울 25개 구 / 행정동 | 화성시 21개 읍면동 |
+| 행정구역 | 서울 25개 구 / 행정동 | 화성시 29개 행정동 |
 | GeoJSON | `seoul_gu.geojson`, `seoul_hangjeongdong.geojson` | `hwaseong_emd.geojson` |
 | 목적 | 창업 입지 탐색 | 폐업 위험 조기경보 |
 | AI 텍스트 | Gemini 2.5 Flash | 없음 (행정데이터 외부 전송 금지) |
@@ -412,19 +447,33 @@ Claude가 다시 제안하더라도 아래 결정사항은 바꾸지 않는다.
 
 ### AI 파이프라인 주의사항
 - 실행 순서 반드시 준수: `build_dataset.py` → `train_model.py` → `build_risk_index.py` → `import_to_db.py`
-- 학습된 모델은 `data/processed/lgbm_model.pkl`에 저장됨 (joblib, `{"model", "features", "auc"}` 키)
+- 학습된 모델은 `data/processed/lgbm_model_store.pkl`(점포단위, 참고용) / `lgbm_model_cell.pkl`(셀단위, 주력
+  프로덕션)에 각각 저장됨 (joblib, `{"model", "features"}` 키)
 - `import_to_db.py`는 TRUNCATE 후 재삽입 방식 — 여러 번 실행해도 중복 없음
 
-**`ai/build_dataset.py` 재작성 완료 (2026-07-18)** — 다운받은 원본에 매출·유동인구 수치가 없어(소상공인진흥공단 "상권분석서비스" 별도 API 상품, 미확보) 라벨을 매출성장 대신 **다음 분기 점포수 증가 여부**로 재정의. 상가업소번호를 분기 간 diff해서 행정동×업종×분기 단위 점포수/개업율/폐업율을 직접 계산. `CATEGORY_MAP`도 이미 채워짐, `RAW_DATA_DIR`/`PROCESSED_DATA_DIR` 배선도 완료 — 아래 함정만 알아두면 재실행에 문제없음.
+**Phase 4 재작성 완료 (2026-08-03)** — `ai/build_dataset.py`~`build_risk_index.py`를 `eda/02_preprocessing.ipynb`
+·`03_modeling.ipynb`에서 검증된 로직으로 전면 교체(구버전은 `ai/archive/`에 보존, [[project_eda_rework_status]]
+참고). 핵심 변경: ① 라벨을 "다음 분기 점포수 증가 여부"에서 **`label_h2`**(관측분기 기준 +2분기 시점 폐업
+여부, 상가업소번호 갭필링 threshold=11 패널 기준)로 교체 — 원본 스냅샷을 단순 diff하면 2023Q1 데이터
+결함(재등장률 72.1%, 실제 폐업 아님)이 인위적 폐업 급증으로 잡히는데, 갭필링 패널 기준으로 바꾸면서
+해결됨. ② `통합카테고리` grain을 대분류 10개→중분류 74개로 변경(검증된 최고 성능 모델의 grain을
+그대로 프로덕션에 반영). ③ 프로덕션 스코어를 셀단위(중분류, n≥30 필터 학습) LightGBM **회귀**로 교체 —
+스피어만 0.419(팀원 벤치마크 0.293 상회). `build_dataset.py`의 `USECOLS`/`load_snapshot()`은 기존
+로직을 그대로 재사용해 아래 함정을 그대로 물려받는다.
 
 **원본 데이터 관련 함정 (재실행/신규 팀원 온보딩 시 필독)**
 - **zip 안에 zip**: 2020년4분기~2022년4분기(9개 분기) 파일은 outer zip 안에 폴더+inner zip이 한 겹 더 있는 구조. 2023년1분기부터는 시도별 CSV가 outer zip에 바로 들어있음. `ai/build_dataset.py`의 `load_snapshot()`이 두 구조 다 처리하도록 이미 되어 있음.
 - **macOS 메타데이터 파일**: SSD에 압축 해제/복사한 zip 옆에 `._원본파일명.zip` 형태의 리소스 포크 파일이 같이 생겨서 `glob("*.zip")`에 걸림 — `.name.startswith("._")`로 걸러냄.
 - **결측 분기 파일명 불일치**: `20250930.zip`(2025년 3분기 정규 파일)이 없고 대신 `20251031.zip`로 발간되어 있음. 파일명의 월(10)이 표준 분기말(03/06/09/12)에 안 걸려서 `QUARTER_OVERRIDE` 딕셔너리로 수동 매핑 처리.
-- **업종 분류명 두 버전 공존**: 같은 폴더의 "업종코드_20230228.csv" 코드표는 대분류명이 정식 명칭("전문, 과학 및 기술 서비스업")인데, 실제 분기별 데이터 CSV의 `상권업종대분류명` 컬럼은 축약형("과학·기술")을 씀. `CATEGORY_MAP`은 반드시 **실제 데이터 파일 값 기준**으로 채워야 함 — 코드표 명칭으로 채우면 전부 매칭 실패해서 조용히 원본 그대로 통과됨(에러 없이 매핑이 무의미해짐).
+- **업종 분류명 두 버전 공존**: 같은 폴더의 "업종코드_20230228.csv" 코드표는 대분류명이 정식 명칭("전문, 과학 및 기술 서비스업")인데, 실제 분기별 데이터 CSV의 `상권업종대분류명`/`상권업종중분류명` 컬럼은 축약형("과학·기술")을 씀. Phase 4부터는 `통합카테고리`가 `상권업종중분류명` 값을 그대로 쓰므로(별도 매핑 딕셔너리 없음) 이 문제는 더 이상 해당 없음 — 코드표 명칭이 필요한 경우에만 유효한 주의사항으로 남겨둠.
 - 상가정보 zip의 인코딩은 파일명은 cp949, CSV 내용은 UTF-8 — `zipfile.ZipFile(path, metadata_encoding="cp949")`로 열고 `pd.read_csv(..., encoding="utf-8")`로 읽어야 함.
 
-**최초 실행 결과 (2026-07-18)**: 5,149행 (화성시 29개 행정동 × 10개 업종 × 20개 분기, 2021Q1~2025Q4). 업종 10개: 소매/숙박/음식/부동산/과학·기술/시설관리·임대/교육/보건의료/예술·스포츠/수리·개인. 성장여부(다음 분기 점포수 증가) 비율 44.2% — 이진분류로 쓸만한 분포. `data/processed/final_dataset.csv`, 약 390KB.
+**검증 현황 (2026-08-03 완료)**: `ai/build_dataset.py`→`train_model.py`→`build_risk_index.py`→
+`import_to_db.py` 전체를 실제 SSD raw 데이터로 end-to-end 실행 완료. `store_panel.csv` 873,035행,
+`final_dataset.csv` 35,505행 — 앞서 fixture(노트북 산출물) 기준으로 미리 계산했던 예측치와 정확히
+일치(같은 알고리즘 + 같은 raw 데이터 → 같은 결과, 이식이 정확하다는 재확인). 셀단위 모델 스피어만
+0.4193/리프트 1.444x도 그대로 재현됨. `score_latest_quarter()`가 실제 최신 분기(2025Q4, `기준_년분기_코드
+20254`)를 정확히 스코어링하는 것까지 DB import→API 응답(`/api/alerts/closure-risk` 등)에서 확인 완료.
 
 ### 코딩 컨벤션
 - 새 API 엔드포인트 추가 시 `backend/schemas.py`에 Pydantic 스키마 먼저 정의

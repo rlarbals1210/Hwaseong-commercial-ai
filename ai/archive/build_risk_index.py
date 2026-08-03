@@ -1,17 +1,14 @@
 """
-폐업위험지수 + 트렌드 이상탐지 -> risk_index.csv 생성
-final_dataset.csv(트레일링 통계) + scores.csv(셀단위 모델 추론)를 결합해 RiskIndex 테이블용 CSV 생성.
-
-산식·코드 구조는 구버전(ai/archive/build_risk_index.py)과 동일 - 통합카테고리 grain이 상권업종중분류
-74개로 바뀌었을 뿐, 그룹키가 이미 새 grain을 참조하므로 로직 변경 없이 그대로 재사용한다.
+폐업위험지수 + 트렌드 이상탐지 → risk_index.csv 생성
+scores.csv + final_dataset.csv 를 결합해 RiskIndex 테이블용 CSV 생성
 
 사용법:
     python ai/build_risk_index.py
 """
 import argparse
-from pathlib import Path
-
 import pandas as pd
+import numpy as np
+from pathlib import Path
 from scipy.stats import linregress
 
 
