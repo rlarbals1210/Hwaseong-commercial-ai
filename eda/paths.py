@@ -14,7 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
 RAW_DATA_DIR = Path(os.getenv("RAW_DATA_DIR", str(PROJECT_ROOT / "data" / "raw")))
-RAW_DIR = RAW_DATA_DIR / "hwaseong-commercial-dataset"
+RAW_DIR = RAW_DATA_DIR / "Hwaseong-commercial-ai-main-dataset"
 
 PROCESSED_DATA_DIR = Path(os.getenv("PROCESSED_DATA_DIR", str(PROJECT_ROOT / "data" / "processed")))
 

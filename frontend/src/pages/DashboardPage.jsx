@@ -2,23 +2,11 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../lib/api";
 
-const LEVEL = {
-  위험: { color: "var(--status-red)", threshold: 70 },
-  주의: { color: "var(--status-orange)", threshold: 50 },
-  안전: { color: "var(--status-green)", threshold: 0 },
-};
-
-function levelOf(score) {
-  if (score >= 70) return "위험";
-  if (score >= 50) return "주의";
-  return "안전";
-}
-
 function downloadCsv(rows) {
   if (!rows.length) return;
-  const headers = ["순위", "읍면동", "업종", "폐업위험점수", "성장확률", "폐업률", "트렌드이상", "권고사항"];
+  const headers = ["예측순위", "읍면동", "업종", "실제폐업률(%)", "성장확률(%)", "개업률(%)", "트렌드이상", "권고사항"];
   const lines = rows.map((r) =>
-    [r.rank, r.dong, r.category, r.risk_score, r.growth_prob, r.closure_rate, r.anomaly ? "Y" : "N", r.action]
+    [r.predicted_rank, r.dong, r.category, r.actual_closure_rate_pct, r.growth_prob, r.open_rate_pct, r.anomaly ? "Y" : "N", r.action]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(",")
   );
@@ -27,7 +15,7 @@ function downloadCsv(rows) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
-  a.download = `화성시_폐업위험_Top10_${new Date().toISOString().slice(0, 10)}.csv`;
+  a.download = `화성시_조기경보_예측순위_${new Date().toISOString().slice(0, 10)}.csv`;
   a.click();
   URL.revokeObjectURL(url);
 }
@@ -41,32 +29,37 @@ function StatCard({ label, value, color }) {
   );
 }
 
+// AI 예측값(부풀려진 절대 수치)은 화면에 표시하지 않는다 — 순위만 신뢰할 수 있는 정보라
+// "예측 위험 #N"으로만 보여주고, 근거는 실제 관측 지표(폐업률·개업률·추세)로 뒷받침한다.
 function RiskCard({ item }) {
-  const level = levelOf(item.risk_score);
-  const color = LEVEL[level].color;
+  const color = "var(--primary)";
   return (
     <div style={{ background: "var(--surface-container-lowest)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 12, color: "var(--outline)" }}>Rank {String(item.rank).padStart(2, "0")}</span>
-        <span style={{ fontSize: 10, fontWeight: 700, color, background: `${color}1A`, padding: "3px 10px", borderRadius: 999 }}>{level}</span>
+        <span style={{ fontSize: 10, fontWeight: 700, color, background: `${color}1A`, padding: "3px 10px", borderRadius: 999 }}>
+          AI 예측 위험 #{item.predicted_rank}
+        </span>
+        {item.anomaly && (
+          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--status-red)" }}>⚠ 트렌드 이상</span>
+        )}
       </div>
       <div>
         <div style={{ fontSize: 17, fontWeight: 700, color: "var(--on-surface)" }}>{item.dong}</div>
         <div style={{ fontSize: 13, color: "var(--on-surface-variant)" }}>{item.category}</div>
       </div>
       <div style={{ marginTop: "auto" }}>
-        <div style={{ fontSize: 12, color: "var(--outline)", marginBottom: 2 }}>위험 지수</div>
+        <div style={{ fontSize: 12, color: "var(--outline)", marginBottom: 2 }}>실제 최근 폐업률</div>
         <div>
-          <span style={{ fontSize: 28, fontWeight: 700, color }}>{item.risk_score}</span>
-          <span style={{ fontSize: 13, color: "var(--outline)" }}> /100</span>
+          <span style={{ fontSize: 28, fontWeight: 700, color: "var(--on-surface)" }}>{item.actual_closure_rate_pct}</span>
+          <span style={{ fontSize: 13, color: "var(--outline)" }}> %</span>
         </div>
       </div>
-      <div style={{ display: "flex", gap: 12 }}>
+      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
         <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
-          성장확률 <b style={{ color: "var(--on-surface)" }}>{item.growth_prob?.toFixed(1)}%</b>
+          개업률 <b style={{ color: "var(--on-surface)" }}>{item.open_rate_pct?.toFixed(1)}%</b>
         </span>
         <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
-          폐업률 <b style={{ color: "var(--on-surface)" }}>{item.closure_rate?.toFixed(1)}%</b>
+          폐업률 추세 <b style={{ color: "var(--on-surface)" }}>{item.trend_slope > 0 ? "+" : ""}{item.trend_slope}</b>
         </span>
       </div>
       <div style={{ fontSize: 12, color: "var(--on-surface)", background: "var(--surface-gray)", padding: "8px 10px", borderRadius: 6 }}>
@@ -100,9 +93,8 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
   }, [category]);
 
-  const dangerCount = data.filter((d) => d.risk_score >= 70).length;
-  const cautionCount = data.filter((d) => d.risk_score >= 50 && d.risk_score < 70).length;
   const anomalyCount = data.filter((d) => d.anomaly).length;
+  const avgActual = data.length ? (data.reduce((s, d) => s + d.actual_closure_rate_pct, 0) / data.length).toFixed(1) : 0;
   const top = data[0];
   const topActions = data.slice(0, 2);
 
@@ -111,16 +103,16 @@ export default function DashboardPage() {
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--primary)", margin: 0 }}>폐업 위험 조기경보</h1>
         <p style={{ fontSize: 14, color: "var(--on-surface-variant)", marginTop: 4 }}>
-          AI가 감지한 이번 분기 화성시 고위험 읍면동·업종 Top 10
+          AI 예측 기반 조기경보 — 상대 순위 (예측 절대값 아님, 실제값과는 별도 지표)
         </p>
       </div>
 
       {!loading && data.length > 0 && (
         <>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 16 }}>
-            <StatCard label="위험 지역" value={dangerCount} color="var(--status-red)" />
-            <StatCard label="주의 지역" value={cautionCount} color="var(--status-orange)" />
-            <StatCard label="트렌드 이상" value={anomalyCount} color="var(--secondary)" />
+            <StatCard label="AI 예측 상위 셀" value={data.length} color="var(--primary)" />
+            <StatCard label="트렌드 이상" value={anomalyCount} color="var(--status-red)" />
+            <StatCard label="상위권 평균 실제 폐업률" value={`${avgActual}%`} color="var(--secondary)" />
           </div>
 
           {top && (
@@ -139,14 +131,14 @@ export default function DashboardPage() {
               }}
             >
               <div>
-                <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>최고 위험 지역</div>
+                <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>AI 예측 위험 1순위</div>
                 <div style={{ fontSize: 24, fontWeight: 700 }}>
                   화성시 {top.dong} · {top.category}
                 </div>
               </div>
               <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>폐업위험 지수</div>
-                <div style={{ fontSize: 32, fontWeight: 700, color: "var(--status-red)" }}>{top.risk_score}</div>
+                <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>실제 최근 폐업률</div>
+                <div style={{ fontSize: 32, fontWeight: 700, color: "#fff" }}>{top.actual_closure_rate_pct}%</div>
               </div>
             </div>
           )}

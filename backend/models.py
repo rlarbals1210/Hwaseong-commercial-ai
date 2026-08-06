@@ -84,7 +84,19 @@ class RiskIndex(Base):
     행정동명 = Column(String(50), index=True)
     통합카테고리 = Column(String(50), index=True)
     기준_년분기_코드 = Column(Integer, index=True)
-    폐업위험점수 = Column(Float)
+
+    # 지도·순위표(현황) — 실제 관측 폐업률만 사용, 보정 없음
+    실제폐업률_pct = Column(Float)
+    위험등급 = Column(String(10), nullable=True)  # 실제폐업률_pct 기준 안정/주의/위험/표본부족
+    위험업종비율 = Column(Float, nullable=True)  # 동단위: 위험등급 셀 수 / 표본충분 셀 수 (%), choropleth용
+    표본부족_플래그 = Column(Boolean, default=False)  # 점포수 < SAMPLE_MIN(build_risk_index.py)
+    점포수 = Column(Integer, nullable=True)
+    개업률_pct = Column(Float, nullable=True)
+    업종_포화도 = Column(Float, nullable=True)
+
+    # 조기경보(예측) — 예측 절대값은 저장하지 않음(내부 랭킹 산정은 CSV에서 완료). 순위만 노출.
+    예측순위 = Column(Integer, nullable=True)  # 표본충분 셀 내 예측폐업률 내림차순 순위, 표본부족은 NULL
+    성장확률 = Column(Float, nullable=True)  # ScoreData와 동일 값 — 위험도와 분리된 "성장성" 지표, 4사분면 진단용 보존
+
     트렌드_기울기 = Column(Float, nullable=True)
     이상탐지_플래그 = Column(Boolean, default=False)
-    공실위험지수 = Column(Float, nullable=True)

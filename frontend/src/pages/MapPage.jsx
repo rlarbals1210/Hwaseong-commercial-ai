@@ -7,31 +7,83 @@ const NAVER_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "";
 const LEGEND = [
   { label: "위험", color: "var(--status-red)" },
   { label: "주의", color: "var(--status-orange)" },
-  { label: "안전", color: "var(--status-green)" },
+  { label: "안정", color: "var(--status-green)" },
   { label: "데이터 없음", color: "#94A3B8" },
 ];
 
-function loadNaverMap(callback) {
-  if (window.naver?.maps) { callback(); return; }
-  const script = document.createElement("script");
-  script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_CLIENT_ID}`;
-  script.onload = callback;
-  document.head.appendChild(script);
+let naverMapLoadPromise = null;
+
+function loadNaverMap() {
+  if (window.naver?.maps) return Promise.resolve();
+  if (!naverMapLoadPromise) {
+    naverMapLoadPromise = new Promise((resolve) => {
+      const script = document.createElement("script");
+      script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_CLIENT_ID}`;
+      script.onload = resolve;
+      document.head.appendChild(script);
+    });
+  }
+  return naverMapLoadPromise;
+}
+
+function RankingTable({ rows, loading }) {
+  return (
+    <div style={{ background: "var(--surface-container-lowest)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: 24, marginTop: 16 }}>
+      <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "var(--primary)" }}>상권 순위표 — 실제 폐업률 기준</h3>
+      <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--outline)" }}>순수 관측치 정렬, 보정·예측 없음(표본 30개 이상 업종만 집계)</p>
+      {loading ? (
+        <div style={{ padding: 20, textAlign: "center", color: "var(--outline)", fontSize: 13 }}>불러오는 중...</div>
+      ) : rows.length === 0 ? (
+        <div style={{ padding: 20, textAlign: "center", color: "var(--outline)", fontSize: 13 }}>데이터 없음</div>
+      ) : (
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr style={{ textAlign: "left", color: "var(--on-surface-variant)", borderBottom: "1px solid var(--border-subtle)" }}>
+              <th style={{ padding: "8px 4px", fontWeight: 600 }}>순위</th>
+              <th style={{ padding: "8px 4px", fontWeight: 600 }}>읍면동</th>
+              <th style={{ padding: "8px 4px", fontWeight: 600 }}>업종</th>
+              <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>실제 폐업률</th>
+              <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>점포수</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((r) => (
+              <tr key={`${r.dong}-${r.category}`} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+                <td style={{ padding: "8px 4px", color: "var(--outline)" }}>{r.rank}</td>
+                <td style={{ padding: "8px 4px", fontWeight: 600, color: "var(--on-surface)" }}>{r.dong}</td>
+                <td style={{ padding: "8px 4px", color: "var(--on-surface-variant)" }}>{r.category}</td>
+                <td style={{ padding: "8px 4px", textAlign: "right", fontWeight: 700, color: "var(--status-red)" }}>{r.closure_rate_pct}%</td>
+                <td style={{ padding: "8px 4px", textAlign: "right", color: "var(--on-surface-variant)" }}>{r.store_count}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
 }
 
 export default function MapPage() {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const polygonsRef = useRef([]);
+  const boundsFitRef = useRef(false);
   const [riskData, setRiskData] = useState([]);
   const [selected, setSelected] = useState(null);
   const [tooltip, setTooltip] = useState(null);
+  const [ranking, setRanking] = useState([]);
+  const [rankingLoading, setRankingLoading] = useState(true);
 
   useEffect(() => {
     apiFetch(`/api/alerts/vacancy-risk/map`)
       .then((r) => r.json())
       .then(setRiskData)
       .catch(() => {});
+    apiFetch(`/api/alerts/closure-rate-ranking?limit=10`)
+      .then((r) => r.json())
+      .then(setRanking)
+      .catch(() => setRanking([]))
+      .finally(() => setRankingLoading(false));
   }, []);
 
   const drawPolygons = useCallback((map, geojson, riskMap) => {
@@ -42,7 +94,7 @@ export default function MapPage() {
       const name = feat.properties.dong_name || feat.properties.EMD_KOR_NM || "";
       const risk = riskMap[name];
       const color = risk?.color || "#94A3B8";
-      const score = risk?.score ?? null;
+      const ratio = risk?.risk_ratio ?? null;
 
       const coords = feat.geometry.type === "Polygon"
         ? [feat.geometry.coordinates]
@@ -52,12 +104,12 @@ export default function MapPage() {
         const path = rings[0].map(([lng, lat]) => new window.naver.maps.LatLng(lat, lng));
         const polygon = new window.naver.maps.Polygon({
           map, paths: [path], fillColor: color, fillOpacity: 0.5,
-          strokeColor: "#fff", strokeWeight: 1,
+          strokeColor: "#fff", strokeWeight: 1, clickable: true,
         });
 
         window.naver.maps.Event.addListener(polygon, "mouseover", (e) => {
           polygon.setOptions({ fillOpacity: 0.8 });
-          setTooltip({ name, score, color, x: e.pointerEvent.clientX, y: e.pointerEvent.clientY });
+          setTooltip({ name, ratio, color, x: e.pointerEvent.clientX, y: e.pointerEvent.clientY });
         });
         window.naver.maps.Event.addListener(polygon, "mousemove", (e) => {
           setTooltip((t) => t ? { ...t, x: e.pointerEvent.clientX, y: e.pointerEvent.clientY } : null);
@@ -79,7 +131,7 @@ export default function MapPage() {
     if (!NAVER_CLIENT_ID) return;
     const riskMap = Object.fromEntries(riskData.map((r) => [r.dong, r]));
 
-    loadNaverMap(() => {
+    loadNaverMap().then(() => {
       if (!mapRef.current) return;
       if (!mapInstanceRef.current) {
         mapInstanceRef.current = new window.naver.maps.Map(mapRef.current, {
@@ -89,7 +141,22 @@ export default function MapPage() {
       }
       fetch("/hwaseong_emd.geojson")
         .then((r) => r.json())
-        .then((geojson) => drawPolygons(mapInstanceRef.current, geojson, riskMap))
+        .then((geojson) => {
+          drawPolygons(mapInstanceRef.current, geojson, riskMap);
+          if (!boundsFitRef.current) {
+            const bounds = new window.naver.maps.LatLngBounds();
+            geojson.features.forEach((feat) => {
+              const coords = feat.geometry.type === "Polygon"
+                ? [feat.geometry.coordinates]
+                : feat.geometry.coordinates;
+              coords.forEach((rings) => {
+                rings[0].forEach(([lng, lat]) => bounds.extend(new window.naver.maps.LatLng(lat, lng)));
+              });
+            });
+            mapInstanceRef.current.fitBounds(bounds);
+            boundsFitRef.current = true;
+          }
+        })
         .catch(() => console.warn("GeoJSON 없음 — 먼저 hwaseong_emd.geojson을 생성하세요"));
     });
   }, [riskData, drawPolygons]);
@@ -99,7 +166,7 @@ export default function MapPage() {
       <div style={{ marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--primary)", margin: 0 }}>공실위험 지도</h1>
         <p style={{ fontSize: 14, color: "var(--on-surface-variant)", marginTop: 4 }}>
-          화성시 읍면동별 공실위험지수. 클릭하면 상세 정보를 볼 수 있습니다.
+          화성시 읍면동별 위험 업종 비율 — 실제 폐업률 기준(보정 없음). 클릭하면 상세 정보를 볼 수 있습니다.
         </p>
       </div>
 
@@ -130,7 +197,7 @@ export default function MapPage() {
               zIndex: 10,
             }}
           >
-            <p style={{ fontSize: 14, fontWeight: 600, color: "var(--primary)", margin: "0 0 12px" }}>공실 위험도 범례</p>
+            <p style={{ fontSize: 14, fontWeight: 600, color: "var(--primary)", margin: "0 0 12px" }}>위험 업종 비율 범례</p>
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               {LEGEND.map(({ label, color }) => (
                 <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
@@ -155,11 +222,11 @@ export default function MapPage() {
                 </button>
               </div>
 
-              {selected.score != null ? (
+              {selected.risk_ratio != null ? (
                 <>
                   <div style={{ textAlign: "center", margin: "16px 0 20px" }}>
-                    <div style={{ fontSize: 40, fontWeight: 700, color: selected.color }}>{selected.score}</div>
-                    <div style={{ fontSize: 13, color: "var(--on-surface-variant)", marginTop: 4 }}>공실위험지수 / 100</div>
+                    <div style={{ fontSize: 40, fontWeight: 700, color: selected.color }}>{selected.risk_ratio}%</div>
+                    <div style={{ fontSize: 13, color: "var(--on-surface-variant)", marginTop: 4 }}>위험 업종 비율 (실제 폐업률 기준)</div>
                     <span
                       style={{
                         display: "inline-block",
@@ -214,6 +281,8 @@ export default function MapPage() {
         </div>
       </div>
 
+      <RankingTable rows={ranking} loading={rankingLoading} />
+
       {tooltip && (
         <div
           style={{
@@ -230,7 +299,7 @@ export default function MapPage() {
           }}
         >
           <b>{tooltip.name}</b>
-          {tooltip.score != null && <span style={{ marginLeft: 8, color: tooltip.color }}>위험도 {tooltip.score}</span>}
+          {tooltip.ratio != null && <span style={{ marginLeft: 8, color: tooltip.color }}>위험 업종 비율 {tooltip.ratio}%</span>}
         </div>
       )}
     </div>

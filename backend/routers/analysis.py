@@ -5,6 +5,7 @@ from typing import Optional
 from ..database import get_db
 from ..models import CommercialData, ScoreData, RiskIndex
 from ..schemas import AnalysisDongResponse, ScoreResponse
+from ..services.risk import risk_level
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
@@ -70,7 +71,12 @@ def get_score(
         .order_by(RiskIndex.기준_년분기_코드.desc())
         .first()
     )
-    risk_score = risk_row.폐업위험점수 if risk_row else (100 - score_row.성장확률)
+    actual_rate = risk_row.실제폐업률_pct if risk_row else 0.0
+    sample_insufficient = bool(risk_row.표본부족_플래그) if risk_row else False
+    if risk_row and risk_row.위험등급:
+        level = risk_row.위험등급
+    else:
+        level, _ = risk_level(actual_rate)
 
     return ScoreResponse(
         dong=dong,
@@ -80,7 +86,10 @@ def get_score(
         rank=score_row.업종내_순위,
         total_dongs=score_row.업종내_전체동수,
         top_pct=score_row.상위_퍼센트,
-        risk_score=round(risk_score, 1),
+        actual_closure_rate_pct=round(actual_rate, 1),
+        risk_level=level,
+        predicted_rank=risk_row.예측순위 if risk_row else None,
+        sample_insufficient=sample_insufficient,
     )
 
 

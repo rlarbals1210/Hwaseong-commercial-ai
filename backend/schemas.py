@@ -3,23 +3,42 @@ from typing import Optional
 
 
 class ClosureRiskItem(BaseModel):
+    """조기경보(예측) — 예측 절대값은 절대 노출하지 않는다. 순위만 표시하고,
+    판단 근거는 실제 관측 지표(폐업률·개업률·추세)로만 뒷받침한다."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    predicted_rank: int
+    dong: str
+    category: str
+    actual_closure_rate_pct: float
+    growth_prob: float
+    open_rate_pct: float
+    trend_slope: float
+    saturation: float
+    anomaly: bool
+    action: str
+
+
+class ClosureRateRankingItem(BaseModel):
+    """상권 순위표(현황) — 실제 관측 폐업률로만 정렬, 절대 % 그대로 표시."""
+
     model_config = ConfigDict(from_attributes=True)
 
     rank: int
     dong: str
     category: str
-    risk_score: float
-    growth_prob: float
-    closure_rate: float
-    anomaly: bool
-    action: str
+    closure_rate_pct: float
+    store_count: int
 
 
 class VacancyRiskItem(BaseModel):
+    """지도(현황) — 읍면동 단위 위험 업종 비율(실제값 기준), 예측값 관여 없음."""
+
     model_config = ConfigDict(from_attributes=True)
 
     dong: str
-    score: float
+    risk_ratio: float
     risk_level: str
     color: str
     trend: float
@@ -30,9 +49,10 @@ class PolicyPriorityItem(BaseModel):
 
     dong: str
     category: str
-    risk_score: float
+    actual_closure_rate_pct: float
     growth_prob: float
     quadrant: int
+    sample_insufficient: bool
 
 
 class AnalysisDongResponse(BaseModel):
@@ -60,7 +80,10 @@ class ScoreResponse(BaseModel):
     rank: Optional[int]
     total_dongs: Optional[int]
     top_pct: Optional[float]
-    risk_score: float
+    actual_closure_rate_pct: float
+    risk_level: str
+    predicted_rank: Optional[int]
+    sample_insufficient: bool
 
 
 class OfficialLoginRequest(BaseModel):

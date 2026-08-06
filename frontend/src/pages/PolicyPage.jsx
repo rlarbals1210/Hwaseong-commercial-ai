@@ -77,7 +77,7 @@ function QuadrantPanel({ meta, items, highlight }) {
               <div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "var(--on-surface)" }}>{item.dong}</div>
                 <div style={{ fontSize: 11, color: "var(--on-surface-variant)" }}>
-                  {item.category} · 위험 {item.risk_score}
+                  {item.category} · 실제 폐업률 {item.actual_closure_rate_pct}%
                 </div>
               </div>
               <span style={{ fontSize: 12, fontWeight: 700, color: meta.color, flexShrink: 0 }}>{item.growth_prob}개</span>
@@ -92,9 +92,9 @@ function QuadrantPanel({ meta, items, highlight }) {
 function downloadCsv(data) {
   const rows = Object.entries(data).flatMap(([q, items]) => items.map((item) => ({ ...item, quadrant: q })));
   if (!rows.length) return;
-  const headers = ["우선순위", "읍면동", "업종", "폐업위험점수", "점포수(수혜규모)"];
+  const headers = ["우선순위", "읍면동", "업종", "실제폐업률(%)", "점포수(수혜규모)"];
   const lines = rows.map((r) =>
-    [r.quadrant, r.dong, r.category, r.risk_score, r.growth_prob]
+    [r.quadrant, r.dong, r.category, r.actual_closure_rate_pct, r.growth_prob]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(",")
   );
@@ -135,7 +135,7 @@ export default function PolicyPage() {
   const total = Object.values(data).reduce((s, arr) => s + arr.length, 0);
   const dongCount = new Set(Object.values(data).flat().map((i) => i.dong)).size;
   const highRiskStores = [...data.Q1, ...data.Q2].reduce((s, i) => s + (i.growth_prob || 0), 0);
-  const topQ1 = [...data.Q1].sort((a, b) => b.risk_score - a.risk_score)[0];
+  const topQ1 = [...data.Q1].sort((a, b) => b.actual_closure_rate_pct - a.actual_closure_rate_pct)[0];
 
   return (
     <div>
@@ -229,7 +229,7 @@ export default function PolicyPage() {
                 <span>High</span>
               </div>
               <div style={{ textAlign: "center", fontSize: 12, color: "var(--on-surface-variant)", marginTop: 4 }}>
-                폐업 위험도 스코어 (Risk Score)
+                실제 폐업률 (Actual Closure Rate, %)
               </div>
             </div>
           </div>
@@ -253,7 +253,7 @@ export default function PolicyPage() {
             lightbulb
           </span>
           <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, opacity: 0.95 }}>
-            현재 <b>{topQ1.dong} · {topQ1.category}</b>이(가) 1순위 구역 중 가장 높은 위험도(<b>{topQ1.risk_score}</b>)를 보이고 있습니다.
+            현재 <b>{topQ1.dong} · {topQ1.category}</b>이(가) 1순위 구역 중 가장 높은 실제 폐업률(<b>{topQ1.actual_closure_rate_pct}%</b>)을 보이고 있습니다.
             해당 구역부터 정책자금 배정을 우선 검토하세요.
           </p>
         </div>

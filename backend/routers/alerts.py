@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func, tuple_
+from sqlalchemy import func
 from typing import Optional
 from ..auth.dependencies import get_current_official
 from ..database import get_db
-from ..models import ScoreData, CommercialData, RiskIndex
-from ..schemas import ClosureRiskItem, VacancyRiskItem
-from ..services.risk import action_message, risk_level
+from ..models import RiskIndex
+from ..schemas import ClosureRiskItem, ClosureRateRankingItem, VacancyRiskItem
+from ..services.risk import action_message, dong_risk_level
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"], dependencies=[Depends(get_current_official)])
 
@@ -17,86 +17,100 @@ def get_closure_risk(
     category: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
+    """조기경보(예측) — AI 예측 폐업률로 셀 순위만 매긴다. 예측 절대값은 응답에 없음
+    (예측폐업률이 실제 관측치보다 구조적으로 ~2.4배 높게 나오는 게 확인되어, 화면에 노출하면
+    오해를 줌 — 순위만 신뢰할 수 있는 정보). 실제 관측 폐업률·개업률·추세는 팩트로 그대로 병기."""
     latest = db.query(func.max(RiskIndex.기준_년분기_코드)).scalar()
     if not latest:
         return []
 
-    q = db.query(RiskIndex).filter(RiskIndex.기준_년분기_코드 == latest)
+    # 표본부족(점포수<30) 셀은 예측순위 산정에서 이미 제외됨(build_risk_index.py) — NULL 방어차 재확인
+    q = db.query(RiskIndex).filter(
+        RiskIndex.기준_년분기_코드 == latest,
+        RiskIndex.표본부족_플래그.is_(False),
+        RiskIndex.예측순위.isnot(None),
+    )
     if category:
         q = q.filter(RiskIndex.통합카테고리 == category)
-    rows = q.order_by(RiskIndex.폐업위험점수.desc()).limit(limit).all()
-    if not rows:
+    rows = q.order_by(RiskIndex.예측순위.asc()).limit(limit).all()
+
+    return [
+        ClosureRiskItem(
+            predicted_rank=r.예측순위,
+            dong=r.행정동명,
+            category=r.통합카테고리,
+            actual_closure_rate_pct=r.실제폐업률_pct,
+            growth_prob=r.성장확률,
+            open_rate_pct=r.개업률_pct,
+            trend_slope=round(r.트렌드_기울기 or 0.0, 3),
+            saturation=r.업종_포화도,
+            anomaly=r.이상탐지_플래그 or False,
+            action=action_message(r.위험등급, r.이상탐지_플래그 or False),
+        )
+        for r in rows
+    ]
+
+
+@router.get("/closure-rate-ranking", response_model=list[ClosureRateRankingItem])
+def get_closure_rate_ranking(
+    limit: int = Query(10, ge=1, le=50),
+    category: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """상권 순위표(현황) — 실제 관측 폐업률로만 정렬. 보정·예측 관여 없음."""
+    latest = db.query(func.max(RiskIndex.기준_년분기_코드)).scalar()
+    if not latest:
         return []
 
-    pairs = [(r.행정동명, r.통합카테고리) for r in rows]
-
-    all_scores = (
-        db.query(ScoreData)
-        .filter(tuple_(ScoreData.행정동명, ScoreData.통합카테고리).in_(pairs))
-        .order_by(ScoreData.기준_년분기_코드.desc())
-        .all()
+    q = db.query(RiskIndex).filter(
+        RiskIndex.기준_년분기_코드 == latest,
+        RiskIndex.표본부족_플래그.is_(False),
     )
-    score_map: dict = {}
-    for s in all_scores:
-        key = (s.행정동명, s.통합카테고리)
-        if key not in score_map:
-            score_map[key] = s
+    if category:
+        q = q.filter(RiskIndex.통합카테고리 == category)
+    rows = q.order_by(RiskIndex.실제폐업률_pct.desc()).limit(limit).all()
 
-    all_comms = (
-        db.query(CommercialData)
-        .filter(
-            tuple_(CommercialData.행정동명, CommercialData.통합카테고리).in_(pairs),
-            CommercialData.기준_년분기_코드 == latest,
+    return [
+        ClosureRateRankingItem(
+            rank=i,
+            dong=r.행정동명,
+            category=r.통합카테고리,
+            closure_rate_pct=r.실제폐업률_pct,
+            store_count=r.점포수,
         )
-        .all()
-    )
-    comm_map = {(c.행정동명, c.통합카테고리): c for c in all_comms}
-
-    result = []
-    for i, r in enumerate(rows, 1):
-        key = (r.행정동명, r.통합카테고리)
-        score_row = score_map.get(key)
-        comm_row = comm_map.get(key)
-        result.append(
-            ClosureRiskItem(
-                rank=i,
-                dong=r.행정동명,
-                category=r.통합카테고리,
-                risk_score=round(r.폐업위험점수, 1),
-                growth_prob=score_row.성장확률 if score_row else 0.0,
-                closure_rate=comm_row.폐업_률_평균 if comm_row else 0.0,
-                anomaly=r.이상탐지_플래그 or False,
-                action=action_message(r.폐업위험점수, r.이상탐지_플래그 or False),
-            )
-        )
-    return result
+        for i, r in enumerate(rows, 1)
+    ]
 
 
 @router.get("/vacancy-risk/map", response_model=list[VacancyRiskItem])
 def get_vacancy_risk_map(db: Session = Depends(get_db)):
+    """지도(현황) — 읍면동별 위험 업종 비율(실제 폐업률 기준 셀 등급의 집계). 예측값 관여 없음."""
     latest = db.query(func.max(RiskIndex.기준_년분기_코드)).scalar()
     if not latest:
         return []
 
+    # 위험업종비율은 build_risk_index.py가 동단위로 미리 계산해 각 셀에 동일값을 채워둔 필드라
+    # 동별 아무 값이나 하나(min/max/avg 무관하게 동일)만 집계하면 된다. 트렌드는 표본부족 셀의
+    # 노이즈를 배제하기 위해 표본충분 셀만으로 평균낸다.
     rows = (
         db.query(
             RiskIndex.행정동명,
-            func.avg(RiskIndex.폐업위험점수).label("avg_risk"),
+            func.avg(RiskIndex.위험업종비율).label("risk_ratio"),
             func.avg(RiskIndex.트렌드_기울기).label("avg_slope"),
         )
-        .filter(RiskIndex.기준_년분기_코드 == latest)
+        .filter(RiskIndex.기준_년분기_코드 == latest, RiskIndex.표본부족_플래그.is_(False))
         .group_by(RiskIndex.행정동명)
         .all()
     )
 
     result = []
     for r in rows:
-        score = r.avg_risk or 0.0
-        level, color = risk_level(score)
+        ratio = r.risk_ratio or 0.0
+        level, color = dong_risk_level(ratio)
         result.append(
             VacancyRiskItem(
                 dong=r.행정동명,
-                score=round(score, 1),
+                risk_ratio=round(ratio, 1),
                 risk_level=level,
                 color=color,
                 trend=round(r.avg_slope or 0.0, 3),

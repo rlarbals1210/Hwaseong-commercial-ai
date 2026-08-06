@@ -28,6 +28,10 @@ def import_scores():
 def import_risk():
     df = pd.read_csv("data/processed/risk_index.csv", encoding="utf-8-sig")
     df["이상탐지_플래그"] = df["이상탐지_플래그"].astype(bool)
+    df["표본부족_플래그"] = df["표본부족_플래그"].astype(bool)
+    # 예측 절대값(_예측폐업률_내부용)은 CSV에만 남기고(오프라인 감사용) DB/API로는 절대 노출하지 않는다
+    # — 예측값은 순위(예측순위)로만 쓴다는 원칙(routers/alerts.py 참고).
+    df = df.drop(columns=["_예측폐업률_내부용"])
     with engine.connect() as conn:
         conn.execute(text("TRUNCATE TABLE risk_index RESTART IDENTITY"))
         conn.commit()
