@@ -26,6 +26,14 @@ export function apiFetch(path, options = {}) {
   return fetch(`${API}${path}`, { ...options, headers });
 }
 
+export async function apiFetchJson(path, options = {}) {
+  const response = await apiFetch(path, options);
+  if (!response.ok) {
+    throw new Error(`API request failed: ${response.status}`);
+  }
+  return response.json();
+}
+
 // JWT는 서명만 되어있을 뿐 암호화되지 않으므로, payload는 백엔드 호출 없이 클라이언트에서 바로 읽을 수 있음
 // (예: 사이드바에 표시할 공무원 아이디). base64url이라 표준 atob 전에 패딩/문자 치환이 필요.
 export function decodeJwtPayload(token) {

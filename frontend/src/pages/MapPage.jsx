@@ -95,6 +95,7 @@ export default function MapPage() {
       const risk = riskMap[name];
       const color = risk?.color || "#94A3B8";
       const ratio = risk?.risk_ratio ?? null;
+      const coverage = risk?.coverage_pct ?? null;
 
       const coords = feat.geometry.type === "Polygon"
         ? [feat.geometry.coordinates]
@@ -109,7 +110,7 @@ export default function MapPage() {
 
         window.naver.maps.Event.addListener(polygon, "mouseover", (e) => {
           polygon.setOptions({ fillOpacity: 0.8 });
-          setTooltip({ name, ratio, color, x: e.pointerEvent.clientX, y: e.pointerEvent.clientY });
+          setTooltip({ name, ratio, coverage, color, x: e.pointerEvent.clientX, y: e.pointerEvent.clientY });
         });
         window.naver.maps.Event.addListener(polygon, "mousemove", (e) => {
           setTooltip((t) => t ? { ...t, x: e.pointerEvent.clientX, y: e.pointerEvent.clientY } : null);
@@ -245,6 +246,12 @@ export default function MapPage() {
                   <div style={{ fontSize: 13, color: "var(--on-surface-variant)", padding: "12px 0", borderTop: "1px solid var(--border-subtle)" }}>
                     폐업률 추이 기울기 <b style={{ color: "var(--on-surface)" }}>{selected.trend?.toFixed(3)}</b>
                   </div>
+                  <div style={{ fontSize: 13, color: "var(--on-surface-variant)", padding: "12px 0", borderTop: "1px solid var(--border-subtle)" }}>
+                    분석 가능 업종 <b style={{ color: "var(--on-surface)" }}>{selected.sample_sufficient_cells}/{selected.total_cells}개</b>
+                    <div style={{ marginTop: 4, fontSize: 11, color: "var(--outline)" }}>
+                      표본 충족률 {selected.coverage_pct}% · 점포 수 30개 이상 기준
+                    </div>
+                  </div>
                   <Link
                     to="/dashboard"
                     style={{
@@ -300,6 +307,7 @@ export default function MapPage() {
         >
           <b>{tooltip.name}</b>
           {tooltip.ratio != null && <span style={{ marginLeft: 8, color: tooltip.color }}>위험 업종 비율 {tooltip.ratio}%</span>}
+          {tooltip.coverage != null && <span style={{ marginLeft: 8 }}>표본 충족 {tooltip.coverage}%</span>}
         </div>
       )}
     </div>

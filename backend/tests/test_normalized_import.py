@@ -1,12 +1,26 @@
 import numpy as np
 import pandas as pd
 
-from ai.import_normalized_db import _quarter_add, _supplement_score_only_cells
+from ai.import_normalized_db import (
+    _area_risk_grade,
+    _cell_risk_grade,
+    _quarter_add,
+    _supplement_score_only_cells,
+)
 
 
 def test_quarter_add_rolls_over_year():
     assert _quarter_add(20254, 1) == 20261
     assert _quarter_add(20254, 2) == 20262
+
+
+def test_risk_grades_use_stored_threshold_semantics():
+    assert _cell_risk_grade(0.07, False, 3.22, 6.44) == "위험"
+    assert _cell_risk_grade(0.04, False, 3.22, 6.44) == "주의"
+    assert _cell_risk_grade(0.01, False, 3.22, 6.44) == "안정"
+    assert _cell_risk_grade(0.20, True, 3.22, 6.44) == "표본부족"
+    assert _cell_risk_grade(None, False, 3.22, 6.44) is None
+    assert _area_risk_grade(25.0, 11.62, 23.24) == "위험"
 
 
 def test_score_only_cell_is_preserved_as_unrated_fact(tmp_path):

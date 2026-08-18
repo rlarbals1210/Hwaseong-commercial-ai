@@ -169,7 +169,9 @@ hwaseong-commercial-ai/
 │   ├── build_dataset.py         # raw zip → 갭필링 패널 → label_h2 → final_dataset.csv/store_train_table.csv/cell_train_table.csv
 │   ├── train_model.py           # LightGBM 학습(셀단위 중분류 주력 + 점포단위 참고) → scores.csv
 │   ├── build_risk_index.py      # 폐업위험점수 + 이상탐지 → risk_index.csv
-│   ├── import_to_db.py          # CSV → PostgreSQL
+│   ├── import_normalized_db.py  # 검증 CSV → 정규화 PostgreSQL(upsert)
+│   ├── build_explanations.py    # M1 검증 → 상대 기여 요인 적재
+│   ├── import_to_db.py          # 레거시 3테이블 적재(롤백용)
 │   └── archive/                 # 구버전 파이프라인 4개 + 팀원 실험 스크립트 23개 (Phase 4에서 정리, 기록 보존용)
 │
 └── data/
@@ -324,8 +326,12 @@ python ai/train_model.py
 # 3. 폐업위험지수 계산 → risk_index.csv
 python ai/build_risk_index.py
 
-# 4. PostgreSQL 임포트
-python ai/import_to_db.py --table all
+# 4. 정규화 PostgreSQL 임포트(기준선·등급·동 요약 포함)
+python ai/import_normalized_db.py
+
+# 5. 상대 기여 요인 M1 검증 후 적재(단일 요인 쏠림 90% 초과면 비움)
+python ai/build_explanations.py --validate-only
+python ai/build_explanations.py
 ```
 
 `ai/build_dataset.py`는 raw zip 로딩 + 인허가 매칭 부분이 외장 SSD(`RAW_DATA_DIR`)에 의존한다 — SSD가
@@ -472,10 +478,12 @@ Codex가 다시 제안하더라도 아래 결정사항은 바꾸지 않는다.
 - `*.pkl`, `*.csv`, `*.env` 파일 커밋 금지
 
 ### AI 파이프라인 주의사항
-- 실행 순서 반드시 준수: `build_dataset.py` → `train_model.py` → `build_risk_index.py` → `import_to_db.py`
+- 실행 순서 반드시 준수: `build_dataset.py` → `train_model.py` → `build_risk_index.py` →
+  `import_normalized_db.py` → `build_explanations.py`
 - 학습된 모델은 `data/processed/lgbm_model_store.pkl`(점포단위, 참고용) / `lgbm_model_cell.pkl`(셀단위, 주력
   프로덕션)에 각각 저장됨 (joblib, `{"model", "features"}` 키)
-- `import_to_db.py`는 TRUNCATE 후 재삽입 방식 — 여러 번 실행해도 중복 없음
+- `import_normalized_db.py`는 복합키 upsert 방식이며 업무 이력·과거 모델 실행을 삭제하지 않는다.
+- `build_explanations.py`는 M1 검증을 통과할 때만 활성 모델의 상대 기여 요인을 적재한다.
 
 **Phase 4 재작성 완료 (2026-08-03)** — `ai/build_dataset.py`~`build_risk_index.py`를 `eda/02_preprocessing.ipynb`
 ·`03_modeling.ipynb`에서 검증된 로직으로 전면 교체(구버전은 `ai/archive/`에 보존, [[project_eda_rework_status]]
@@ -494,8 +502,9 @@ Codex가 다시 제안하더라도 아래 결정사항은 바꾸지 않는다.
 - **업종 분류명 두 버전 공존**: 같은 폴더의 "업종코드_20230228.csv" 코드표는 대분류명이 정식 명칭("전문, 과학 및 기술 서비스업")인데, 실제 분기별 데이터 CSV의 `상권업종대분류명`/`상권업종중분류명` 컬럼은 축약형("과학·기술")을 씀. Phase 4부터는 `통합카테고리`가 `상권업종중분류명` 값을 그대로 쓰므로(별도 매핑 딕셔너리 없음) 이 문제는 더 이상 해당 없음 — 코드표 명칭이 필요한 경우에만 유효한 주의사항으로 남겨둠.
 - 상가정보 zip의 인코딩은 파일명은 cp949, CSV 내용은 UTF-8 — `zipfile.ZipFile(path, metadata_encoding="cp949")`로 열고 `pd.read_csv(..., encoding="utf-8")`로 읽어야 함.
 
-**검증 현황 (2026-08-03 완료)**: `ai/build_dataset.py`→`train_model.py`→`build_risk_index.py`→
-`import_to_db.py` 전체를 실제 SSD raw 데이터로 end-to-end 실행 완료. `store_panel.csv` 873,035행,
+**검증 현황 (2026-08-18 완료)**: `ai/build_dataset.py`→`train_model.py`→`build_risk_index.py`→
+`import_normalized_db.py`→`build_explanations.py` 전체를 실제 SSD raw 데이터로 end-to-end 실행 완료.
+`store_panel.csv` 873,035행,
 `final_dataset.csv` 35,505행 — 앞서 fixture(노트북 산출물) 기준으로 미리 계산했던 예측치와 정확히
 일치(같은 알고리즘 + 같은 raw 데이터 → 같은 결과, 이식이 정확하다는 재확인). 셀단위 모델 스피어만
 0.4193/리프트 1.444x도 그대로 재현됨. `score_latest_quarter()`가 실제 최신 분기(2025Q4, `기준_년분기_코드

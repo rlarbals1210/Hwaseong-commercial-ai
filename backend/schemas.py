@@ -1,7 +1,9 @@
 from pydantic import BaseModel, ConfigDict
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
-from typing import Optional
+from typing import Literal, Optional
+
+from pydantic import Field
 
 
 class ClosureRiskItem(BaseModel):
@@ -10,11 +12,11 @@ class ClosureRiskItem(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    prediction_id: int
     predicted_rank: int
     dong: str
     category: str
     actual_closure_rate_pct: float
-    growth_prob: float
     open_rate_pct: float
     trend_slope: float
     saturation: float
@@ -44,15 +46,40 @@ class VacancyRiskItem(BaseModel):
     risk_level: str
     color: str
     trend: float
+    total_cells: int
+    sample_sufficient_cells: int
+    coverage_pct: float
+
+
+class PredictionContributionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    rank: int
+    factor_code: str
+    factor_label: str
+    direction: Literal["risk", "safe"]
+    share_pct: float
+
+
+class PredictionExplanationResponse(BaseModel):
+    notice: str
+    contributions: list[PredictionContributionResponse]
 
 
 class PolicyPriorityItem(BaseModel):
+    """현장점검 우선순위 4사분면 항목.
+
+    x축 = 실제 관측 폐업률(예측값 아님), y축 = store_count(영향 점포 수).
+    구 필드명 growth_prob은 실제로 점포 수를 담고 있어 의미가 혼동되므로 store_count로 정정했다.
+    이 응답은 지원 대상 결정이 아니라 '어디부터 현장 확인할지' 순서를 제시한다.
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
     dong: str
     category: str
     actual_closure_rate_pct: float
-    growth_prob: float
+    store_count: int
     quadrant: int
     sample_insufficient: bool
 
@@ -77,7 +104,6 @@ class ScoreResponse(BaseModel):
 
     dong: str
     category: str
-    growth_prob: float
     grade: str
     rank: Optional[int]
     total_dongs: Optional[int]
@@ -138,6 +164,34 @@ class AlertEvidenceResponse(AlertEvidenceCreate):
     alert_id: int
     verified_by_official_id: Optional[int]
     created_at: datetime
+
+
+class AlertContactCreate(BaseModel):
+    contacted_on: date
+    channel: Literal["visit", "phone", "sms", "email", "meeting", "other"]
+    outcome: Literal["connected", "no_answer", "declined", "applied", "pending"]
+    target_scope: Literal["cell", "store_subset"] = "cell"
+    contacted_store_count: Optional[int] = Field(default=None, ge=0)
+    note: Optional[str] = None
+
+
+class AlertContactUpdate(BaseModel):
+    contacted_on: Optional[date] = None
+    channel: Optional[Literal["visit", "phone", "sms", "email", "meeting", "other"]] = None
+    outcome: Optional[Literal["connected", "no_answer", "declined", "applied", "pending"]] = None
+    target_scope: Optional[Literal["cell", "store_subset"]] = None
+    contacted_store_count: Optional[int] = Field(default=None, ge=0)
+    note: Optional[str] = None
+
+
+class AlertContactResponse(AlertContactCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    alert_id: int
+    official_id: int
+    created_at: datetime
+    updated_at: Optional[datetime]
 
 
 class PolicyProgramResponse(BaseModel):

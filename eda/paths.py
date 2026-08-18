@@ -70,3 +70,8 @@ MODEL_STORE_RESULTS_JSON = PROCESSED_DATA_DIR / "model_store_results.json"
 MODEL_CELL_RESULTS_JSON = PROCESSED_DATA_DIR / "model_cell_results.json"
 LGBM_MODEL_STORE_PKL = PROCESSED_DATA_DIR / "lgbm_model_store.pkl"
 LGBM_MODEL_CELL_PKL = PROCESSED_DATA_DIR / "lgbm_model_cell.pkl"
+
+# 업력별 2개 분기 내 명시적 폐업률 분석 산출물
+TENURE_RATES_CSV = PROCESSED_DATA_DIR / "tenure_closure_rates.csv"
+TENURE_BY_QUARTER_CSV = PROCESSED_DATA_DIR / "tenure_closure_by_quarter.csv"
+TENURE_ANALYSIS_JSON = PROCESSED_DATA_DIR / "tenure_analysis.json"

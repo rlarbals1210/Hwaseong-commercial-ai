@@ -57,12 +57,17 @@ def dong_risk_level(risk_ratio_pct: float) -> tuple[str, str]:
 
 
 def action_message(level: str, anomaly: bool) -> str:
+    """후속 조치 '검토안' 문구 — 규칙 기반 템플릿(외부 LLM 미사용).
+
+    AI가 지원 대상을 결정한다는 오해를 막기 위해 "정책자금 지원"처럼 집행을 단정하는 표현을
+    쓰지 않는다. 모든 문구는 공무원의 다음 행동(확인·관찰)을 제안하는 형태로만 쓴다.
+    """
     if anomaly:
-        return "즉시 현장 점검 필요 (트렌드 이상)"
+        return "트렌드 이상 — 현장 확인 우선"
     if level == "표본부족":
-        return "표본 부족 — 참고용, 정책 판단 보류 권장"
+        return "표본 부족 — 통계 판단 보류, 현장 확인 권장"
     if level == "위험":
-        return "정책자금 지원 우선 검토"
+        return "현장 확인 우선순위 높음"
     if level == "주의":
         return "분기별 모니터링 강화"
     return "정기 관찰 유지"

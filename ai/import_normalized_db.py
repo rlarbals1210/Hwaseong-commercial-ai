@@ -17,6 +17,7 @@ model_run별 append/upsert한다. 예측 절대값은 내부 감사용으로만 
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -35,12 +36,14 @@ sys.path.insert(0, str(PROJECT_ROOT))
 from backend.database import engine  # noqa: E402
 from backend.models import (  # noqa: E402
     AdminArea,
+    AreaQuarterSummary,
     CommercialQuarter,
     DataBatch,
     IndustryCategory,
     ModelRun,
     PolicyProgram,
     RiskPrediction,
+    RiskThresholdSet,
 )
 from eda import paths as eda_paths  # noqa: E402
 
@@ -54,6 +57,14 @@ SCORES_REQUIRED = {
     "업종내_순위", "업종내_전체동수", "상위_퍼센트",
 }
 SAMPLE_MIN = 30
+THRESHOLD_REQUIRED = {
+    "avg_closure_rate_pct",
+    "danger_threshold_pct",
+    "dong_ratio_avg_pct",
+    "dong_ratio_danger_pct",
+    "sample_min",
+    "quarter",
+}
 POLICY_PROGRAMS = [
     {
         "program_code": "SPECIAL_GUARANTEE",
@@ -115,7 +126,9 @@ def _slope(values: pd.Series) -> float:
     return float(np.polyfit(np.arange(len(clean)), clean, 1)[0])
 
 
-def _build_latest_signals(commercial: pd.DataFrame, scores: pd.DataFrame) -> pd.DataFrame:
+def _build_latest_signals(
+    commercial: pd.DataFrame, scores: pd.DataFrame, sample_min: int = SAMPLE_MIN
+) -> pd.DataFrame:
     latest = int(commercial["기준_년분기_코드"].max())
     quarters = sorted(commercial["기준_년분기_코드"].unique())[-4:]
     slopes = (
@@ -133,7 +146,7 @@ def _build_latest_signals(commercial: pd.DataFrame, scores: pd.DataFrame) -> pd.
     ]
     result = scores.merge(latest_fact, on=["행정동명", "통합카테고리"], how="left")
     result = result.merge(slopes, on=["행정동명", "통합카테고리"], how="left")
-    result["sample_insufficient"] = result["점포수"].fillna(0) < SAMPLE_MIN
+    result["sample_insufficient"] = result["점포수"].fillna(0) < sample_min
     result["predicted_closure_rate_internal"] = ((100 - result["성장확률"]) / 100).clip(0, 1)
     result["predicted_rank"] = pd.NA
     ok = ~result["sample_insufficient"]
@@ -188,6 +201,49 @@ def _supplement_score_only_cells(
 
 def _nullable_float(value) -> float | None:
     return None if pd.isna(value) else float(value)
+
+
+def _load_thresholds(path: Path, latest_quarter: int) -> dict:
+    if not path.exists():
+        raise FileNotFoundError(
+            f"위험 기준선 파일이 없습니다: {path}. ai/build_risk_index.py를 먼저 실행하세요."
+        )
+    thresholds = json.loads(path.read_text(encoding="utf-8"))
+    missing = sorted(THRESHOLD_REQUIRED - set(thresholds))
+    if missing:
+        raise ValueError(f"risk_thresholds.json 필수 키 누락: {missing}")
+    if int(thresholds["quarter"]) != latest_quarter:
+        raise ValueError(
+            "위험 기준선 분기가 최신 상권 분기와 다릅니다: "
+            f"{thresholds['quarter']} != {latest_quarter}"
+        )
+    return thresholds
+
+
+def _cell_risk_grade(
+    closure_rate: float | None,
+    sample_insufficient: bool,
+    avg_pct: float,
+    danger_pct: float,
+) -> str | None:
+    if sample_insufficient:
+        return "표본부족"
+    if closure_rate is None:
+        return None
+    actual_pct = closure_rate * 100
+    if actual_pct >= danger_pct:
+        return "위험"
+    if actual_pct >= avg_pct:
+        return "주의"
+    return "안정"
+
+
+def _area_risk_grade(ratio_pct: float, avg_pct: float, danger_pct: float) -> str:
+    if ratio_pct >= danger_pct:
+        return "위험"
+    if ratio_pct >= avg_pct:
+        return "주의"
+    return "안정"
 
 
 def _upsert(
@@ -279,9 +335,17 @@ def import_normalized(
     cell_table_path: Path,
     metrics_path: Path,
     model_artifact_path: Path,
+    thresholds_path: Path,
     model_version: str = "phase6-cell-lgbm",
 ) -> dict:
-    required_tables = {"admin_areas", "industry_categories", "commercial_quarters", "model_runs"}
+    required_tables = {
+        "admin_areas",
+        "industry_categories",
+        "commercial_quarters",
+        "model_runs",
+        "risk_threshold_sets",
+        "area_quarter_summaries",
+    }
     missing_tables = required_tables - set(inspect(session.get_bind()).get_table_names())
     if missing_tables:
         raise RuntimeError(f"Alembic migration이 필요합니다. 누락 테이블: {sorted(missing_tables)}")
@@ -298,10 +362,12 @@ def import_normalized(
         raise ValueError("scores.csv에 행정동×업종×분기 중복키가 있습니다")
 
     latest = int(commercial["기준_년분기_코드"].max())
+    thresholds = _load_thresholds(thresholds_path, latest)
+    sample_min = int(thresholds["sample_min"])
     if set(scores["기준_년분기_코드"].astype(int).unique()) != {latest}:
         raise ValueError("scores.csv는 final_dataset.csv의 최신 분기 한 개만 포함해야 합니다")
     commercial = _supplement_score_only_cells(commercial, scores, cell_table_path)
-    signals = _build_latest_signals(commercial, scores)
+    signals = _build_latest_signals(commercial, scores, sample_min)
     signal_lookup = signals.set_index(["행정동명", "통합카테고리"]).to_dict("index")
 
     _upsert(
@@ -336,26 +402,129 @@ def import_normalized(
     session.flush()
     batch_id = session.query(DataBatch.id).filter(DataBatch.batch_key == batch_key).scalar()
 
+    threshold_rows = [{
+        "batch_id": batch_id,
+        "quarter_code": latest,
+        "avg_closure_rate_pct": float(thresholds["avg_closure_rate_pct"]),
+        "danger_threshold_pct": float(thresholds["danger_threshold_pct"]),
+        "area_ratio_avg_pct": float(thresholds["dong_ratio_avg_pct"]),
+        "area_ratio_danger_pct": float(thresholds["dong_ratio_danger_pct"]),
+        "sample_min": sample_min,
+        "computed_at": datetime.now(timezone.utc),
+    }]
+    _upsert(
+        session,
+        RiskThresholdSet,
+        threshold_rows,
+        ["batch_id", "quarter_code"],
+        [
+            "avg_closure_rate_pct",
+            "danger_threshold_pct",
+            "area_ratio_avg_pct",
+            "area_ratio_danger_pct",
+            "sample_min",
+            "computed_at",
+        ],
+    )
+    session.flush()
+    threshold_set_id = (
+        session.query(RiskThresholdSet.id)
+        .filter(
+            RiskThresholdSet.batch_id == batch_id,
+            RiskThresholdSet.quarter_code == latest,
+        )
+        .scalar()
+    )
+
     commercial_rows = []
     for row in commercial.itertuples(index=False):
         signal = signal_lookup.get((row.행정동명, row.통합카테고리), {}) if row.기준_년분기_코드 == latest else {}
+        closure_rate = _nullable_float(row.폐업_률_평균)
+        is_latest = int(row.기준_년분기_코드) == latest
+        sample_insufficient = int(row.점포수) < sample_min
         commercial_rows.append({
             "area_id": areas[row.행정동명],
             "industry_id": industries[row.통합카테고리],
             "quarter_code": int(row.기준_년분기_코드),
             "store_count": int(row.점포수),
             "opening_rate": _nullable_float(row.개업_율_평균),
-            "closure_rate": _nullable_float(row.폐업_률_평균),
+            "closure_rate": closure_rate,
             "saturation_rate": _nullable_float(row.업종_포화도),
             "competition_index": _nullable_float(row.경쟁강도),
             "trend_slope": float(signal.get("trend_slope", 0.0)) if signal else None,
             "anomaly_flag": bool(signal.get("anomaly_flag", False)),
+            "risk_grade": _cell_risk_grade(
+                closure_rate,
+                sample_insufficient,
+                float(thresholds["avg_closure_rate_pct"]),
+                float(thresholds["danger_threshold_pct"]),
+            ) if is_latest else None,
+            "sample_insufficient": sample_insufficient,
+            "threshold_set_id": threshold_set_id if is_latest else None,
             "batch_id": batch_id,
         })
     _upsert(
         session, CommercialQuarter, commercial_rows,
         ["area_id", "industry_id", "quarter_code"],
-        ["store_count", "opening_rate", "closure_rate", "saturation_rate", "competition_index", "trend_slope", "anomaly_flag", "batch_id"],
+        [
+            "store_count",
+            "opening_rate",
+            "closure_rate",
+            "saturation_rate",
+            "competition_index",
+            "trend_slope",
+            "anomaly_flag",
+            "risk_grade",
+            "sample_insufficient",
+            "threshold_set_id",
+            "batch_id",
+        ],
+    )
+    session.flush()
+
+    latest_rows = [row for row in commercial_rows if row["quarter_code"] == latest]
+    summary_rows = []
+    for area_id in sorted({row["area_id"] for row in latest_rows}):
+        cells = [row for row in latest_rows if row["area_id"] == area_id]
+        sufficient = [row for row in cells if not row["sample_insufficient"]]
+        risk_cells = sum(row["risk_grade"] == "위험" for row in sufficient)
+        ratio = round(risk_cells / len(sufficient) * 100, 1) if sufficient else 0.0
+        slopes = [
+            row["trend_slope"]
+            for row in sufficient
+            if row["trend_slope"] is not None
+        ]
+        summary_rows.append({
+            "area_id": area_id,
+            "quarter_code": latest,
+            "total_cells": len(cells),
+            "sample_sufficient_cells": len(sufficient),
+            "risk_cells": risk_cells,
+            "risk_industry_ratio_pct": ratio,
+            "area_risk_grade": _area_risk_grade(
+                ratio,
+                float(thresholds["dong_ratio_avg_pct"]),
+                float(thresholds["dong_ratio_danger_pct"]),
+            ),
+            "avg_trend_slope": float(np.mean(slopes)) if slopes else None,
+            "threshold_set_id": threshold_set_id,
+            "batch_id": batch_id,
+        })
+    _upsert(
+        session,
+        AreaQuarterSummary,
+        summary_rows,
+        ["area_id", "quarter_code"],
+        [
+            "total_cells",
+            "sample_sufficient_cells",
+            "risk_cells",
+            "risk_industry_ratio_pct",
+            "area_risk_grade",
+            "avg_trend_slope",
+            "threshold_set_id",
+            "batch_id",
+        ],
     )
     session.flush()
 
@@ -422,6 +591,8 @@ def import_normalized(
         "areas": len(areas),
         "industries": len(industries),
         "commercial_quarters": len(commercial_rows),
+        "threshold_sets": len(threshold_rows),
+        "area_quarter_summaries": len(summary_rows),
         "predictions": len(prediction_rows),
         "ranked_predictions": sum(row["predicted_rank"] is not None for row in prediction_rows),
         "latest_quarter": latest,
@@ -436,12 +607,24 @@ def main() -> None:
     parser.add_argument("--cell-table", type=Path, default=PROJECT_ROOT / "data/processed/cell_train_table.csv")
     parser.add_argument("--metrics", type=Path, default=PROJECT_ROOT / "data/processed/model_cell_results.json")
     parser.add_argument("--model", type=Path, default=PROJECT_ROOT / "data/processed/lgbm_model_cell.pkl")
+    parser.add_argument(
+        "--thresholds",
+        type=Path,
+        default=PROJECT_ROOT / "data/processed/risk_thresholds.json",
+    )
     parser.add_argument("--model-version", default="phase6-cell-lgbm")
     args = parser.parse_args()
 
     with Session(engine) as session:
         result = import_normalized(
-            session, args.commercial, args.scores, args.cell_table, args.metrics, args.model, args.model_version
+            session,
+            args.commercial,
+            args.scores,
+            args.cell_table,
+            args.metrics,
+            args.model,
+            args.thresholds,
+            args.model_version,
         )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

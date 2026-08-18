@@ -1,11 +1,10 @@
 from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
-from typing import Optional
+from typing import Literal, Optional
 from ..database import get_db
 from ..models import AdminArea, CommercialQuarter, IndustryCategory, ModelRun, RiskPrediction
 from ..schemas import AnalysisDongResponse, ScoreResponse
-from ..services.risk import risk_level
 
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
@@ -93,13 +92,12 @@ def get_score(
     prediction, commercial = result
 
     actual_rate = (commercial.closure_rate or 0.0) * 100
-    sample_insufficient = prediction.sample_insufficient
-    level = "표본부족" if sample_insufficient else risk_level(actual_rate)[0]
+    sample_insufficient = commercial.sample_insufficient
+    level = commercial.risk_grade or ("표본부족" if sample_insufficient else "판정없음")
 
     return ScoreResponse(
         dong=dong,
         category=category,
-        growth_prob=round((1 - prediction.predicted_closure_rate_internal) * 100, 1),
         grade=prediction.grade,
         rank=prediction.industry_rank,
         total_dongs=prediction.industry_total_areas,
@@ -112,14 +110,40 @@ def get_score(
 
 
 @router.get("/categories")
-def list_categories(db: Session = Depends(get_db)):
-    cats = (
-        db.query(IndustryCategory.industry_name)
-        .join(CommercialQuarter, CommercialQuarter.industry_id == IndustryCategory.id)
-        .distinct()
-        .order_by(IndustryCategory.industry_name)
-        .all()
-    )
+def list_categories(
+    purpose: Optional[Literal["alert", "policy"]] = Query(None),
+    db: Session = Depends(get_db),
+):
+    if purpose == "alert":
+        q = (
+            db.query(IndustryCategory.industry_name)
+            .join(CommercialQuarter, CommercialQuarter.industry_id == IndustryCategory.id)
+            .join(RiskPrediction, RiskPrediction.commercial_quarter_id == CommercialQuarter.id)
+            .join(ModelRun, RiskPrediction.model_run_id == ModelRun.id)
+            .filter(
+                ModelRun.is_active.is_(True),
+                CommercialQuarter.sample_insufficient.is_(False),
+                RiskPrediction.predicted_rank.isnot(None),
+            )
+        )
+    elif purpose == "policy":
+        latest = db.query(func.max(CommercialQuarter.quarter_code)).scalar()
+        if latest is None:
+            return {"categories": []}
+        q = (
+            db.query(IndustryCategory.industry_name)
+            .join(CommercialQuarter, CommercialQuarter.industry_id == IndustryCategory.id)
+            .filter(
+                CommercialQuarter.quarter_code == latest,
+                CommercialQuarter.sample_insufficient.is_(False),
+            )
+        )
+    else:
+        q = db.query(IndustryCategory.industry_name).join(
+            CommercialQuarter, CommercialQuarter.industry_id == IndustryCategory.id
+        )
+
+    cats = q.distinct().order_by(IndustryCategory.industry_name).all()
     return {"categories": [c[0] for c in cats]}
 
 

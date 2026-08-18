@@ -4,14 +4,14 @@ import MapPage from "./pages/MapPage";
 import PolicyPage from "./pages/PolicyPage";
 import OfficialLoginPage from "./pages/OfficialLoginPage";
 import RequireRole from "./components/RequireRole";
-import { useAuth } from "./context/AuthContext";
+import { useAuth } from "./context/auth-context";
 
 // 공무원 정책 의사결정 지원 전용.
 // 시민(소상공인) 직접조회 화면은 2026-08-18 설계 결정으로 제외했다 — 상세 사유는 CLAUDE.md '설계 결정' 절 참조.
 const NAV = [
   { path: "/dashboard", label: "조기경보 대시보드", icon: "dashboard", Component: DashboardPage },
   { path: "/map", label: "공실위험 지도", icon: "map", Component: MapPage },
-  { path: "/policy", label: "정책자금 우선순위", icon: "grid_view", Component: PolicyPage },
+  { path: "/policy", label: "현장점검 우선순위", icon: "grid_view", Component: PolicyPage },
 ];
 
 function Sidebar({ nav, pathname, username, onLogout }) {

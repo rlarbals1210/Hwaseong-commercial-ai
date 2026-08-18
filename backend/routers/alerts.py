@@ -1,12 +1,26 @@
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional
 from ..auth.dependencies import get_current_official
 from ..database import get_db
-from ..models import AdminArea, CommercialQuarter, IndustryCategory, ModelRun, RiskPrediction
-from ..schemas import ClosureRiskItem, ClosureRateRankingItem, VacancyRiskItem
-from ..services.risk import DANGER_THRESHOLD_PCT, action_message, dong_risk_level, risk_level
+from ..models import (
+    AdminArea,
+    AreaQuarterSummary,
+    CommercialQuarter,
+    IndustryCategory,
+    ModelRun,
+    PredictionContribution,
+    RiskPrediction,
+)
+from ..schemas import (
+    ClosureRiskItem,
+    ClosureRateRankingItem,
+    PredictionExplanationResponse,
+    VacancyRiskItem,
+)
+from ..services.explain import EXPLANATION_NOTICE
+from ..services.risk import action_message
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"], dependencies=[Depends(get_current_official)])
 
@@ -28,7 +42,7 @@ def get_closure_risk(
         .join(IndustryCategory, CommercialQuarter.industry_id == IndustryCategory.id)
         .filter(
             ModelRun.is_active.is_(True),
-            RiskPrediction.sample_insufficient.is_(False),
+            CommercialQuarter.sample_insufficient.is_(False),
             RiskPrediction.predicted_rank.isnot(None),
         )
     )
@@ -39,13 +53,13 @@ def get_closure_risk(
     result = []
     for prediction, commercial, dong, industry in rows:
         actual_pct = (commercial.closure_rate or 0.0) * 100
-        level = risk_level(actual_pct)[0]
+        level = commercial.risk_grade or "안정"
         result.append(ClosureRiskItem(
+            prediction_id=prediction.id,
             predicted_rank=prediction.predicted_rank,
             dong=dong,
             category=industry,
             actual_closure_rate_pct=round(actual_pct, 2),
-            growth_prob=round((1 - prediction.predicted_closure_rate_internal) * 100, 1),
             open_rate_pct=round((commercial.opening_rate or 0.0) * 100, 2),
             trend_slope=round(commercial.trend_slope or 0.0, 3),
             saturation=commercial.saturation_rate or 0.0,
@@ -70,7 +84,10 @@ def get_closure_rate_ranking(
         db.query(CommercialQuarter, AdminArea.area_name, IndustryCategory.industry_name)
         .join(AdminArea, CommercialQuarter.area_id == AdminArea.id)
         .join(IndustryCategory, CommercialQuarter.industry_id == IndustryCategory.id)
-        .filter(CommercialQuarter.quarter_code == latest, CommercialQuarter.store_count >= 30)
+        .filter(
+            CommercialQuarter.quarter_code == latest,
+            CommercialQuarter.sample_insufficient.is_(False),
+        )
     )
     if category:
         q = q.filter(IndustryCategory.industry_name == category)
@@ -90,38 +107,58 @@ def get_closure_rate_ranking(
 
 @router.get("/vacancy-risk/map", response_model=list[VacancyRiskItem])
 def get_vacancy_risk_map(db: Session = Depends(get_db)):
-    """지도(현황) — 읍면동별 위험 업종 비율(실제 폐업률 기준 셀 등급의 집계). 예측값 관여 없음."""
-    latest = db.query(func.max(CommercialQuarter.quarter_code)).scalar()
+    """지도(현황) — 저장된 동×분기 집계를 조회한다. 예측값 관여 없음."""
+    latest = db.query(func.max(AreaQuarterSummary.quarter_code)).scalar()
     if not latest:
         return []
 
     rows = (
         db.query(
+            AreaQuarterSummary,
             AdminArea.area_name,
-            CommercialQuarter.closure_rate,
-            CommercialQuarter.trend_slope,
         )
-        .join(AdminArea, CommercialQuarter.area_id == AdminArea.id)
-        .filter(CommercialQuarter.quarter_code == latest, CommercialQuarter.store_count >= 30)
+        .join(AdminArea, AreaQuarterSummary.area_id == AdminArea.id)
+        .filter(AreaQuarterSummary.quarter_code == latest)
         .all()
     )
 
-    grouped: dict[str, list[tuple[float, float]]] = {}
-    for dong, closure_rate, trend_slope in rows:
-        grouped.setdefault(dong, []).append(((closure_rate or 0.0) * 100, trend_slope or 0.0))
-
-    result = []
-    for dong, values in grouped.items():
-        ratio = round(sum(rate >= DANGER_THRESHOLD_PCT for rate, _ in values) / len(values) * 100, 1)
-        avg_slope = sum(slope for _, slope in values) / len(values)
-        level, color = dong_risk_level(ratio)
-        result.append(
+    colors = {"안정": "#10B981", "주의": "#F59E0B", "위험": "#D51B4C"}
+    result = [
             VacancyRiskItem(
                 dong=dong,
-                risk_ratio=ratio,
-                risk_level=level,
-                color=color,
-                trend=round(avg_slope, 3),
+                risk_ratio=summary.risk_industry_ratio_pct,
+                risk_level=summary.area_risk_grade or "안정",
+                color=colors.get(summary.area_risk_grade, "#10B981"),
+                trend=round(summary.avg_trend_slope or 0.0, 3),
+                total_cells=summary.total_cells,
+                sample_sufficient_cells=summary.sample_sufficient_cells,
+                coverage_pct=round(
+                    summary.sample_sufficient_cells / summary.total_cells * 100, 1
+                ) if summary.total_cells else 0.0,
             )
-        )
+            for summary, dong in rows
+        ]
     return sorted(result, key=lambda item: item.dong)
+
+
+@router.get(
+    "/{prediction_id}/contributions",
+    response_model=PredictionExplanationResponse,
+)
+def get_prediction_contributions(
+    prediction_id: int,
+    db: Session = Depends(get_db),
+):
+    prediction = db.get(RiskPrediction, prediction_id)
+    if not prediction:
+        raise HTTPException(status_code=404, detail="예측 결과가 없습니다")
+    rows = (
+        db.query(PredictionContribution)
+        .filter(PredictionContribution.prediction_id == prediction_id)
+        .order_by(PredictionContribution.rank)
+        .all()
+    )
+    return PredictionExplanationResponse(
+        notice=EXPLANATION_NOTICE,
+        contributions=rows,
+    )

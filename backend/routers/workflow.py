@@ -1,22 +1,27 @@
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from sqlalchemy.orm import Session
 
 from ..auth.dependencies import get_current_official
 from ..database import get_db
 from ..models import (
     AlertCase,
+    AlertContact,
     AlertEvidence,
     CommercialQuarter,
     PolicyAction,
     PolicyOutcome,
     PolicyProgram,
     RiskPrediction,
+    RiskThresholdSet,
 )
 from ..schemas import (
     AlertCaseResponse,
     AlertCaseUpdate,
+    AlertContactCreate,
+    AlertContactResponse,
+    AlertContactUpdate,
     AlertEvidenceCreate,
     AlertEvidenceResponse,
     PolicyActionCreate,
@@ -25,16 +30,14 @@ from ..schemas import (
     PolicyOutcomeResponse,
     PolicyProgramResponse,
 )
-from ..services.risk import AVG_CLOSURE_RATE_PCT
 
 
 router = APIRouter(prefix="/api/workflow", tags=["workflow"])
 ALERT_STATUSES = {"new", "reviewing", "confirmed", "dismissed", "actioned", "closed"}
 EVIDENCE_TYPES = {
-    "OBSERVED_SIGNAL",
-    "MODEL_CONTRIBUTION",
-    "CONTEXT_INDICATOR",
-    "OFFICIAL_CONFIRMATION",
+    "confirmed_signal",
+    "model_contribution",
+    "field_check",
 }
 
 
@@ -45,21 +48,29 @@ def _official_id(payload: dict) -> int:
         raise HTTPException(status_code=401, detail="공무원 식별정보가 유효하지 않습니다")
 
 
-def _initial_evidence(alert_id: int, prediction: RiskPrediction, cell: CommercialQuarter) -> list[AlertEvidence]:
+def _initial_evidence(
+    alert_id: int,
+    prediction: RiskPrediction,
+    cell: CommercialQuarter,
+    avg_closure_rate_pct: float | None,
+) -> list[AlertEvidence]:
+    actual_closure_rate_pct = round((cell.closure_rate or 0.0) * 100, 2)
     return [
         AlertEvidence(
             alert_id=alert_id,
-            evidence_type="OBSERVED_SIGNAL",
+            evidence_type="confirmed_signal",
             metric_code="actual_closure_rate_pct",
-            observed_value=round((cell.closure_rate or 0.0) * 100, 2),
-            baseline_value=AVG_CLOSURE_RATE_PCT,
-            direction="above" if (cell.closure_rate or 0.0) * 100 >= AVG_CLOSURE_RATE_PCT else "below",
+            observed_value=actual_closure_rate_pct,
+            baseline_value=avg_closure_rate_pct,
+            direction=(
+                "above" if actual_closure_rate_pct >= avg_closure_rate_pct else "below"
+            ) if avg_closure_rate_pct is not None else None,
             source_quarter_code=cell.quarter_code,
             description="최근 관측 폐업률과 화성시 평균 비교",
         ),
         AlertEvidence(
             alert_id=alert_id,
-            evidence_type="OBSERVED_SIGNAL",
+            evidence_type="confirmed_signal",
             metric_code="opening_rate_pct",
             observed_value=round((cell.opening_rate or 0.0) * 100, 2),
             source_quarter_code=cell.quarter_code,
@@ -67,7 +78,7 @@ def _initial_evidence(alert_id: int, prediction: RiskPrediction, cell: Commercia
         ),
         AlertEvidence(
             alert_id=alert_id,
-            evidence_type="OBSERVED_SIGNAL",
+            evidence_type="confirmed_signal",
             metric_code="trend_slope",
             observed_value=cell.trend_slope or 0.0,
             direction="up" if (cell.trend_slope or 0.0) > 0 else "flat_or_down",
@@ -76,7 +87,7 @@ def _initial_evidence(alert_id: int, prediction: RiskPrediction, cell: Commercia
         ),
         AlertEvidence(
             alert_id=alert_id,
-            evidence_type="CONTEXT_INDICATOR",
+            evidence_type="model_contribution",
             metric_code="predicted_risk_rank",
             observed_value=prediction.predicted_rank,
             quality_flag="model_rank_only",
@@ -108,7 +119,15 @@ def create_alert_case(
     alert = AlertCase(prediction_id=prediction_id, assigned_official_id=_official_id(official))
     db.add(alert)
     db.flush()
-    db.add_all(_initial_evidence(alert.id, prediction, cell))
+    threshold = db.get(RiskThresholdSet, cell.threshold_set_id) if cell.threshold_set_id else None
+    db.add_all(
+        _initial_evidence(
+            alert.id,
+            prediction,
+            cell,
+            threshold.avg_closure_rate_pct if threshold else None,
+        )
+    )
     db.commit()
     db.refresh(alert)
     return alert
@@ -186,6 +205,88 @@ def add_evidence(
     db.commit()
     db.refresh(evidence)
     return evidence
+
+
+@router.get(
+    "/alerts/{alert_id}/contacts",
+    response_model=list[AlertContactResponse],
+)
+def list_alert_contacts(
+    alert_id: int,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_official),
+):
+    if not db.get(AlertCase, alert_id):
+        raise HTTPException(status_code=404, detail="경보 검토 건이 없습니다")
+    return (
+        db.query(AlertContact)
+        .filter(AlertContact.alert_id == alert_id)
+        .order_by(AlertContact.contacted_on.desc(), AlertContact.created_at.desc())
+        .all()
+    )
+
+
+@router.post(
+    "/alerts/{alert_id}/contacts",
+    response_model=AlertContactResponse,
+)
+def create_alert_contact(
+    alert_id: int,
+    body: AlertContactCreate,
+    db: Session = Depends(get_db),
+    official: dict = Depends(get_current_official),
+):
+    if not db.get(AlertCase, alert_id):
+        raise HTTPException(status_code=404, detail="경보 검토 건이 없습니다")
+    contact = AlertContact(
+        alert_id=alert_id,
+        official_id=_official_id(official),
+        store_refs=None,
+        **body.model_dump(),
+    )
+    db.add(contact)
+    db.commit()
+    db.refresh(contact)
+    return contact
+
+
+@router.patch(
+    "/contacts/{contact_id}",
+    response_model=AlertContactResponse,
+)
+def update_alert_contact(
+    contact_id: int,
+    body: AlertContactUpdate,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_official),
+):
+    contact = db.get(AlertContact, contact_id)
+    if not contact:
+        raise HTTPException(status_code=404, detail="접촉 이력이 없습니다")
+    updates = body.model_dump(exclude_unset=True)
+    required = {"contacted_on", "channel", "outcome", "target_scope"}
+    if any(updates.get(field) is None for field in required & updates.keys()):
+        raise HTTPException(status_code=400, detail="필수 접촉 정보는 비울 수 없습니다")
+    for field, value in updates.items():
+        setattr(contact, field, value)
+    contact.updated_at = datetime.now(timezone.utc)
+    db.commit()
+    db.refresh(contact)
+    return contact
+
+
+@router.delete("/contacts/{contact_id}", status_code=204)
+def delete_alert_contact(
+    contact_id: int,
+    db: Session = Depends(get_db),
+    _: dict = Depends(get_current_official),
+):
+    contact = db.get(AlertContact, contact_id)
+    if not contact:
+        raise HTTPException(status_code=404, detail="접촉 이력이 없습니다")
+    db.delete(contact)
+    db.commit()
+    return Response(status_code=204)
 
 
 @router.get("/programs", response_model=list[PolicyProgramResponse])

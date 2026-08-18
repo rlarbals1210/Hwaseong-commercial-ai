@@ -2,16 +2,20 @@ from sqlalchemy import (
     JSON,
     BigInteger,
     Boolean,
+    CheckConstraint,
     Column,
+    Date,
     DateTime,
     Float,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     String,
     Text,
     UniqueConstraint,
     func,
+    text,
 )
 from .database import Base
 
@@ -165,6 +169,25 @@ class DataBatch(Base):
     purged_at = Column(DateTime(timezone=True), nullable=True)
 
 
+class RiskThresholdSet(Base):
+    """관측 위험등급과 표본 판정에 사용한 기준선 이력."""
+
+    __tablename__ = "risk_threshold_sets"
+    __table_args__ = (
+        UniqueConstraint("batch_id", "quarter_code", name="uq_threshold_batch_quarter"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    batch_id = Column(Integer, ForeignKey("data_batches.id"), nullable=False, index=True)
+    quarter_code = Column(Integer, nullable=False, index=True)
+    avg_closure_rate_pct = Column(Float, nullable=False)
+    danger_threshold_pct = Column(Float, nullable=False)
+    area_ratio_avg_pct = Column(Float, nullable=False)
+    area_ratio_danger_pct = Column(Float, nullable=False)
+    sample_min = Column(Integer, nullable=False, default=30)
+    computed_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 class CommercialQuarter(Base):
     __tablename__ = "commercial_quarters"
     __table_args__ = (
@@ -182,11 +205,46 @@ class CommercialQuarter(Base):
     competition_index = Column(Float, nullable=True)
     trend_slope = Column(Float, nullable=True)
     anomaly_flag = Column(Boolean, nullable=False, default=False)
+    risk_grade = Column(String(10), nullable=True)
+    sample_insufficient = Column(Boolean, nullable=False, default=False, index=True)
+    threshold_set_id = Column(
+        Integer, ForeignKey("risk_threshold_sets.id"), nullable=True, index=True
+    )
+    batch_id = Column(Integer, ForeignKey("data_batches.id"), nullable=False, index=True)
+
+
+class AreaQuarterSummary(Base):
+    """동×분기 집계 — 지도와 표본 사각지대 조회의 단일 원천."""
+
+    __tablename__ = "area_quarter_summaries"
+    __table_args__ = (
+        UniqueConstraint("area_id", "quarter_code", name="uq_area_quarter"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    area_id = Column(Integer, ForeignKey("admin_areas.id"), nullable=False, index=True)
+    quarter_code = Column(Integer, nullable=False, index=True)
+    total_cells = Column(Integer, nullable=False)
+    sample_sufficient_cells = Column(Integer, nullable=False)
+    risk_cells = Column(Integer, nullable=False)
+    risk_industry_ratio_pct = Column(Float, nullable=False)
+    area_risk_grade = Column(String(10), nullable=True)
+    avg_trend_slope = Column(Float, nullable=True)
+    threshold_set_id = Column(Integer, ForeignKey("risk_threshold_sets.id"), nullable=True)
     batch_id = Column(Integer, ForeignKey("data_batches.id"), nullable=False, index=True)
 
 
 class ModelRun(Base):
     __tablename__ = "model_runs"
+    __table_args__ = (
+        Index(
+            "uq_model_runs_single_active",
+            "is_active",
+            unique=True,
+            postgresql_where=text("is_active"),
+            sqlite_where=text("is_active = 1"),
+        ),
+    )
 
     id = Column(Integer, primary_key=True)
     run_key = Column(String(120), unique=True, nullable=False, index=True)
@@ -226,6 +284,31 @@ class RiskPrediction(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
+class PredictionContribution(Base):
+    """모델 기여 요인. 화면은 share_pct만 사용하고 내부 원 기여도는 노출하지 않는다."""
+
+    __tablename__ = "prediction_contributions"
+    __table_args__ = (
+        UniqueConstraint("prediction_id", "rank", name="uq_contribution_prediction_rank"),
+        CheckConstraint("direction IN ('risk','safe')", name="ck_contribution_direction"),
+        CheckConstraint("rank BETWEEN 1 AND 5", name="ck_contribution_rank"),
+        CheckConstraint("share_pct >= 0 AND share_pct <= 100", name="ck_contribution_share"),
+    )
+
+    id = Column(BIGINT_PK, primary_key=True)
+    prediction_id = Column(
+        BIGINT_PK, ForeignKey("risk_predictions.id"), nullable=False, index=True
+    )
+    rank = Column(Integer, nullable=False)
+    factor_code = Column(String(40), nullable=False)
+    factor_label = Column(String(60), nullable=False)
+    direction = Column(String(10), nullable=False)
+    share_pct = Column(Float, nullable=False)
+    contribution_value_internal = Column(Float, nullable=True)
+    source_features = Column(JSON, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 class AlertCase(Base):
     __tablename__ = "alert_cases"
 
@@ -240,8 +323,46 @@ class AlertCase(Base):
     closed_at = Column(DateTime(timezone=True), nullable=True)
 
 
+class AlertContact(Base):
+    __tablename__ = "alert_contacts"
+    __table_args__ = (
+        CheckConstraint(
+            "channel IN ('visit','phone','sms','email','meeting','other')",
+            name="ck_alert_contacts_channel",
+        ),
+        CheckConstraint(
+            "outcome IN ('connected','no_answer','declined','applied','pending')",
+            name="ck_alert_contacts_outcome",
+        ),
+        CheckConstraint(
+            "target_scope IN ('cell','store_subset')", name="ck_alert_contacts_scope"
+        ),
+        Index("ix_alert_contacts_alert_date", "alert_id", "contacted_on"),
+    )
+
+    id = Column(BIGINT_PK, primary_key=True)
+    alert_id = Column(BIGINT_PK, ForeignKey("alert_cases.id"), nullable=False, index=True)
+    official_id = Column(Integer, ForeignKey("officials.id"), nullable=False, index=True)
+    contacted_on = Column(Date, nullable=False, index=True)
+    channel = Column(String(20), nullable=False)
+    outcome = Column(String(20), nullable=False)
+    target_scope = Column(String(20), nullable=False, default="cell")
+    contacted_store_count = Column(Integer, nullable=True)
+    # 개별 점포 참조는 원칙 문구가 승인되기 전까지 API에서 입력받지 않고 NULL로 유지한다.
+    store_refs = Column(JSON, nullable=True)
+    note = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), nullable=True, onupdate=func.now())
+
+
 class AlertEvidence(Base):
     __tablename__ = "alert_evidences"
+    __table_args__ = (
+        CheckConstraint(
+            "evidence_type IN ('confirmed_signal','model_contribution','field_check')",
+            name="ck_alert_evidences_type",
+        ),
+    )
 
     id = Column(BIGINT_PK, primary_key=True)
     alert_id = Column(BIGINT_PK, ForeignKey("alert_cases.id"), nullable=False, index=True)
