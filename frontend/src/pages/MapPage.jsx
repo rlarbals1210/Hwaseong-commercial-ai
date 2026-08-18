@@ -5,10 +5,10 @@ import { apiFetch } from "../lib/api";
 const NAVER_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "";
 
 const LEGEND = [
-  { label: "위험", color: "var(--status-red)" },
-  { label: "주의", color: "var(--status-orange)" },
-  { label: "안정", color: "var(--status-green)" },
-  { label: "데이터 없음", color: "#94A3B8" },
+  { label: "위험", color: "var(--error)" },
+  { label: "주의", color: "var(--accent-orange)" },
+  { label: "안정", color: "var(--accent-green)" },
+  { label: "데이터 없음", color: "var(--outline-variant)" },
 ];
 
 let naverMapLoadPromise = null;
@@ -28,32 +28,32 @@ function loadNaverMap() {
 
 function RankingTable({ rows, loading }) {
   return (
-    <div style={{ background: "var(--surface-container-lowest)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: 24, marginTop: 16 }}>
-      <h3 style={{ margin: "0 0 4px", fontSize: 16, fontWeight: 700, color: "var(--primary)" }}>상권 순위표 — 실제 폐업률 기준</h3>
-      <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--outline)" }}>순수 관측치 정렬, 보정·예측 없음(표본 30개 이상 업종만 집계)</p>
+    <div className="card" style={{ marginTop: 16 }}>
+      <h3 className="t-h3" style={{ margin: 0 }}>상권 순위표 — 실제 폐업률 기준</h3>
+      <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--outline)" }}>순수 관측치 정렬, 보정·예측 없음(표본 50개 이상 업종만 집계)</p>
       {loading ? (
-        <div style={{ padding: 20, textAlign: "center", color: "var(--outline)", fontSize: 13 }}>불러오는 중...</div>
+        <div className="t-body-sm" style={{ padding: 24, textAlign: "center", color: "var(--ink-faint)" }}>불러오는 중...</div>
       ) : rows.length === 0 ? (
-        <div style={{ padding: 20, textAlign: "center", color: "var(--outline)", fontSize: 13 }}>데이터 없음</div>
+        <div className="t-body-sm" style={{ padding: 24, textAlign: "center", color: "var(--ink-faint)" }}>데이터 없음</div>
       ) : (
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <table>
           <thead>
-            <tr style={{ textAlign: "left", color: "var(--on-surface-variant)", borderBottom: "1px solid var(--border-subtle)" }}>
-              <th style={{ padding: "8px 4px", fontWeight: 600 }}>순위</th>
-              <th style={{ padding: "8px 4px", fontWeight: 600 }}>읍면동</th>
-              <th style={{ padding: "8px 4px", fontWeight: 600 }}>업종</th>
+            <tr>
+              <th style={{ fontWeight: 600 }}>순위</th>
+              <th style={{ fontWeight: 600 }}>읍면동</th>
+              <th style={{ fontWeight: 600 }}>업종</th>
               <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>실제 폐업률</th>
               <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>점포수</th>
             </tr>
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={`${r.dong}-${r.category}`} style={{ borderBottom: "1px solid var(--border-subtle)" }}>
+              <tr key={`${r.dong}-${r.category}`}>
                 <td style={{ padding: "8px 4px", color: "var(--outline)" }}>{r.rank}</td>
                 <td style={{ padding: "8px 4px", fontWeight: 600, color: "var(--on-surface)" }}>{r.dong}</td>
-                <td style={{ padding: "8px 4px", color: "var(--on-surface-variant)" }}>{r.category}</td>
-                <td style={{ padding: "8px 4px", textAlign: "right", fontWeight: 700, color: "var(--status-red)" }}>{r.closure_rate_pct}%</td>
-                <td style={{ padding: "8px 4px", textAlign: "right", color: "var(--on-surface-variant)" }}>{r.store_count}</td>
+                <td style={{ color: "var(--ink-muted)" }}>{r.category}</td>
+                <td className="t-metric" style={{ textAlign: "right", color: "var(--error)" }}>{r.closure_rate_pct}%</td>
+                <td className="t-metric" style={{ textAlign: "right", fontWeight: 400, color: "var(--ink-muted)" }}>{r.store_count}</td>
               </tr>
             ))}
           </tbody>
@@ -93,7 +93,7 @@ export default function MapPage() {
     geojson.features.forEach((feat) => {
       const name = feat.properties.dong_name || feat.properties.EMD_KOR_NM || "";
       const risk = riskMap[name];
-      const color = risk?.color || "#94A3B8";
+      const color = risk?.color || "#c1c6d5";
       const ratio = risk?.risk_ratio ?? null;
       const coverage = risk?.coverage_pct ?? null;
 
@@ -165,9 +165,9 @@ export default function MapPage() {
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--primary)", margin: 0 }}>공실위험 지도</h1>
-        <p style={{ fontSize: 14, color: "var(--on-surface-variant)", marginTop: 4 }}>
-          화성시 읍면동별 위험 업종 비율 — 실제 폐업률 기준(보정 없음). 클릭하면 상세 정보를 볼 수 있습니다.
+        <h1 className="t-h1" style={{ margin: 0 }}>공실위험 지도</h1>
+        <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>
+          읍면동별 위험 업종 비율 — 실제 폐업률 기준(보정 없음). 구역을 클릭하면 상세 지표가 표시됩니다.
         </p>
       </div>
 
@@ -175,7 +175,7 @@ export default function MapPage() {
         <div style={{ position: "relative", flex: 1 }}>
           <div
             ref={mapRef}
-            style={{ height: 580, borderRadius: 8, overflow: "hidden", border: "1px solid var(--border-subtle)" }}
+            style={{ height: 580, borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--hairline)" }}
           >
             {!NAVER_CLIENT_ID && (
               <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--outline)", flexDirection: "column", gap: 8 }}>
@@ -190,31 +190,35 @@ export default function MapPage() {
               position: "absolute",
               bottom: 16,
               left: 16,
-              width: 180,
-              background: "var(--surface-container-lowest)",
-              border: "1px solid var(--border-subtle)",
-              borderRadius: 8,
-              padding: 16,
+              width: 172,
+              background: "rgba(255,255,255,0.94)",
+              backdropFilter: "blur(6px)",
+              border: "1px solid var(--hairline)",
+              borderRadius: "var(--radius-lg)",
+              padding: 14,
               zIndex: 10,
+              boxShadow: "var(--elev-1)",
             }}
           >
-            <p style={{ fontSize: 14, fontWeight: 600, color: "var(--primary)", margin: "0 0 12px" }}>위험 업종 비율 범례</p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <p className="t-eyebrow" style={{ color: "var(--ink-muted)", margin: "0 0 10px", textTransform: "uppercase" }}>
+              위험 업종 비율
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
               {LEGEND.map(({ label, color }) => (
                 <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                  <span style={{ width: 14, height: 14, borderRadius: 3, background: color, display: "inline-block", flexShrink: 0 }} />
-                  <span style={{ fontSize: 13, color: "var(--on-surface-variant)" }}>{label}</span>
+                  <span style={{ width: 10, height: 10, borderRadius: "var(--radius-full)", background: color, display: "inline-block", flexShrink: 0 }} />
+                  <span className="t-caption" style={{ color: "var(--ink-secondary)" }}>{label}</span>
                 </div>
               ))}
             </div>
           </div>
         </div>
 
-        <div style={{ width: 280, flexShrink: 0, background: "var(--surface-container-lowest)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: 24, height: "fit-content" }}>
+        <div className="card" style={{ width: 288, flexShrink: 0, height: "fit-content" }}>
           {selected ? (
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                <h3 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: "var(--primary)" }}>{selected.name}</h3>
+                <h3 className="t-h3" style={{ margin: 0 }}>{selected.name}</h3>
                 <button
                   onClick={() => setSelected(null)}
                   style={{ background: "none", border: "none", cursor: "pointer", color: "var(--outline)", fontSize: 18, lineHeight: 1, padding: 0 }}
@@ -225,9 +229,9 @@ export default function MapPage() {
 
               {selected.risk_ratio != null ? (
                 <>
-                  <div style={{ textAlign: "center", margin: "16px 0 20px" }}>
-                    <div style={{ fontSize: 40, fontWeight: 700, color: selected.color }}>{selected.risk_ratio}%</div>
-                    <div style={{ fontSize: 13, color: "var(--on-surface-variant)", marginTop: 4 }}>위험 업종 비율 (실제 폐업률 기준)</div>
+                  <div style={{ textAlign: "center", margin: "18px 0 20px" }}>
+                    <div className="t-metric" style={{ fontSize: 44, color: selected.color, lineHeight: 1.1 }}>{selected.risk_ratio}%</div>
+                    <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 6 }}>위험 업종 비율 (실제 폐업률 기준)</div>
                     <span
                       style={{
                         display: "inline-block",
@@ -235,35 +239,35 @@ export default function MapPage() {
                         fontSize: 12,
                         fontWeight: 700,
                         color: selected.color,
-                        background: `${selected.color}1A`,
+                        background: `color-mix(in srgb, ${selected.color} 12%, white)`,
                         padding: "4px 12px",
-                        borderRadius: 999,
+                        borderRadius: "var(--radius-full)",
                       }}
                     >
                       {selected.risk_level}
                     </span>
                   </div>
-                  <div style={{ fontSize: 13, color: "var(--on-surface-variant)", padding: "12px 0", borderTop: "1px solid var(--border-subtle)" }}>
+                  <div className="t-body-sm" style={{ color: "var(--ink-muted)", padding: "12px 0", borderTop: "1px solid var(--hairline)" }}>
                     폐업률 추이 기울기 <b style={{ color: "var(--on-surface)" }}>{selected.trend?.toFixed(3)}</b>
                   </div>
-                  <div style={{ fontSize: 13, color: "var(--on-surface-variant)", padding: "12px 0", borderTop: "1px solid var(--border-subtle)" }}>
+                  <div className="t-body-sm" style={{ color: "var(--ink-muted)", padding: "12px 0", borderTop: "1px solid var(--hairline)" }}>
                     분석 가능 업종 <b style={{ color: "var(--on-surface)" }}>{selected.sample_sufficient_cells}/{selected.total_cells}개</b>
-                    <div style={{ marginTop: 4, fontSize: 11, color: "var(--outline)" }}>
-                      표본 충족률 {selected.coverage_pct}% · 점포 수 30개 이상 기준
+                    <div className="t-caption" style={{ marginTop: 4, color: "var(--ink-faint)" }}>
+                      표본 충족률 {selected.coverage_pct}% · 점포 수 50개 이상 기준
                     </div>
                   </div>
                   <Link
                     to="/dashboard"
+                    className="btn-utility"
                     style={{
-                      display: "block",
-                      textAlign: "center",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: 6,
                       marginTop: 16,
-                      border: "1px solid var(--primary)",
+                      width: "100%",
+                      boxSizing: "border-box",
                       color: "var(--primary)",
-                      padding: "10px 0",
-                      borderRadius: 8,
-                      fontSize: 14,
-                      fontWeight: 700,
                       textDecoration: "none",
                     }}
                   >
@@ -276,12 +280,12 @@ export default function MapPage() {
             </>
           ) : (
             <div style={{ textAlign: "center", padding: "40px 0" }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 40, color: "var(--outline)", display: "block", marginBottom: 12 }}>
+              <span className="material-symbols-outlined" style={{ fontSize: 36, color: "var(--ink-faint)", display: "block", marginBottom: 12 }}>
                 touch_app
               </span>
-              <p style={{ fontSize: 15, fontWeight: 600, color: "var(--on-surface-variant)", margin: "0 0 8px" }}>구역을 선택하십시오</p>
-              <p style={{ fontSize: 13, color: "var(--outline)", margin: 0, lineHeight: 1.6 }}>
-                지도에서 상세 분석이 필요한 구역을 클릭하면 위험 지표가 표시됩니다.
+              <p className="t-title" style={{ color: "var(--on-surface)", margin: "0 0 8px" }}>구역을 선택하세요</p>
+              <p className="t-caption" style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
+                지도에서 구역을 클릭하면 위험 지표가 표시됩니다.
               </p>
             </div>
           )}
@@ -297,11 +301,12 @@ export default function MapPage() {
             left: tooltip.x + 12,
             top: tooltip.y - 32,
             pointerEvents: "none",
-            background: "var(--primary)",
+            background: "var(--on-surface)",
             color: "#fff",
             fontSize: 12,
-            padding: "6px 10px",
-            borderRadius: 6,
+            padding: "7px 11px",
+            borderRadius: "var(--radius-md)",
+            boxShadow: "var(--elev-2)",
             zIndex: 9999,
           }}
         >

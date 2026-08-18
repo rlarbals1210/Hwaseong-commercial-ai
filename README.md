@@ -90,6 +90,63 @@ JWT_EXPIRE_MINUTES=480
 - Web 서비스 URL 미등록 → 인증 실패. 로컬 개발용 `http://localhost:5174`와 배포 도메인 둘 다 등록 필요.
 - `.env` 수정 후 브라우저 새로고침만으로는 반영 안 될 수 있음 → `npm run dev` 재시작 권장.
 
+## 팀원 DB 셋업
+
+팀원 모두 동일한 DB 상태로 맞추려면 [docs/팀원-DB-셋업.md](docs/팀원-DB-셋업.md)를 따른다.
+요약하면 이렇다.
+
+```bash
+git pull
+source .venv/bin/activate
+createdb hwaseong_db
+alembic upgrade head
+python ai/import_normalized_db.py      # import_to_db.py 아님(레거시)
+python ai/build_explanations.py
+python -m backend.scripts.create_official admin demo1234 "테스트관리자"
+```
+
+`build_dataset.py`·`train_model.py`는 외장 SSD 원본이 필요하므로 **돌리지 않는다.**
+그 산출물 6개(6.5MB)를 리포에 포함해 두었다.
+
+---
+
+## 데이터 정책
+
+### 리포에 포함하는 것 (읍면동 × 업종 집계 단위, 총 6.5MB)
+
+```
+data/processed/final_dataset.csv        상권 집계
+data/processed/cell_train_table.csv     셀 학습 테이블
+data/processed/scores.csv               최신 분기 예측 점수
+data/processed/lgbm_model_cell.pkl      학습된 셀 모델
+data/processed/model_cell_results.json  모델 성능 지표
+data/processed/risk_thresholds.json     등급 기준선
+```
+
+전부 **집계 단위라 개별 점포를 식별할 수 없다.** 이 저장소는 공개이므로 이 기준을 벗어나는 파일은 넣지 않는다.
+
+### 절대 커밋하지 않는 것
+
+```
+data/raw/                      원본 zip(소진공 상가정보·인허가)
+data/processed/store_*.csv     개별 점포 단위 — 상가업소번호·지번주소·좌표 포함
+                               store_train_table.csv(193M) / store_panel.csv(145M) / store_labels.csv(135M)
+.env                           DB 접속정보·JWT 비밀키
+```
+
+`.gitignore`가 `data/processed/*`를 차단하고 위 6개만 `!` 예외로 허용한다.
+**개별 점포 파일을 예외 목록에 추가하지 말 것.**
+
+### 대회 규정 (공모전 유의사항 Ⅴ-5)
+
+- 제공받은 데이터는 본 대회 목적 외 사용 금지
+- 행정데이터 원본을 외부 AI API에 전송 금지 (위반 시 실격)
+- **대회 종료 후 3개월 이내 제공 데이터 완전 폐기 + 폐기확인서 제출** — 시상금 지급 조건
+  - 이 저장소의 `data/processed/*`도 폐기 대상이다
+  - **폐기는 수동으로 진행한다.** 자동 삭제 스크립트를 두지 않는다
+
+---
+
 ## 자세한 개발 가이드
 
 프로젝트 구조, API 명세, ML 파이프라인, 협업 규칙 등은 [CLAUDE.md](CLAUDE.md) 참고.

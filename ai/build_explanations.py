@@ -14,6 +14,7 @@ import sys
 import joblib
 import numpy as np
 import pandas as pd
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 
@@ -142,11 +143,19 @@ def build_explanations(
     if validate_only:
         return {**validation, "eligible_predictions": len(prediction_lookup), "written": 0}
 
-    prediction_ids = list(prediction_lookup.values())
-    if prediction_ids:
-        session.query(PredictionContribution).filter(
-            PredictionContribution.prediction_id.in_(prediction_ids)
-        ).delete(synchronize_session=False)
+    # 삭제 범위는 "지금 자격 있는 예측"이 아니라 "활성 run의 모든 예측"이어야 한다.
+    # 자격 기준(SAMPLE_MIN)이 상향되면 이전에 자격이 있었다가 잃은 셀이 생기는데,
+    # 삭제를 자격 있는 것으로만 한정하면 그 셀의 기여도가 유령 행으로 남는다.
+    # (실제 발생: SAMPLE_MIN 30->50 상향 시 1,146행 중 693행만 교체되고 453행이 잔존)
+    # 표본부족 셀은 "통계 판단 보류" 대상이므로 기여 요인도 남아 있으면 안 된다.
+    stale_ids_subq = (
+        session.query(RiskPrediction.id)
+        .filter(RiskPrediction.model_run_id == active_run.id)
+        .subquery()
+    )
+    session.query(PredictionContribution).filter(
+        PredictionContribution.prediction_id.in_(select(stale_ids_subq.c.id))
+    ).delete(synchronize_session=False)
 
     if not m1_passed:
         session.commit()

@@ -1,67 +1,269 @@
+/* ============================================================================
+   Document Modernist — 디자인 토큰
+   출처: DESIGN.md (Stitch 생성) / Notion 계열 "paper-soft" 시스템
+   원칙
+     1. 페이지 캔버스는 웜 오프화이트, 카드만 순백 → 레이어드 페이퍼 효과
+     2. 구조적 강조색은 primary 하나뿐. 나머지 accent는 장식·상태 표시 전용
+     3. 입체감은 그림자가 아니라 hairline + 톤 차이로 만든다
+     4. 큰 제목일수록 음수 자간을 강하게 → 편집디자인 같은 밀도
+   ========================================================================== */
 :root {
-  --primary: #00153e;
-  --primary-container: #002868;
+  /* ── Surface (레이어드 페이퍼) ───────────────────────────────────────── */
+  --background: #f9f9f9;
+  --surface: #f9f9f9;
+  --surface-gray: #f9f9f9;              /* 페이지 캔버스 (기존 변수명 유지) */
+  --surface-container-lowest: #ffffff;  /* 카드·입력 */
+  --surface-container-low: #f3f3f3;     /* hover */
+  --surface-container: #eeeeee;         /* 활성 내비 행 */
+  --surface-container-high: #e8e8e8;
+  --surface-container-highest: #e2e2e2;
+
+  /* ── Ink (색 없이 위계를 만든다) ─────────────────────────────────────── */
+  --on-surface: #1b1b1b;
+  --on-background: #1b1b1b;
+  --on-surface-variant: #414753;
+  --ink-secondary: #31302e;
+  --ink-muted: #615d59;
+  --ink-faint: #a39e98;
+  --outline: #717784;
+  --outline-variant: #c1c6d5;
+  --hairline: #e6e6e6;
+  --border-subtle: #e6e6e6;             /* 기존 변수명 유지 → hairline과 동일 */
+
+  /* ── Primary (유일한 구조적 강조색) ──────────────────────────────────── */
+  --primary: #005db2;
+  --primary-container: #0075de;
+  --primary-active: #005bab;
   --on-primary: #ffffff;
-  --secondary: #0061a7;
-  --secondary-container: #5daafd;
-  --on-secondary-container: #003d6c;
+  --on-primary-container: #fffeff;
+  --primary-fixed: #d5e3ff;
+  --primary-fixed-dim: #a8c8ff;
 
-  --status-red: #d51b4c;
-  --status-orange: #f59e0b;
-  --status-green: #10b981;
+  --secondary: #4958aa;
+  --secondary-container: #dee0ff;
+  --on-secondary-container: #283789;
 
-  --surface-gray: #f8fafc;
-  --surface-container-lowest: #ffffff;
-  --surface-container-low: #f1f3ff;
-  --border-subtle: #e2e8f0;
+  /* ── 상태색 (스티커 팔레트, 장식·상태 전용) ─────────────────────────── */
+  --error: #ba1a1a;
+  --error-container: #ffdad6;
+  --on-error-container: #93000a;
+  --accent-orange: #dd5b00;
+  --accent-green: #1aae39;
+  --accent-teal: #2a9d99;
+  --accent-sky: #62aef0;
+  --accent-purple: #d6b6f6;
+  --accent-pink: #ff64c8;
 
-  --on-surface: #161b28;
-  --on-surface-variant: #444650;
+  /* 기존 코드 호환 별칭 */
+  --status-red: #ba1a1a;
+  --status-orange: #dd5b00;
+  --status-green: #1aae39;
 
-  --font-main: "Noto Sans KR", "Pretendard", "Apple SD Gothic Neo", sans-serif;
+  /* 상태 배지용 연한 배경 (저채도 fill + 고채도 text 원칙) */
+  --error-soft: #fdecea;
+  --orange-soft: #fdf0e7;
+  --green-soft: #e9f8ed;
+  --teal-soft: #e6f4f4;
+
+  /* ── Radius ─────────────────────────────────────────────────────────── */
+  --radius-sm: 4px;    /* 입력·태그 — 도구다운 정밀함 */
+  --radius-md: 8px;    /* 유틸리티 버튼·내비 행 */
+  --radius-lg: 12px;   /* 카드 */
+  --radius-xl: 16px;   /* 큰 컨테이너 */
+  --radius-full: 9999px;
+
+  /* ── Spacing (8px 기본 그리드) ──────────────────────────────────────── */
+  --space-xxs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 28px;
+  --space-xxl: 32px;
+
+  /* ── Elevation — 거의 보이지 않는 다층 그림자 ───────────────────────── */
+  --elev-1: 0 0.175px 1.04px rgba(0, 0, 0, 0.01), 0 0.8px 2.93px rgba(0, 0, 0, 0.02),
+    0 2.03px 7.85px rgba(0, 0, 0, 0.027), 0 4px 18px rgba(0, 0, 0, 0.04);
+  --elev-2: 0 2px 8px rgba(0, 0, 0, 0.03), 0 8px 24px rgba(0, 0, 0, 0.04),
+    0 23px 52px rgba(0, 0, 0, 0.05);
+
+  /* ── Typography ─────────────────────────────────────────────────────── */
+  /* Inter가 라틴·숫자를, Noto Sans KR이 한글을 담당한다.
+     지표 숫자가 화면의 주인공이라 Inter의 정돈된 숫자꼴이 중요하다. */
+  --font-main: "Inter", "Noto Sans KR", "Pretendard", "Apple SD Gothic Neo", sans-serif;
+  --font-mono: "SFMono-Regular", "SF Mono", Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
 }
 
 body {
   margin: 0;
-  background: var(--surface-gray);
+  background: var(--background);
   color: var(--on-surface);
   font-family: var(--font-main);
+  font-size: 16px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  /* lnum: 라이닝 숫자, tnum: 고정폭 숫자 → 표에서 자릿수가 흔들리지 않는다 */
+  font-feature-settings: "lnum" 1, "tnum" 1;
 }
+
+/* ── 타이포그래피 스케일 ──────────────────────────────────────────────
+   큰 제목일수록 자간을 더 좁힌다. Inter는 기본 자간이 넓어
+   음수 트래킹을 명시하지 않으면 헐거워 보인다. */
+h1, h2, h3, h4 {
+  margin: 0;
+  color: var(--on-surface);
+  font-weight: 700;
+}
+
+.t-display  { font-size: 40px; line-height: 1.1;  letter-spacing: -1px;      font-weight: 700; }
+.t-h1       { font-size: 32px; line-height: 1.15; letter-spacing: -0.8px;    font-weight: 700; }
+.t-h2       { font-size: 26px; line-height: 1.23; letter-spacing: -0.625px;  font-weight: 700; }
+.t-h3       { font-size: 22px; line-height: 1.27; letter-spacing: -0.25px;   font-weight: 700; }
+.t-title    { font-size: 20px; line-height: 1.4;  letter-spacing: -0.125px;  font-weight: 600; }
+.t-body     { font-size: 16px; line-height: 1.5;  letter-spacing: 0;         font-weight: 400; }
+.t-body-sm  { font-size: 15px; line-height: 1.33; letter-spacing: 0;         font-weight: 400; }
+.t-caption  { font-size: 14px; line-height: 1.43; letter-spacing: 0;         font-weight: 400; }
+.t-eyebrow  { font-size: 12px; line-height: 1.33; letter-spacing: 0.125px;   font-weight: 600; }
+
+/* 지표 숫자 — 자릿수 정렬이 필요한 곳 */
+.t-metric {
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.5px;
+  font-weight: 700;
+}
+
+/* ── 재사용 표면 ─────────────────────────────────────────────────────── */
+.card {
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+}
+
+.card-soft {
+  background: var(--surface-container-low);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+}
+
+.card-elevated {
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  padding: var(--space-lg);
+  box-shadow: var(--elev-1);
+}
+
+/* 상태 배지 — 저채도 fill + 같은 색상의 고채도 text */
+.badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: var(--radius-full);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.125px;
+  white-space: nowrap;
+}
+
+.badge-danger  { background: var(--error-soft);  color: var(--error); }
+.badge-warn    { background: var(--orange-soft); color: var(--accent-orange); }
+.badge-ok      { background: var(--green-soft);  color: var(--accent-green); }
+.badge-neutral { background: var(--surface-container); color: var(--ink-secondary); }
+
+/* 버튼 — 마케팅 CTA는 pill, 유틸리티는 8px. 이 대비는 의도된 것이다. */
+.btn-primary {
+  background: var(--primary);
+  color: var(--on-primary);
+  border: none;
+  border-radius: var(--radius-full);
+  padding: 10px 20px;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease, transform 0.1s ease;
+}
+.btn-primary:hover { background: var(--primary-active); }
+.btn-primary:active { transform: scale(0.97); }
+
+.btn-utility {
+  background: var(--surface-container-lowest);
+  color: var(--on-surface);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-md);
+  padding: 8px 14px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease;
+}
+.btn-utility:hover { background: var(--surface-container-low); }
+.btn-utility:disabled { color: var(--ink-faint); cursor: default; }
+
+/* 입력 — CTA와 달리 각지게. 도구다운 정밀함. */
+input, select, textarea {
+  font-family: inherit;
+  font-size: 15px;
+  color: var(--on-surface);
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  transition: border-color 0.12s ease, box-shadow 0.12s ease;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(0, 93, 178, 0.12);
+}
+
+/* 표 — 헤더는 eyebrow, 본문은 body-sm, 행 구분은 hairline */
+table { border-collapse: collapse; width: 100%; }
+th {
+  background: var(--surface);
+  color: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  text-align: left;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--hairline);
+}
+td {
+  font-size: 15px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--hairline);
+}
+tbody tr:last-child td { border-bottom: none; }
+tbody tr { transition: background 0.12s ease; }
+tbody tr:hover { background: var(--surface-container-low); }
+
+a { color: var(--primary); }
 
 .material-symbols-outlined {
   font-variation-settings: "FILL" 0, "wght" 400, "GRAD" 0, "opsz" 24;
   vertical-align: middle;
   line-height: 1;
 }
+.material-symbols-outlined.fill { font-variation-settings: "FILL" 1; }
 
-.role-card {
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-}
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--hairline); border-radius: var(--radius-sm); }
+::-webkit-scrollbar-thumb:hover { background: var(--surface-container-highest); }
 
-.role-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px rgba(0, 21, 62, 0.08);
-}
-
-.role-card:hover .role-card-arrow {
-  transform: translateX(4px);
-}
-
-.role-card-arrow {
-  transition: transform 0.2s ease;
-}
-
-.spin {
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
+.spin { animation: spin 1s linear infinite; }
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
 @media print {
-  .print-hide {
-    display: none !important;
-  }
+  .print-hide { display: none !important; }
 }

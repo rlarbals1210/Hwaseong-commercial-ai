@@ -20,11 +20,28 @@ function downloadCsv(rows) {
   URL.revokeObjectURL(url);
 }
 
-function StatCard({ label, value, color }) {
+// 화성시 전체 평균 실제 폐업률(점포수 가중). ai/build_risk_index.py가 매 실행 재계산해
+// risk_thresholds.json에 저장하는 값과 동일하다 — 값이 바뀌면 여기도 함께 갱신할 것.
+const CITY_AVG_PCT = 3.22;
+
+function PageHeader({ title, desc }) {
   return (
-    <div style={{ background: "var(--surface-container-lowest)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: 20 }}>
-      <div style={{ fontSize: 32, fontWeight: 700, color }}>{value}</div>
-      <div style={{ fontSize: 13, color: "var(--on-surface-variant)", marginTop: 4 }}>{label}</div>
+    <div style={{ marginBottom: 24 }}>
+      <h1 className="t-h1" style={{ margin: 0 }}>{title}</h1>
+      <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>{desc}</p>
+    </div>
+  );
+}
+
+// 지표 타일 — 큰 숫자가 주인공. 라벨은 위, 값은 아래로 두어 스캔 시 라벨 먼저 읽히게 한다.
+function StatCard({ label, value, unit, tone }) {
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      <div className="t-eyebrow" style={{ color: "var(--ink-muted)", textTransform: "uppercase" }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginTop: 10 }}>
+        <span className="t-metric" style={{ fontSize: 32, color: tone ?? "var(--on-surface)" }}>{value}</span>
+        {unit && <span style={{ fontSize: 15, color: "var(--ink-faint)", fontWeight: 500 }}>{unit}</span>}
+      </div>
     </div>
   );
 }
@@ -32,39 +49,83 @@ function StatCard({ label, value, color }) {
 // AI 예측값(부풀려진 절대 수치)은 화면에 표시하지 않는다 — 순위만 신뢰할 수 있는 정보라
 // "예측 위험 #N"으로만 보여주고, 근거는 실제 관측 지표(폐업률·개업률·추세)로 뒷받침한다.
 function RiskCard({ item }) {
-  const color = "var(--primary)";
+  const trend = item.trend_slope ?? 0;
   return (
-    <div style={{ background: "var(--surface-container-lowest)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <span style={{ fontSize: 10, fontWeight: 700, color, background: `${color}1A`, padding: "3px 10px", borderRadius: 999 }}>
-          AI 예측 위험 #{item.predicted_rank}
+    <div
+      className="card"
+      style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14, transition: "box-shadow .15s ease" }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
+        <span className="badge" style={{ background: "var(--primary-fixed)", color: "var(--primary)" }}>
+          예측 #{item.predicted_rank}
         </span>
         {item.anomaly && (
-          <span style={{ fontSize: 10, fontWeight: 700, color: "var(--status-red)" }}>⚠ 트렌드 이상</span>
+          <span className="badge badge-danger">
+            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>trending_up</span>
+            트렌드 이상
+          </span>
         )}
       </div>
+
       <div>
-        <div style={{ fontSize: 17, fontWeight: 700, color: "var(--on-surface)" }}>{item.dong}</div>
-        <div style={{ fontSize: 13, color: "var(--on-surface-variant)" }}>{item.category}</div>
+        <div className="t-title" style={{ color: "var(--on-surface)" }}>{item.dong}</div>
+        <div className="t-caption" style={{ color: "var(--ink-muted)" }}>{item.category}</div>
       </div>
+
       <div style={{ marginTop: "auto" }}>
-        <div style={{ fontSize: 12, color: "var(--outline)", marginBottom: 2 }}>실제 최근 폐업률</div>
-        <div>
-          <span style={{ fontSize: 28, fontWeight: 700, color: "var(--on-surface)" }}>{item.actual_closure_rate_pct}</span>
-          <span style={{ fontSize: 13, color: "var(--outline)" }}> %</span>
+        <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 2 }}>실제 최근 폐업률</div>
+        <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
+          <span className="t-metric" style={{ fontSize: 30 }}>{item.actual_closure_rate_pct}</span>
+          <span style={{ fontSize: 14, color: "var(--ink-faint)", fontWeight: 500 }}>%</span>
         </div>
       </div>
-      <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
-          개업률 <b style={{ color: "var(--on-surface)" }}>{item.open_rate_pct?.toFixed(1)}%</b>
+
+      {/* 보조 지표는 hairline 위에 얹어 주 지표와 위계를 분리 */}
+      <div
+        style={{
+          display: "flex",
+          gap: 14,
+          flexWrap: "wrap",
+          paddingTop: 10,
+          borderTop: "1px solid var(--hairline)",
+          fontSize: 13,
+          color: "var(--ink-muted)",
+        }}
+      >
+        <span>
+          개업률 <b style={{ color: "var(--on-surface)", fontVariantNumeric: "tabular-nums" }}>{item.open_rate_pct?.toFixed(1)}%</b>
         </span>
-        <span style={{ fontSize: 12, color: "var(--on-surface-variant)" }}>
-          폐업률 추세 <b style={{ color: "var(--on-surface)" }}>{item.trend_slope > 0 ? "+" : ""}{item.trend_slope}</b>
+        <span>
+          추세{" "}
+          <b style={{ color: trend > 0 ? "var(--accent-orange)" : "var(--on-surface)", fontVariantNumeric: "tabular-nums" }}>
+            {trend > 0 ? "+" : ""}{trend}
+          </b>
         </span>
       </div>
-      <div style={{ fontSize: 12, color: "var(--on-surface)", background: "var(--surface-gray)", padding: "8px 10px", borderRadius: 6 }}>
+
+      <div
+        className="t-caption"
+        style={{ color: "var(--ink-secondary)", background: "var(--surface-container-low)", padding: "8px 10px", borderRadius: "var(--radius-md)" }}
+      >
         {item.action}
       </div>
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, desc, tone }) {
+  return (
+    <div
+      style={{
+        background: "var(--surface-container-low)",
+        borderRadius: "var(--radius-lg)",
+        padding: 56,
+        textAlign: "center",
+      }}
+    >
+      <span className="material-symbols-outlined" style={{ fontSize: 36, color: tone ?? "var(--ink-faint)" }}>{icon}</span>
+      <div className="t-title" style={{ color: tone ?? "var(--on-surface)", marginTop: 10 }}>{title}</div>
+      {desc && <div className="t-body-sm" style={{ color: "var(--ink-muted)", marginTop: 6 }}>{desc}</div>}
     </div>
   );
 }
@@ -106,60 +167,103 @@ export default function DashboardPage() {
 
   const anomalyCount = data.filter((d) => d.anomaly).length;
   const avgActual = data.length ? (data.reduce((s, d) => s + d.actual_closure_rate_pct, 0) / data.length).toFixed(1) : 0;
-  const top = data[0];
+  const ratio = data.length ? (avgActual / CITY_AVG_PCT).toFixed(2) : 0;
   const topReviewItems = data.slice(0, 2);
 
   return (
     <div>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--primary)", margin: 0 }}>폐업 위험 조기경보</h1>
-        <p style={{ fontSize: 14, color: "var(--on-surface-variant)", marginTop: 4 }}>
-          AI 예측 기반 조기경보 — 상대 순위 (예측 절대값 아님, 실제값과는 별도 지표)
-        </p>
-      </div>
+      <PageHeader
+        title="폐업 위험 조기경보"
+        desc="AI가 2분기 뒤 폐업 위험이 높을 것으로 예측한 구역입니다. 절대 확률이 아닌 상대 순위입니다."
+      />
 
       {!loading && data.length > 0 && (
         <>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 16 }}>
-            <StatCard label="AI 예측 상위 셀" value={data.length} color="var(--primary)" />
-            <StatCard label="트렌드 이상" value={anomalyCount} color="var(--status-red)" />
-            <StatCard label="상위권 평균 실제 폐업률" value={`${avgActual}%`} color="var(--secondary)" />
+          {/* 요약 배너 — 개별 셀이 아니라 상위권 집단과 시 전체를 대비시킨다.
+              예측은 2분기 뒤를 보므로 개별 구역의 현재 폐업률이 0%일 수 있고,
+              그 한 건이 대표로 뜨면 모델 전체가 틀린 것처럼 읽힌다. */}
+          <div
+            className="card"
+            style={{
+              padding: 24,
+              marginBottom: 16,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              flexWrap: "wrap",
+              gap: 24,
+              background: "var(--surface-container-lowest)",
+            }}
+          >
+            <div style={{ maxWidth: 620 }}>
+              <span className="badge" style={{ background: "var(--primary-fixed)", color: "var(--primary)" }}>
+                예측 상위 {data.length}개 구역
+              </span>
+              <div className="t-h2" style={{ marginTop: 12, lineHeight: 1.35 }}>
+                현재 폐업률이 평균{" "}
+                <span style={{ color: "var(--primary)" }}>{avgActual}%</span>로
+                <br />
+                화성시 전체({CITY_AVG_PCT}%)의{" "}
+                <span style={{ color: "var(--primary)" }}>{ratio}배</span>입니다
+              </div>
+              <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "12px 0 0", lineHeight: 1.6 }}>
+                예측은 관측 시점 기준 2분기 뒤를 봅니다. 개별 구역의 현재 폐업률이 낮아도 상위 순위에 오를 수 있습니다.
+              </p>
+            </div>
+
+            {/* 비교 막대 — 숫자 두 개보다 길이 대비가 즉시 읽힌다 */}
+            <div style={{ minWidth: 260, flex: "0 0 auto" }}>
+              {[
+                { label: `예측 상위 ${data.length}개`, value: Number(avgActual), tone: "var(--primary)" },
+                { label: "화성시 전체", value: CITY_AVG_PCT, tone: "var(--outline-variant)" },
+              ].map((row) => (
+                <div key={row.label} style={{ marginBottom: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
+                    <span className="t-caption" style={{ color: "var(--ink-muted)" }}>{row.label}</span>
+                    <span className="t-metric" style={{ fontSize: 18 }}>{row.value}%</span>
+                  </div>
+                  <div style={{ height: 8, background: "var(--surface-container)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
+                    <div
+                      style={{
+                        width: `${Math.min(100, (row.value / Math.max(Number(avgActual), CITY_AVG_PCT)) * 100)}%`,
+                        height: "100%",
+                        background: row.tone,
+                        borderRadius: "var(--radius-full)",
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
 
-          {top && (
-            <div
-              style={{
-                background: "var(--primary)",
-                borderRadius: 8,
-                padding: 24,
-                marginBottom: 24,
-                color: "#fff",
-                display: "flex",
-                justifyContent: "space-between",
-                alignItems: "center",
-                flexWrap: "wrap",
-                gap: 16,
-              }}
-            >
-              <div>
-                <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>AI 예측 위험 1순위</div>
-                <div style={{ fontSize: 24, fontWeight: 700 }}>
-                  화성시 {top.dong} · {top.category}
-                </div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>실제 최근 폐업률</div>
-                <div style={{ fontSize: 32, fontWeight: 700, color: "#fff" }}>{top.actual_closure_rate_pct}%</div>
-              </div>
-            </div>
-          )}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
+            <StatCard label="분석 대상 구역" value={data.length} unit="개" />
+            <StatCard
+              label="트렌드 이상"
+              value={anomalyCount}
+              unit="개"
+              tone={anomalyCount > 0 ? "var(--error)" : "var(--on-surface)"}
+            />
+            <StatCard label="상위권 평균 폐업률" value={avgActual} unit="%" tone="var(--primary)" />
+          </div>
         </>
       )}
 
-      <div style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
+      {/* 필터 바 */}
+      <div
+        style={{
+          display: "flex",
+          gap: 16,
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          flexWrap: "wrap",
+          marginBottom: 16,
+        }}
+      >
         <div>
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <label style={{ fontSize: 13, color: "var(--on-surface-variant)", fontWeight: 600 }}>업종 필터</label>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <label className="t-caption" style={{ color: "var(--ink-secondary)", fontWeight: 600 }}>업종</label>
             <select
               value={category}
               onChange={(e) => {
@@ -167,57 +271,51 @@ export default function DashboardPage() {
                 setError("");
                 setCategory(e.target.value);
               }}
-              style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border-subtle)", fontSize: 13, background: "var(--surface-container-lowest)" }}
+              style={{ minWidth: 180 }}
             >
               <option value="">전체 업종</option>
               {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
-          <div style={{ marginTop: 5, fontSize: 11, color: categoryError ? "var(--status-red)" : "var(--outline)" }}>
+          <div
+            className="t-caption"
+            style={{ marginTop: 7, color: categoryError ? "var(--error)" : "var(--ink-faint)" }}
+          >
             {categoryError
               ? "업종 목록을 불러오지 못했습니다."
-              : `최신 분기 점포 수 30개 이상이며 AI 순위가 산출된 ${categories.length}개 업종`}
+              : `최신 분기 점포 수 50개 이상이며 AI 순위가 산출된 ${categories.length}개 업종`}
           </div>
         </div>
-        <button
-          onClick={() => downloadCsv(data)}
-          disabled={!data.length}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "8px 14px",
-            borderRadius: 8,
-            border: "1px solid var(--border-subtle)",
-            background: "var(--surface-container-lowest)",
-            fontSize: 13,
-            color: "var(--on-surface-variant)",
-            cursor: data.length ? "pointer" : "default",
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
-            download
-          </span>
+
+        <button className="btn-utility" onClick={() => downloadCsv(data)} disabled={!data.length}
+          style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>download</span>
           CSV 다운로드
         </button>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: 60, color: "var(--outline)", fontSize: 14 }}>데이터 로드 중...</div>
+        <EmptyState icon="progress_activity" title="데이터를 불러오는 중입니다" />
       ) : error ? (
-        <div style={{ textAlign: "center", padding: 60, color: "var(--status-red)", fontSize: 14 }}>{error}</div>
+        <EmptyState icon="error" title={error} tone="var(--error)" />
       ) : data.length === 0 ? (
-        <div style={{ textAlign: "center", padding: 60, color: "var(--outline)", fontSize: 14 }}>
-          {category
-            ? "선택한 업종은 최신 분기의 분석 가능 표본이 부족합니다."
-            : "AI 분석 결과가 없습니다. 데이터 적재 상태를 확인해주세요."}
-        </div>
+        category ? (
+          <EmptyState
+            icon="filter_alt_off"
+            title="선택한 업종은 분석 가능 표본이 부족합니다"
+            desc="최신 분기 점포 수가 50개 미만이라 통계 판단을 보류합니다."
+          />
+        ) : (
+          <EmptyState
+            icon="database_off"
+            title="AI 분석 결과가 없습니다"
+            desc="데이터 적재 상태를 확인해주세요."
+          />
+        )
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 16, marginBottom: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(236px, 1fr))", gap: 16, marginBottom: 24 }}>
           {data.map((item) => (
             <RiskCard key={`${item.dong}-${item.category}`} item={item} />
           ))}
@@ -225,41 +323,56 @@ export default function DashboardPage() {
       )}
 
       {topReviewItems.length > 0 && (
-        <div style={{ background: "var(--surface-container-lowest)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: 24 }}>
-          <h3 style={{ fontSize: 16, fontWeight: 700, color: "var(--primary)", margin: "0 0 16px" }}>후속 조치 검토안</h3>
-          <p style={{ fontSize: 12, color: "var(--outline)", margin: "-8px 0 16px" }}>
+        <div className="card">
+          <h3 className="t-h3" style={{ margin: 0 }}>후속 조치 검토안</h3>
+          <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "6px 0 18px" }}>
             AI가 지원 대상을 결정하지 않습니다. 확인 순서를 제안할 뿐이며 최종 판단은 담당자가 합니다.
           </p>
-          <div style={{ display: "flex", flexDirection: "column", gap: 12, marginBottom: 16 }}>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 18 }}>
             {topReviewItems.map((item) => (
               <div
                 key={`${item.dong}-${item.category}-action`}
-                style={{ padding: 12, background: "var(--surface-gray)", borderLeft: `4px solid var(--primary)`, borderRadius: "0 6px 6px 0" }}
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  gap: 16,
+                  flexWrap: "wrap",
+                  padding: "14px 16px",
+                  background: "var(--surface-container-low)",
+                  borderRadius: "var(--radius-md)",
+                }}
               >
-                <p style={{ fontSize: 14, fontWeight: 700, color: "var(--primary)", margin: "0 0 4px" }}>
-                  {item.dong} · {item.category}
-                </p>
-                <p style={{ fontSize: 13, color: "var(--on-surface-variant)", margin: 0 }}>{item.action}</p>
+                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                  <span className="badge" style={{ background: "var(--surface-container-lowest)", color: "var(--primary)" }}>
+                    #{item.predicted_rank}
+                  </span>
+                  <span className="t-body-sm" style={{ fontWeight: 600, color: "var(--on-surface)" }}>
+                    {item.dong} · {item.category}
+                  </span>
+                </div>
+                <span className="t-caption" style={{ color: "var(--ink-secondary)" }}>{item.action}</span>
               </div>
             ))}
           </div>
+
           <Link
             to="/policy"
+            className="btn-utility"
             style={{
-              display: "inline-block",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 6,
+              textDecoration: "none",
+              color: "var(--primary)",
               width: "100%",
               boxSizing: "border-box",
-              textAlign: "center",
-              border: "1px solid var(--primary)",
-              color: "var(--primary)",
-              padding: "10px 0",
-              borderRadius: 8,
-              fontSize: 14,
-              fontWeight: 700,
-              textDecoration: "none",
             }}
           >
             현장점검 우선순위 보기
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
           </Link>
         </div>
       )}

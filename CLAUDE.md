@@ -139,7 +139,7 @@ hwaseong-commercial-ai/
 │   │   ├── policy.py           # /api/policy/ (공무원 전용)
 │   │   └── analysis.py         # /api/analysis/ (공개)
 │   └── services/
-│       └── risk.py             # 폐업위험점수 계산 로직
+│       └── risk.py             # 등급 판정 + 후속 조치 검토안 문구(규칙 기반, LLM 미사용)
 │
 ├── frontend/                   # React 19 + Vite
 │   ├── .env
@@ -169,7 +169,9 @@ hwaseong-commercial-ai/
 │   ├── build_dataset.py         # raw zip → 갭필링 패널 → label_h2 → final_dataset.csv/store_train_table.csv/cell_train_table.csv
 │   ├── train_model.py           # LightGBM 학습(셀단위 중분류 주력 + 점포단위 참고) → scores.csv
 │   ├── build_risk_index.py      # 폐업위험점수 + 이상탐지 → risk_index.csv
-│   ├── import_to_db.py          # CSV → PostgreSQL
+│   ├── import_normalized_db.py  # 검증 CSV → 정규화 PostgreSQL(upsert)
+│   ├── build_explanations.py    # M1 검증 → 상대 기여 요인 적재
+│   ├── import_to_db.py          # 레거시 3테이블 적재(롤백용)
 │   └── archive/                 # 구버전 파이프라인 4개 + 팀원 실험 스크립트 23개 (Phase 4에서 정리, 기록 보존용)
 │
 └── data/
@@ -189,12 +191,14 @@ hwaseong-commercial-ai/
 1. **위험예측 엔진** — LightGBM 이진분류 + 트렌드 이상탐지, 읍면동×업종 단위 폐업위험점수 산출
 2. **공실위험 지도** — 읍면동 단위 choropleth 시각화 (MapPage)
 3. **조기경보 Top 10** — 읍면동×업종 단위 고위험 리스트 (DashboardPage)
-4. **정책자금 우선순위 매트릭스** — 폐업위험도(x) × 정책잠재력(y) 4분면, Q1(고위험+고잠재력)=1순위 (PolicyPage)
-   - x축 = 폐업위험점수(확정) / y축 = 점포수(수혜규모), 행정동×업종 결과셋 내 중위값 기준 상/하위 50% 분류로 확정.
-     근거: 초기 구현에서 성장확률을 y축에 재사용했으나, 이는 x축(폐업위험점수) 계산식의 60% 비중을 차지하는
-     값과 동일해 두 축이 자기모순적 음의 상관관계를 가지는 문제가 있었음(고위험일수록 성장확률이 낮아야
-     하는데 y축도 성장확률이라 Q1 "고위험+고잠재력"이 잘 나오지 않음). "다수 점포에 파급효과"라는 x축과
-     독립적이고 방어하기 쉬운 정책 논리로 대체(`backend/routers/policy.py`).
+4. **현장점검 우선순위** — 실제 관측 폐업률(x) × 영향 점포 수(y) 4분면 (PolicyPage)
+   - **2026-08-18 개명**: 구 명칭 "정책자금 우선순위 매트릭스". AI가 지원 대상을 결정한다는 오해를
+     주는 표현이라 "현장점검 우선순위"로 바꿨다. 엔드포인트도 `fund-priority` → `inspection-priority`.
+     로직은 그대로다 — 원래부터 지원 배분이 아니라 "어디부터 확인할지" 계산이었고 이름만 틀렸다.
+   - x축 = 실제 관측 폐업률(예측값 아님) / y축 = `store_count`(영향 점포 수), 결과셋 내 중위값 기준 분류.
+     y축에 성장확률을 재사용하면 x축과 자기모순적 음의 상관이 생겨 점포 수로 대체했다.
+   - **필드명 주의**: 구 `PolicyPriorityItem.growth_prob`은 실제로 점포 수를 담고 있었다.
+     2026-08-18에 `store_count: int`로 정정했다. 되돌리지 말 것.
 
 ### 프라이버시 설계 원칙
 - 모든 출력은 **읍면동 × 업종 집계 단위** — 개별 점포 노출 없음 (원본 데이터가 집계 단위)
@@ -246,6 +250,10 @@ hwaseong-commercial-ai/
 ### RiskIndex
 폐업위험지수 + 트렌드 이상탐지 (build_risk_index.py 출력)
 
+> ⚠ **아래 `RiskIndex`는 레거시 테이블이다.** 2026-08-18 정규화 전환 이후 신규 API는
+> `commercial_quarters` / `risk_predictions` / `risk_threshold_sets`를 조회한다. 레거시 테이블은
+> 롤백용으로만 남겨두며, 실제 DB 스키마와 ORM 모델 사이에 컬럼 불일치가 있으니 ORM으로 직접 조회하지 말 것.
+
 **Phase 5(2026-08-04) 재작성**: 기존 합성점수 `(100-성장확률)×0.6 + 폐업_률_평균×0.4`를 폐기했다.
 `폐업_률_평균`(0~1)에 0.4를 곱한 항은 최대 기여가 0.4뿐이라 `(100-성장확률)×0.6`(0~60) 항에
 완전히 묻혀 실측값이 사실상 무시되고 있었음이 진단으로 확인됨(합성점수와 순수 예측치의 셀 순위가
@@ -256,9 +264,14 @@ hwaseong-commercial-ai/
 - `위험등급`: 안정/주의/위험/표본부족. 안정<화성시 평균 폐업률(가중평균, 매 실행 시 재계산,
   현재 3.22%) ≤ 주의 <평균의 2배(현재 6.44%) ≤ 위험. 기준값은 `data/processed/risk_thresholds.json`에
   저장되고 `backend/services/risk.py`가 이를 로드 — 코드에 하드코딩하지 않는다.
-- `표본부족_플래그`: 점포수 < 30(SAMPLE_MIN)인 셀. 소표본 노이즈가 상위 랭킹을 오염시키는 문제가
-  진단으로 확인되어(표본<30 비율 78.5%, 구버전 Top10 전부가 표본<30) 랭킹·색등급 산정에서 제외하고
+- `표본부족_플래그`: 점포수 < **SAMPLE_MIN(현재 50)**인 셀. 랭킹·색등급 산정에서 제외하고
   프론트에서 회색 처리("표본부족" 배지). CSV/DB에는 남아있음(목록 노출용).
+  **2026-08-18에 30 → 50으로 상향.** 30 기준에서는 점포 35개 안팎의 경계 셀이 상위권을 차지해
+  실제 폐업률 0%인 셀이 예측 1순위로 올라오는 문제가 있었다(상위 10개 리프트 1.14배로 붕괴).
+  민감도 검증: 30→1.14배 / 40→2.07 / **50→1.85** / 60→1.79 / 80→1.74, 스피어만은 50에서 정점(+0.5293).
+  50 기준 결과 — 분석 셀 231개(12.8%), **점포 커버율 61.8%**, 업종 33개.
+  ※ 학습 필터(`train_model.py CELL_MIN_STORES`)는 **30을 유지**한다. 조회 기준만 올린 것이라
+  모델 재학습이 없고 성능 지표(스피어만 0.4193 / 리프트 1.444)가 그대로 유효하다.
 - `성장확률`: ScoreData와 동일 값을 중복 보존 — 위험도(폐업 확률)와 완전히 분리된 "성장성" 지표로,
   이후 위험도×성장성 4사분면(균형발전 진단) 등에 재사용할 수 있도록 셀별로 남겨둔다.
 - `트렌드_기울기`: 최근 4분기 폐업률 선형회귀 기울기
@@ -288,10 +301,10 @@ hwaseong-commercial-ai/
 | `/api/alerts/closure-risk` | GET | `limit=10`, `category`(선택) | Top N 고위험 읍면동×업종 |
 | `/api/alerts/vacancy-risk/map` | GET | - | 읍면동별 공실위험지수 (choropleth용) |
 
-### 정책자금 (`/api/policy/`) — 공무원 전용
+### 현장점검 우선순위 (`/api/policy/`) — 공무원 전용
 | URL | 메서드 | 파라미터 | 설명 |
 |-----|--------|----------|------|
-| `/api/policy/fund-priority` | GET | `category`(선택) | 4분면 매트릭스 (Q1=고위험+고잠재력=1순위) |
+| `/api/policy/inspection-priority` | GET | `category`(선택) | 4분면 (Q1=고위험+다점포=확인 1순위). 구 `fund-priority` |
 
 ### 분석 (`/api/analysis/`) — 공개 (가드 없음)
 | URL | 메서드 | 파라미터 | 설명 |
@@ -324,8 +337,12 @@ python ai/train_model.py
 # 3. 폐업위험지수 계산 → risk_index.csv
 python ai/build_risk_index.py
 
-# 4. PostgreSQL 임포트
-python ai/import_to_db.py --table all
+# 4. 정규화 PostgreSQL 임포트(기준선·등급·동 요약 포함)
+python ai/import_normalized_db.py
+
+# 5. 상대 기여 요인 M1 검증 후 적재(단일 요인 쏠림 90% 초과면 비움)
+python ai/build_explanations.py --validate-only
+python ai/build_explanations.py
 ```
 
 `ai/build_dataset.py`는 raw zip 로딩 + 인허가 매칭 부분이 외장 SSD(`RAW_DATA_DIR`)에 의존한다 — SSD가
@@ -419,7 +436,7 @@ print(hw['dong_name'].tolist())
 → LightGBM 이진분류 + 트렌드 이상탐지 (선형회귀 기울기)
 
 [정책 적용 — 25점]
-발견(공실 지도) → 분석(조기경보 Top 10) → 행동(정책자금 우선순위)
+발견(공실 지도) → 분석(조기경보 Top 10) → 행동(현장점검 우선순위 → 후속 조치 검토안)
 각 기능 → 화성시 담당 부서 즉시 적용 시나리오
 
 [시민 체감 — 20점]  ※ 심사기준 원문: "시민 편익 증대, 행정효율 개선, 사회적 가치 창출"
@@ -442,6 +459,44 @@ print(hw['dong_name'].tolist())
 | AI 텍스트 | Gemini 2.5 Flash | 없음 (행정데이터 외부 전송 금지) |
 | 데이터 필터 | 서울 전체 | 시군구코드 41590 (화성시) |
 | ML 코드 | `ai/retrain_scores.py` | `ai/train_model.py` (동일 로직) |
+
+---
+
+## 용어 규칙 — 2026-08-18 확정 (되돌리지 말 것)
+
+심사기준 원문의 "정책 적용 가능성"과 공모전 원칙상, **AI가 지원 대상을 결정한다는 인상을 주는
+표현을 코드·UI·보고서·발표 어디에도 쓰지 않는다.** AI는 확인 범위를 좁혀줄 뿐이고 최종 판단은 공무원이 한다.
+
+### 금지 표현 (코드 주석·변수명 포함)
+```
+정책자금 우선순위 / 정책자금 배정 / 정책자금 지원 우선 검토
+AI 정책 제안 / AI 추천 정책 / AI가 지원 대상을 선정 / 정책자금 자동 배분
+1순위 — 즉시 지원
+```
+
+### 대체 표현
+| 금지 | 사용 |
+|---|---|
+| 정책자금 우선순위 매트릭스 | **현장점검 우선순위** |
+| 1순위 — 즉시 지원 | **1순위 — 현장 확인 권고** |
+| AI 정책 제안 | **후속 조치 검토안** |
+| 정책자금 지원 우선 검토 | **현장 확인 우선순위 높음** |
+| 정책자금 배정을 우선 검토하세요 | **현장 확인을 우선 검토하세요** |
+
+### 세 영역을 절대 섞지 않는다
+| 용어 | 정의 | 근거 |
+|---|---|---|
+| **확인된 위험 신호** | 관측 데이터로 직접 계산된 사실 | 소진공 원본 집계 |
+| **AI 예측 기여 요인** | 모델이 이 셀을 상위로 예측한 내부 근거. **인과 아님** | LightGBM `pred_contrib` |
+| **공무원 확인 필요 항목** | 데이터가 없어 모델이 보지 못한 원인 후보 | 미보유 데이터 |
+
+`alert_evidences.evidence_type`이 이 셋을 CHECK 제약으로 강제한다
+(`confirmed_signal` / `model_contribution` / `field_check`).
+
+### 예측값 노출 금지
+`predicted_closure_rate_internal`, `contribution_value_internal`은 **API에 절대 노출하지 않는다.**
+예측은 상대 순위로만, 기여도는 `share_pct`(상대 비중)로만 표시한다.
+검사: `grep -rn "_internal" backend/schemas.py backend/routers/` → 0건이어야 정상.
 
 ---
 
@@ -472,10 +527,12 @@ Claude가 다시 제안하더라도 아래 결정사항은 바꾸지 않는다.
 - `*.pkl`, `*.csv`, `*.env` 파일 커밋 금지
 
 ### AI 파이프라인 주의사항
-- 실행 순서 반드시 준수: `build_dataset.py` → `train_model.py` → `build_risk_index.py` → `import_to_db.py`
+- 실행 순서 반드시 준수: `build_dataset.py` → `train_model.py` → `build_risk_index.py` →
+  `import_normalized_db.py` → `build_explanations.py`
 - 학습된 모델은 `data/processed/lgbm_model_store.pkl`(점포단위, 참고용) / `lgbm_model_cell.pkl`(셀단위, 주력
   프로덕션)에 각각 저장됨 (joblib, `{"model", "features"}` 키)
-- `import_to_db.py`는 TRUNCATE 후 재삽입 방식 — 여러 번 실행해도 중복 없음
+- `import_normalized_db.py`는 복합키 upsert 방식이며 업무 이력·과거 모델 실행을 삭제하지 않는다.
+- `build_explanations.py`는 M1 검증을 통과할 때만 활성 모델의 상대 기여 요인을 적재한다.
 
 **Phase 4 재작성 완료 (2026-08-03)** — `ai/build_dataset.py`~`build_risk_index.py`를 `eda/02_preprocessing.ipynb`
 ·`03_modeling.ipynb`에서 검증된 로직으로 전면 교체(구버전은 `ai/archive/`에 보존, [[project_eda_rework_status]]
@@ -494,8 +551,9 @@ Claude가 다시 제안하더라도 아래 결정사항은 바꾸지 않는다.
 - **업종 분류명 두 버전 공존**: 같은 폴더의 "업종코드_20230228.csv" 코드표는 대분류명이 정식 명칭("전문, 과학 및 기술 서비스업")인데, 실제 분기별 데이터 CSV의 `상권업종대분류명`/`상권업종중분류명` 컬럼은 축약형("과학·기술")을 씀. Phase 4부터는 `통합카테고리`가 `상권업종중분류명` 값을 그대로 쓰므로(별도 매핑 딕셔너리 없음) 이 문제는 더 이상 해당 없음 — 코드표 명칭이 필요한 경우에만 유효한 주의사항으로 남겨둠.
 - 상가정보 zip의 인코딩은 파일명은 cp949, CSV 내용은 UTF-8 — `zipfile.ZipFile(path, metadata_encoding="cp949")`로 열고 `pd.read_csv(..., encoding="utf-8")`로 읽어야 함.
 
-**검증 현황 (2026-08-03 완료)**: `ai/build_dataset.py`→`train_model.py`→`build_risk_index.py`→
-`import_to_db.py` 전체를 실제 SSD raw 데이터로 end-to-end 실행 완료. `store_panel.csv` 873,035행,
+**검증 현황 (2026-08-18 완료)**: `ai/build_dataset.py`→`train_model.py`→`build_risk_index.py`→
+`import_normalized_db.py`→`build_explanations.py` 전체를 실제 SSD raw 데이터로 end-to-end 실행 완료.
+`store_panel.csv` 873,035행,
 `final_dataset.csv` 35,505행 — 앞서 fixture(노트북 산출물) 기준으로 미리 계산했던 예측치와 정확히
 일치(같은 알고리즘 + 같은 raw 데이터 → 같은 결과, 이식이 정확하다는 재확인). 셀단위 모델 스피어만
 0.4193/리프트 1.444x도 그대로 재현됨. `score_latest_quarter()`가 실제 최신 분기(2025Q4, `기준_년분기_코드

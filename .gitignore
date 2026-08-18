@@ -4,18 +4,44 @@ __pycache__/
 .venv/
 node_modules/
 dist/
-data/raw/
-data/processed/
 archive/
 Hwaseong-commercial-ai-main-dataset/
+Hwaseong-commercial-ai-main-dataset
 models/
 ai/*.log
-*.csv
-*.pkl
 *.model
 .DS_Store
 study.md
-Hwaseong-commercial-ai-main-dataset
+.vscode/*
 # 개발 서버 단축키(scripts/dev-servers.sh) 로그·PID
 .dev/
 .bak/
+
+# ── 데이터 ────────────────────────────────────────────────────────────────
+# 원본(소진공 zip·인허가)은 외장 SSD에만 두고 절대 커밋하지 않는다.
+data/raw/
+
+# data/processed는 기본 차단하되, 팀원 재현에 필요한 "집계 단위" 산출물만 예외 허용한다.
+# 주의: 디렉터리 자체를 무시(data/processed/)하면 git이 안으로 들어가지 않아 아래 ! 예외가 먹지 않는다.
+#       반드시 `data/processed/*` 형태여야 한다.
+data/processed/*
+
+# 예외 — 읍면동×업종 집계 단위. 개별 점포 레코드 없음(공개 리포 게시 가능).
+!data/processed/final_dataset.csv
+!data/processed/cell_train_table.csv
+!data/processed/scores.csv
+!data/processed/lgbm_model_cell.pkl
+!data/processed/model_cell_results.json
+!data/processed/risk_thresholds.json
+
+# 개별 점포 단위 파일은 위 예외에 넣지 말 것.
+#   store_train_table.csv(193M) / store_panel.csv(145M) / store_labels.csv(135M)
+#   → 상가업소번호·지번주소·좌표 포함. 공개 리포 게시 부적합 + GitHub 100MB 제한 초과.
+
+# 그 밖의 csv/pkl은 위치 무관하게 차단(위 예외보다 뒤에 오면 안 되므로 경로 한정으로 작성)
+/*.csv
+/*.pkl
+eda/*.csv
+eda/*.pkl
+ai/*.csv
+ai/*.pkl

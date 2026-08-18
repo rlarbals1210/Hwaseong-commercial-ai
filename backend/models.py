@@ -184,7 +184,7 @@ class RiskThresholdSet(Base):
     danger_threshold_pct = Column(Float, nullable=False)
     area_ratio_avg_pct = Column(Float, nullable=False)
     area_ratio_danger_pct = Column(Float, nullable=False)
-    sample_min = Column(Integer, nullable=False, default=30)
+    sample_min = Column(Integer, nullable=False, default=50)
     computed_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 

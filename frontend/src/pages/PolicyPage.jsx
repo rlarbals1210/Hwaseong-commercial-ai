@@ -5,18 +5,55 @@ import { apiFetchJson } from "../lib/api";
 const EMPTY_DATA = { Q1: [], Q2: [], Q3: [], Q4: [] };
 
 // AI는 확인 순서만 제시하고 지원 대상은 결정하지 않는다 — 라벨에 "지원/배분" 표현을 쓰지 않는다.
+// 강조는 색 테두리·리본이 아니라 톤 차이로만 한다(디자인 시스템 원칙: 입체감은 hairline과 톤으로).
 const QUADRANT_META = {
-  Q1: { label: "1순위 — 현장 확인 권고", color: "var(--status-red)", desc: "실제 폐업률 높고 영향 점포 많음. 가장 먼저 확인" },
-  Q2: { label: "2순위 — 개별 확인 권고", color: "var(--status-orange)", desc: "실제 폐업률 높으나 영향 점포 적음. 개별 확인" },
-  Q3: { label: "3순위 — 예방 관찰", color: "var(--secondary)", desc: "폐업률 낮으나 영향 점포 많음. 변화 추이 관찰" },
-  Q4: { label: "4순위 — 일반 관찰", color: "var(--status-green)", desc: "안정적 상권. 정기 모니터링 유지" },
+  Q1: {
+    order: "1순위",
+    label: "현장 확인 권고",
+    tone: "var(--error)",
+    soft: "var(--error-soft)",
+    desc: "실제 폐업률 높고 영향 점포 많음. 가장 먼저 확인",
+  },
+  Q2: {
+    order: "2순위",
+    label: "개별 확인 권고",
+    tone: "var(--accent-orange)",
+    soft: "var(--orange-soft)",
+    desc: "실제 폐업률 높으나 영향 점포 적음. 개별 확인",
+  },
+  Q3: {
+    order: "3순위",
+    label: "예방 관찰",
+    tone: "var(--accent-teal)",
+    soft: "var(--teal-soft)",
+    desc: "폐업률 낮으나 영향 점포 많음. 변화 추이 관찰",
+  },
+  Q4: {
+    order: "4순위",
+    label: "일반 관찰",
+    tone: "var(--accent-green)",
+    soft: "var(--green-soft)",
+    desc: "안정적 상권. 정기 모니터링 유지",
+  },
 };
 
-function StatCard({ label, value, color }) {
+function PageHeader({ title, desc }) {
   return (
-    <div style={{ background: "var(--surface-container-lowest)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: 16 }}>
-      <p style={{ fontSize: 12, color: "var(--on-surface-variant)", margin: "0 0 6px" }}>{label}</p>
-      <p style={{ fontSize: 22, fontWeight: 700, color: color || "var(--primary)", margin: 0 }}>{value}</p>
+    <div style={{ marginBottom: 24 }}>
+      <h1 className="t-h1" style={{ margin: 0 }}>{title}</h1>
+      <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>{desc}</p>
+    </div>
+  );
+}
+
+function StatCard({ label, value, unit, tone }) {
+  return (
+    <div className="card" style={{ padding: 20 }}>
+      <div className="t-eyebrow" style={{ color: "var(--ink-muted)", textTransform: "uppercase" }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginTop: 10 }}>
+        <span className="t-metric" style={{ fontSize: 28, color: tone ?? "var(--on-surface)" }}>{value}</span>
+        {unit && <span style={{ fontSize: 14, color: "var(--ink-faint)", fontWeight: 500 }}>{unit}</span>}
+      </div>
     </div>
   );
 }
@@ -25,69 +62,76 @@ function QuadrantPanel({ meta, items, highlight }) {
   return (
     <div
       style={{
-        position: "relative",
-        border: highlight ? `2px solid ${meta.color}` : "1px dashed var(--border-subtle)",
-        borderRadius: 8,
-        background: highlight ? `${meta.color}0D` : "var(--surface-gray)",
+        // 1순위만 순백으로 띄우고 나머지는 캔버스 톤에 얹는다 — 색 테두리 없이 위계가 생긴다
+        background: highlight ? "var(--surface-container-lowest)" : "var(--surface-container-low)",
+        border: `1px solid ${highlight ? "var(--hairline)" : "transparent"}`,
+        borderRadius: "var(--radius-lg)",
         padding: 16,
         display: "flex",
         flexDirection: "column",
         overflow: "hidden",
+        boxShadow: highlight ? "var(--elev-1)" : "none",
       }}
     >
-      {highlight && (
-        <div
-          style={{
-            position: "absolute",
-            top: 10,
-            right: -30,
-            background: meta.color,
-            color: "#fff",
-            fontSize: 10,
-            fontWeight: 700,
-            padding: "3px 32px",
-            transform: "rotate(45deg)",
-          }}
-        >
-          PRIORITY
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 8, marginBottom: 6 }}>
+        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 0 }}>
+          <span className="badge" style={{ background: meta.soft, color: meta.tone, flexShrink: 0 }}>
+            {meta.order}
+          </span>
+          <span className="t-body-sm" style={{ fontWeight: 600, color: "var(--on-surface)", whiteSpace: "nowrap" }}>
+            {meta.label}
+          </span>
         </div>
-      )}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8, gap: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 700, color: meta.color, background: `${meta.color}1A`, padding: "3px 10px", borderRadius: 6, whiteSpace: "nowrap" }}>
-          {meta.label}
+        <span className="t-metric" style={{ fontSize: 16, color: meta.tone, flexShrink: 0 }}>
+          {items.length}
         </span>
-        <span style={{ fontSize: 12, fontWeight: 700, color: meta.color, flexShrink: 0 }}>{items.length}건</span>
       </div>
-      <p style={{ fontSize: 12, color: "var(--on-surface-variant)", margin: "0 0 12px" }}>{meta.desc}</p>
-      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, maxHeight: 220 }}>
+
+      <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "0 0 12px" }}>{meta.desc}</p>
+
+      <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 6, maxHeight: 210 }}>
         {items.length === 0 ? (
-          <div style={{ color: "var(--outline)", fontSize: 13, padding: "8px 0" }}>해당 없음</div>
+          <div className="t-caption" style={{ color: "var(--ink-faint)", padding: "6px 0" }}>해당 없음</div>
         ) : (
           items.map((item, i) => (
             <div
               key={i}
               style={{
                 background: "var(--surface-container-lowest)",
-                border: "1px solid var(--border-subtle)",
-                borderRadius: 6,
-                padding: "8px 10px",
+                border: "1px solid var(--hairline)",
+                borderRadius: "var(--radius-md)",
+                padding: "9px 12px",
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                gap: 8,
+                gap: 10,
               }}
             >
-              <div>
-                <div style={{ fontSize: 13, fontWeight: 700, color: "var(--on-surface)" }}>{item.dong}</div>
-                <div style={{ fontSize: 11, color: "var(--on-surface-variant)" }}>
-                  {item.category} · 실제 폐업률 {item.actual_closure_rate_pct}%
+              <div style={{ minWidth: 0 }}>
+                <div className="t-body-sm" style={{ fontWeight: 600, color: "var(--on-surface)" }}>{item.dong}</div>
+                <div className="t-caption" style={{ color: "var(--ink-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                  {item.category} · 폐업률{" "}
+                  <b style={{ color: meta.tone, fontVariantNumeric: "tabular-nums" }}>{item.actual_closure_rate_pct}%</b>
                 </div>
               </div>
-              <span style={{ fontSize: 12, fontWeight: 700, color: meta.color, flexShrink: 0 }}>{item.store_count}개</span>
+              <div style={{ textAlign: "right", flexShrink: 0 }}>
+                <div className="t-metric" style={{ fontSize: 15 }}>{item.store_count}</div>
+                <div className="t-eyebrow" style={{ color: "var(--ink-faint)" }}>점포</div>
+              </div>
             </div>
           ))
         )}
       </div>
+    </div>
+  );
+}
+
+function EmptyState({ icon, title, desc, tone }) {
+  return (
+    <div style={{ background: "var(--surface-container-low)", borderRadius: "var(--radius-lg)", padding: 56, textAlign: "center" }}>
+      <span className="material-symbols-outlined" style={{ fontSize: 36, color: tone ?? "var(--ink-faint)" }}>{icon}</span>
+      <div className="t-title" style={{ color: tone ?? "var(--on-surface)", marginTop: 10 }}>{title}</div>
+      {desc && <div className="t-body-sm" style={{ color: "var(--ink-muted)", marginTop: 6 }}>{desc}</div>}
     </div>
   );
 }
@@ -155,26 +199,24 @@ export default function PolicyPage() {
 
   return (
     <div>
-      <div style={{ marginBottom: 24 }}>
-        <h1 style={{ fontSize: 22, fontWeight: 700, color: "var(--primary)", margin: 0 }}>현장점검 우선순위</h1>
-        <p style={{ fontSize: 14, color: "var(--on-surface-variant)", marginTop: 4 }}>
-          실제 관측 폐업률 × 영향 점포 수 기준 확인 순서 — 지원 대상 결정이 아닙니다
-        </p>
-      </div>
+      <PageHeader
+        title="현장점검 우선순위"
+        desc="실제 관측 폐업률 × 영향 점포 수 기준 확인 순서입니다. 지원 대상 결정이 아닙니다."
+      />
 
       {!loading && total > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>
-          <StatCard label="총 분석 대상 구역" value={`${dongCount}개 읍면동`} />
-          <StatCard label="영향 점포 수" value={`${affectedStores.toLocaleString()}개소`} color="var(--status-red)" />
-          <StatCard label="1순위(Q1) 구역 수" value={`${data.Q1.length}개 구역`} color="var(--secondary)" />
-          <StatCard label="전체 분석 건수" value={`${total}건`} />
+          <StatCard label="분석 대상 읍면동" value={dongCount} unit="개" />
+          <StatCard label="영향 점포 수" value={affectedStores.toLocaleString()} unit="개소" tone="var(--error)" />
+          <StatCard label="1순위 구역" value={data.Q1.length} unit="개" tone="var(--primary)" />
+          <StatCard label="전체 분석 건수" value={total} unit="건" />
         </div>
       )}
 
-      <div style={{ marginBottom: 16, display: "flex", gap: 12, alignItems: "center", justifyContent: "space-between" }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", marginBottom: 16 }}>
         <div>
-          <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-            <label style={{ fontSize: 13, color: "var(--on-surface-variant)", fontWeight: 600 }}>업종 필터</label>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <label className="t-caption" style={{ color: "var(--ink-secondary)", fontWeight: 600 }}>업종</label>
             <select
               value={category}
               onChange={(e) => {
@@ -182,85 +224,70 @@ export default function PolicyPage() {
                 setError("");
                 setCategory(e.target.value);
               }}
-              style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border-subtle)", fontSize: 13, background: "var(--surface-container-lowest)" }}
+              style={{ minWidth: 180 }}
             >
               <option value="">전체 업종</option>
               {categories.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
+                <option key={c} value={c}>{c}</option>
               ))}
             </select>
           </div>
-          <div style={{ marginTop: 5, fontSize: 11, color: categoryError ? "var(--status-red)" : "var(--outline)" }}>
+          <div className="t-caption" style={{ marginTop: 7, color: categoryError ? "var(--error)" : "var(--ink-faint)" }}>
             {categoryError
               ? "업종 목록을 불러오지 못했습니다."
-              : `최신 분기 점포 수 30개 이상인 ${categories.length}개 업종`}
+              : `최신 분기 점포 수 50개 이상인 ${categories.length}개 업종`}
           </div>
         </div>
-        <button
-          onClick={() => downloadCsv(data)}
-          disabled={!total}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 6,
-            padding: "8px 14px",
-            borderRadius: 8,
-            border: "1px solid var(--border-subtle)",
-            background: "var(--surface-container-lowest)",
-            fontSize: 13,
-            color: "var(--on-surface-variant)",
-            cursor: total ? "pointer" : "default",
-          }}
-        >
-          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>
-            download
-          </span>
+
+        <button className="btn-utility" onClick={() => downloadCsv(data)} disabled={!total}
+          style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 18 }}>download</span>
           CSV 다운로드
         </button>
       </div>
 
       {loading ? (
-        <div style={{ textAlign: "center", padding: 60, color: "var(--outline)", fontSize: 14 }}>분석 중...</div>
+        <EmptyState icon="progress_activity" title="분석 결과를 불러오는 중입니다" />
       ) : error ? (
-        <div style={{ textAlign: "center", padding: 60, color: "var(--status-red)", fontSize: 14 }}>{error}</div>
+        <EmptyState icon="error" title={error} tone="var(--error)" />
       ) : total === 0 ? (
-        <div style={{ textAlign: "center", padding: 60, color: "var(--outline)", fontSize: 14 }}>
-          {category
-            ? "선택한 업종은 최신 분기의 분석 가능 표본이 부족합니다."
-            : "정책 분석 결과가 없습니다. 데이터 적재 상태를 확인해주세요."}
-        </div>
+        category ? (
+          <EmptyState
+            icon="filter_alt_off"
+            title="선택한 업종은 분석 가능 표본이 부족합니다"
+            desc="최신 분기 점포 수가 50개 미만이라 통계 판단을 보류합니다."
+          />
+        ) : (
+          <EmptyState icon="database_off" title="분석 결과가 없습니다" desc="데이터 적재 상태를 확인해주세요." />
+        )
       ) : (
-        <div style={{ background: "var(--surface-container-lowest)", border: "1px solid var(--border-subtle)", borderRadius: 8, padding: 24 }}>
+        <div className="card">
           <div style={{ display: "flex", gap: 12 }}>
             <div
+              className="t-caption"
               style={{
                 writingMode: "vertical-rl",
                 transform: "rotate(180deg)",
-                fontSize: 12,
-                color: "var(--on-surface-variant)",
+                color: "var(--ink-muted)",
                 display: "flex",
                 alignItems: "center",
                 justifyContent: "center",
                 flexShrink: 0,
               }}
             >
-              영향 점포 수 (파급 규모)
+              영향 점포 수 (파급 규모) →
             </div>
-            <div style={{ flex: 1 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr", gap: 12, minHeight: 500 }}>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr", gap: 12, minHeight: 520 }}>
                 <QuadrantPanel meta={QUADRANT_META.Q3} items={data.Q3} />
                 <QuadrantPanel meta={QUADRANT_META.Q1} items={data.Q1} highlight />
                 <QuadrantPanel meta={QUADRANT_META.Q4} items={data.Q4} />
                 <QuadrantPanel meta={QUADRANT_META.Q2} items={data.Q2} />
               </div>
-              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: "var(--on-surface-variant)", marginTop: 8 }}>
-                <span>Low</span>
-                <span>High</span>
-              </div>
-              <div style={{ textAlign: "center", fontSize: 12, color: "var(--on-surface-variant)", marginTop: 4 }}>
-                실제 폐업률 (Actual Closure Rate, %)
+              <div className="t-caption" style={{ display: "flex", justifyContent: "space-between", color: "var(--ink-faint)", marginTop: 10 }}>
+                <span>낮음</span>
+                <span style={{ color: "var(--ink-muted)" }}>실제 폐업률 →</span>
+                <span>높음</span>
               </div>
             </div>
           </div>
@@ -269,23 +296,17 @@ export default function PolicyPage() {
 
       {topQ1 && (
         <div
-          style={{
-            marginTop: 16,
-            background: "var(--primary)",
-            borderRadius: 8,
-            padding: 24,
-            color: "#fff",
-            display: "flex",
-            alignItems: "center",
-            gap: 16,
-          }}
+          className="card"
+          style={{ marginTop: 16, display: "flex", alignItems: "flex-start", gap: 14, background: "var(--surface-container-low)", border: "1px solid transparent" }}
         >
-          <span className="material-symbols-outlined" style={{ fontSize: 32, flexShrink: 0, opacity: 0.85 }}>
+          <span className="material-symbols-outlined" style={{ fontSize: 22, flexShrink: 0, color: "var(--primary)", marginTop: 1 }}>
             lightbulb
           </span>
-          <p style={{ margin: 0, fontSize: 14, lineHeight: 1.6, opacity: 0.95 }}>
-            현재 <b>{topQ1.dong} · {topQ1.category}</b>이(가) 1순위 구역 중 가장 높은 실제 폐업률(<b>{topQ1.actual_closure_rate_pct}%</b>)을 보이고 있습니다.
-            해당 구역부터 현장 확인을 우선 검토하세요. 지원 여부는 현장 확인 결과에 따라 담당자가 판단합니다.
+          <p className="t-body-sm" style={{ margin: 0, color: "var(--ink-secondary)", lineHeight: 1.65 }}>
+            1순위 구역 중 <b style={{ color: "var(--on-surface)" }}>{topQ1.dong} · {topQ1.category}</b>의 실제 폐업률이{" "}
+            <b style={{ color: "var(--error)", fontVariantNumeric: "tabular-nums" }}>{topQ1.actual_closure_rate_pct}%</b>로 가장 높습니다.
+            해당 구역부터 현장 확인을 우선 검토하세요.{" "}
+            <span style={{ color: "var(--ink-muted)" }}>지원 여부는 현장 확인 결과에 따라 담당자가 판단합니다.</span>
           </p>
         </div>
       )}

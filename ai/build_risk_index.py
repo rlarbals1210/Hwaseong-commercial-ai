@@ -33,7 +33,12 @@ from pathlib import Path
 import pandas as pd
 from scipy.stats import linregress
 
-SAMPLE_MIN = 30  # 표본부족 판정 기준 (점포수)
+# 표본부족 판정 기준 (점포수). 학습 필터(train_model.py CELL_MIN_STORES=30)와 별개다.
+# 30 -> 50 상향(2026-08-18): 30 기준에서는 상위 10개 리프트가 1.14배로 무너졌다(상위 20개는 1.59배).
+# 점포 35개 안팎의 경계 셀이 상위권을 차지하면서 실제 폐업률 0%인 셀이 1순위로 올라오는 문제가 있었다.
+# 민감도 검증(최신분기 기준): 30->1.14배 / 40->2.07배 / 50->1.85배 / 60->1.79배 / 80->1.74배,
+# 스피어만은 50에서 정점(+0.5293). 셀은 382->231개로 줄지만 점포 커버율은 74.8%->61.8%로 유지된다.
+SAMPLE_MIN = 50
 
 
 def calc_slope(series: pd.Series) -> float:

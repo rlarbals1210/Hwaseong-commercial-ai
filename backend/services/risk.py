@@ -18,7 +18,7 @@ _DEFAULT_THRESHOLDS = {
     "danger_threshold_pct": 6.4,
     "dong_ratio_avg_pct": 11.6,
     "dong_ratio_danger_pct": 23.2,
-    "sample_min": 30,
+    "sample_min": 50,
 }
 
 

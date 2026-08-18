@@ -56,7 +56,7 @@ SCORES_REQUIRED = {
     "행정동명", "통합카테고리", "기준_년분기_코드", "성장확률", "등급",
     "업종내_순위", "업종내_전체동수", "상위_퍼센트",
 }
-SAMPLE_MIN = 30
+SAMPLE_MIN = 50  # 기본값. 실제로는 risk_thresholds.json의 sample_min을 우선 사용한다.
 THRESHOLD_REQUIRED = {
     "avg_closure_rate_pct",
     "danger_threshold_pct",
