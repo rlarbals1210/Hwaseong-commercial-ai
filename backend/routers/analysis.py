@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Optional
 from ..database import get_db
-from ..models import CommercialData, ScoreData, RiskIndex
+from ..models import AdminArea, CommercialQuarter, IndustryCategory, ModelRun, RiskPrediction
 from ..schemas import AnalysisDongResponse, ScoreResponse
 from ..services.risk import risk_level
 
@@ -12,7 +12,14 @@ router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
 @router.get("/dongs")
 def list_dongs(db: Session = Depends(get_db)):
-    dongs = db.query(CommercialData.행정동명).distinct().order_by(CommercialData.행정동명).all()
+    dongs = (
+        db.query(AdminArea.area_name)
+        .join(CommercialQuarter, CommercialQuarter.area_id == AdminArea.id)
+        .filter(AdminArea.is_current.is_(True))
+        .distinct()
+        .order_by(AdminArea.area_name)
+        .all()
+    )
     return {"dongs": [d[0] for d in dongs]}
 
 
@@ -23,30 +30,41 @@ def get_dong_analysis(
     quarter: Optional[int] = Query(None),
     db: Session = Depends(get_db),
 ):
-    q = db.query(CommercialData).filter(CommercialData.행정동명 == dong)
+    q = (
+        db.query(CommercialQuarter, AdminArea.area_name, IndustryCategory.industry_name)
+        .join(AdminArea, CommercialQuarter.area_id == AdminArea.id)
+        .join(IndustryCategory, CommercialQuarter.industry_id == IndustryCategory.id)
+        .filter(AdminArea.area_name == dong)
+    )
     if category:
-        q = q.filter(CommercialData.통합카테고리 == category)
+        q = q.filter(IndustryCategory.industry_name == category)
     if quarter:
-        q = q.filter(CommercialData.기준_년분기_코드 == quarter)
+        q = q.filter(CommercialQuarter.quarter_code == quarter)
     else:
-        latest = db.query(func.max(CommercialData.기준_년분기_코드)).filter(CommercialData.행정동명 == dong).scalar()
-        q = q.filter(CommercialData.기준_년분기_코드 == latest)
+        latest = (
+            db.query(func.max(CommercialQuarter.quarter_code))
+            .join(AdminArea, CommercialQuarter.area_id == AdminArea.id)
+            .filter(AdminArea.area_name == dong)
+            .scalar()
+        )
+        q = q.filter(CommercialQuarter.quarter_code == latest)
 
-    row = q.first()
-    if not row:
+    result = q.order_by(IndustryCategory.industry_name).first()
+    if not result:
         raise HTTPException(status_code=404, detail="데이터 없음")
+    row, area_name, industry_name = result
 
     return AnalysisDongResponse(
-        dong=row.행정동명,
-        category=row.통합카테고리,
-        quarter=row.기준_년분기_코드,
-        sales=row.당월매출합,
-        store_count=row.점포수,
-        population=row.총_유동인구_수,
-        closure_rate=row.폐업_률_평균,
-        open_rate=row.개업_율_평균,
-        saturation=row.업종_포화도,
-        competition=row.경쟁강도,
+        dong=area_name,
+        category=industry_name,
+        quarter=row.quarter_code,
+        sales=None,
+        store_count=row.store_count,
+        population=None,
+        closure_rate=row.closure_rate,
+        open_rate=row.opening_rate,
+        saturation=row.saturation_rate,
+        competition=row.competition_index,
     )
 
 
@@ -56,53 +74,61 @@ def get_score(
     category: str = Query(...),
     db: Session = Depends(get_db),
 ):
-    score_row = (
-        db.query(ScoreData)
-        .filter(ScoreData.행정동명 == dong, ScoreData.통합카테고리 == category)
-        .order_by(ScoreData.기준_년분기_코드.desc())
+    result = (
+        db.query(RiskPrediction, CommercialQuarter)
+        .join(ModelRun, RiskPrediction.model_run_id == ModelRun.id)
+        .join(CommercialQuarter, RiskPrediction.commercial_quarter_id == CommercialQuarter.id)
+        .join(AdminArea, CommercialQuarter.area_id == AdminArea.id)
+        .join(IndustryCategory, CommercialQuarter.industry_id == IndustryCategory.id)
+        .filter(
+            ModelRun.is_active.is_(True),
+            AdminArea.area_name == dong,
+            IndustryCategory.industry_name == category,
+        )
+        .order_by(ModelRun.created_at.desc())
         .first()
     )
-    if not score_row:
+    if not result:
         raise HTTPException(status_code=404, detail="점수 데이터 없음")
+    prediction, commercial = result
 
-    risk_row = (
-        db.query(RiskIndex)
-        .filter(RiskIndex.행정동명 == dong, RiskIndex.통합카테고리 == category)
-        .order_by(RiskIndex.기준_년분기_코드.desc())
-        .first()
-    )
-    actual_rate = risk_row.실제폐업률_pct if risk_row else 0.0
-    sample_insufficient = bool(risk_row.표본부족_플래그) if risk_row else False
-    if risk_row and risk_row.위험등급:
-        level = risk_row.위험등급
-    else:
-        level, _ = risk_level(actual_rate)
+    actual_rate = (commercial.closure_rate or 0.0) * 100
+    sample_insufficient = prediction.sample_insufficient
+    level = "표본부족" if sample_insufficient else risk_level(actual_rate)[0]
 
     return ScoreResponse(
         dong=dong,
         category=category,
-        growth_prob=score_row.성장확률,
-        grade=score_row.등급,
-        rank=score_row.업종내_순위,
-        total_dongs=score_row.업종내_전체동수,
-        top_pct=score_row.상위_퍼센트,
+        growth_prob=round((1 - prediction.predicted_closure_rate_internal) * 100, 1),
+        grade=prediction.grade,
+        rank=prediction.industry_rank,
+        total_dongs=prediction.industry_total_areas,
+        top_pct=prediction.top_percent,
         actual_closure_rate_pct=round(actual_rate, 1),
         risk_level=level,
-        predicted_rank=risk_row.예측순위 if risk_row else None,
+        predicted_rank=prediction.predicted_rank,
         sample_insufficient=sample_insufficient,
     )
 
 
 @router.get("/categories")
 def list_categories(db: Session = Depends(get_db)):
-    cats = db.query(CommercialData.통합카테고리).distinct().order_by(CommercialData.통합카테고리).all()
+    cats = (
+        db.query(IndustryCategory.industry_name)
+        .join(CommercialQuarter, CommercialQuarter.industry_id == IndustryCategory.id)
+        .distinct()
+        .order_by(IndustryCategory.industry_name)
+        .all()
+    )
     return {"categories": [c[0] for c in cats]}
 
 
 @router.get("/quarters")
 def list_quarters(dong: Optional[str] = Query(None), db: Session = Depends(get_db)):
-    q = db.query(CommercialData.기준_년분기_코드).distinct()
+    q = db.query(CommercialQuarter.quarter_code).join(
+        AdminArea, CommercialQuarter.area_id == AdminArea.id
+    ).distinct()
     if dong:
-        q = q.filter(CommercialData.행정동명 == dong)
+        q = q.filter(AdminArea.area_name == dong)
     quarters = sorted([r[0] for r in q.all()], reverse=True)
     return {"quarters": quarters}

@@ -1,4 +1,6 @@
 from pydantic import BaseModel, ConfigDict
+from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
 
@@ -91,10 +93,6 @@ class OfficialLoginRequest(BaseModel):
     password: str
 
 
-class CitizenLoginRequest(BaseModel):
-    business_number: str
-
-
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
@@ -102,14 +100,90 @@ class TokenResponse(BaseModel):
     verification_type: str
 
 
-class ConsultationResponse(BaseModel):
+class AlertCaseUpdate(BaseModel):
+    status: Optional[str] = None
+    confirmed_cause_code: Optional[str] = None
+    decision_note: Optional[str] = None
+
+
+class AlertCaseResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    dong: str
-    category: str
-    survival_prob: float
-    grade: str
-    population_level: str
-    competition_level: str
-    saturation_level: str
-    reasons: list[str]
+    id: int
+    prediction_id: int
+    assigned_official_id: Optional[int]
+    status: str
+    confirmed_cause_code: Optional[str]
+    decision_note: Optional[str]
+    created_at: datetime
+    reviewed_at: Optional[datetime]
+    closed_at: Optional[datetime]
+
+
+class AlertEvidenceCreate(BaseModel):
+    evidence_type: str
+    metric_code: str
+    observed_value: Optional[float] = None
+    baseline_value: Optional[float] = None
+    direction: Optional[str] = None
+    quality_flag: str = "verified"
+    source_quarter_code: Optional[int] = None
+    description: Optional[str] = None
+
+
+class AlertEvidenceResponse(AlertEvidenceCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    alert_id: int
+    verified_by_official_id: Optional[int]
+    created_at: datetime
+
+
+class PolicyProgramResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    program_code: str
+    program_name: str
+    description: Optional[str]
+
+
+class PolicyActionCreate(BaseModel):
+    alert_id: int
+    program_code: str
+    status: str = "reviewing"
+    decision_reason: Optional[str] = None
+    budget_amount: Optional[Decimal] = None
+    target_store_count: Optional[int] = None
+
+
+class PolicyActionResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    alert_id: int
+    program_id: int
+    official_id: int
+    status: str
+    decision_reason: Optional[str]
+    budget_amount: Optional[Decimal]
+    target_store_count: Optional[int]
+    created_at: datetime
+
+
+class PolicyOutcomeCreate(BaseModel):
+    evaluation_quarter_code: int
+    baseline_closure_rate: Optional[float] = None
+    observed_closure_rate: Optional[float] = None
+    baseline_store_count: Optional[int] = None
+    observed_store_count: Optional[int] = None
+    evaluation_note: Optional[str] = None
+
+
+class PolicyOutcomeResponse(PolicyOutcomeCreate):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    action_id: int
+    created_at: datetime

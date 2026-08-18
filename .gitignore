@@ -16,3 +16,5 @@ ai/*.log
 .DS_Store
 study.md
 Hwaseong-commercial-ai-main-dataset
+# 개발 서버 단축키(scripts/dev-servers.sh) 로그·PID
+.dev/

@@ -54,7 +54,7 @@
 | 백엔드 | FastAPI + Uvicorn (포트 8000) |
 | ML | LightGBM (이진분류: 성장/폐업 예측) |
 | DB | PostgreSQL + SQLAlchemy |
-| 인증 | JWT(PyJWT) + bcrypt — 공무원(DB 계정) / 시민(사업자등록번호 형식검증) |
+| 인증 | JWT(PyJWT) + bcrypt — **공무원 단일 역할**(DB 계정) |
 | 지도 | Naver Maps JS API v3 (CDN, NCP 다이나믹 맵) |
 | 시각화 | matplotlib (choropleth 그리드, 4분면 매트릭스, 파이프라인 다이어그램) |
 | AI 텍스트 | 없음 — LightGBM 예측값으로 대체 |
@@ -107,7 +107,7 @@ JWT_EXPIRE_MINUTES=480
 ```bash
 python -m backend.scripts.create_official <아이디> <비밀번호> [표시이름]
 ```
-시민 로그인은 계정 생성이 필요 없음 — 사업자등록번호(10자리) 형식(체크섬) 검증만 통과하면 로그인됨. 실제 배포 서버에도 별도로 최소 1개 공무원 계정을 시딩해야 함(배포 체크리스트 항목).
+로그인 역할은 공무원 하나뿐이다(시민 로그인은 2026-08-18 설계 결정으로 제거 — 아래 '설계 결정' 절 참조). 실제 배포 서버에도 별도로 최소 1개 공무원 계정을 시딩해야 함(배포 체크리스트 항목).
 
 ---
 
@@ -126,19 +126,18 @@ hwaseong-commercial-ai/
 │   ├── schemas.py              # Pydantic 스키마
 │   ├── auth/
 │   │   ├── security.py         # JWT 발급
-│   │   └── dependencies.py     # 역할별 라우트 가드 (get_current_official/citizen)
+│   │   └── dependencies.py     # 라우트 가드 (get_current_official)
 │   ├── utils/
-│   │   └── business_number.py  # 사업자등록번호 체크섬 검증
+│   │   └── business_number.py  # 사업자등록번호 체크섬 검증 (현재 미사용 — 보고서 근거용 보존)
 │   ├── scripts/
 │   │   └── create_official.py  # 공무원 계정 시딩 CLI
 │   ├── tests/
 │   │   └── test_business_number.py
 │   ├── routers/
-│   │   ├── auth.py             # /api/auth/ (공무원 로그인 / 시민 로그인)
+│   │   ├── auth.py             # /api/auth/ (공무원 로그인)
 │   │   ├── alerts.py           # /api/alerts/ (공무원 전용)
 │   │   ├── policy.py           # /api/policy/ (공무원 전용)
-│   │   ├── analysis.py         # /api/analysis/ (공개)
-│   │   └── consultation.py     # /api/consultation/ (시민 전용)
+│   │   └── analysis.py         # /api/analysis/ (공개)
 │   └── services/
 │       └── risk.py             # 폐업위험점수 계산 로직
 │
@@ -147,20 +146,17 @@ hwaseong-commercial-ai/
 │   ├── public/
 │   │   └── hwaseong_emd.geojson  ← SGIS에서 생성 필요 (아래 참고)
 │   └── src/
-│       ├── App.jsx             # 라우팅 + 상단 네비게이션 + 역할별 라우트 가드
+│       ├── App.jsx             # 라우팅 + 사이드바 네비게이션 + 라우트 가드
 │       ├── main.jsx
 │       ├── context/
 │       │   └── AuthContext.jsx # 로그인 상태(JWT, role) 관리
 │       ├── components/
 │       │   └── RequireRole.jsx # 역할 불일치 시 리다이렉트
 │       └── pages/
-│           ├── RoleSelectPage.jsx   # 로그인 전 공무원/시민 선택
-│           ├── OfficialLoginPage.jsx
-│           ├── CitizenLoginPage.jsx
-│           ├── DashboardPage.jsx   # 조기경보 Top 10 카드 (공무원)
-│           ├── MapPage.jsx         # Naver Maps choropleth (공무원)
-│           ├── PolicyPage.jsx      # 4분면 정책자금 매트릭스 (공무원)
-│           └── ConsultPage.jsx     # 창업 상담 조회 (시민)
+│           ├── OfficialLoginPage.jsx  # 진입 화면 (역할 선택 없음)
+│           ├── DashboardPage.jsx   # 조기경보 Top 10 카드
+│           ├── MapPage.jsx         # Naver Maps choropleth
+│           └── PolicyPage.jsx      # 4분면 정책자금 매트릭스
 │
 ├── eda/                         # EDA→전처리→모델링 재작업 노트북 (ai/ 파이프라인의 로직 근거)
 │   ├── paths.py                 # 원본/산출물 경로 상수 (ai/build_dataset.py, train_model.py가 import)
@@ -199,11 +195,33 @@ hwaseong-commercial-ai/
      값과 동일해 두 축이 자기모순적 음의 상관관계를 가지는 문제가 있었음(고위험일수록 성장확률이 낮아야
      하는데 y축도 성장확률이라 Q1 "고위험+고잠재력"이 잘 나오지 않음). "다수 점포에 파급효과"라는 x축과
      독립적이고 방어하기 쉬운 정책 논리로 대체(`backend/routers/policy.py`).
-5. **창업 상담 조회** — 예비창업자 대상 읍면동×업종 창업 생존확률 + 근거 3가지 (ConsultPage)
 
 ### 프라이버시 설계 원칙
 - 모든 출력은 **읍면동 × 업종 집계 단위** — 개별 점포 노출 없음 (원본 데이터가 집계 단위)
 - 행정데이터 원본은 외부로 전송하지 않음 (공모전 규정)
+
+### 설계 결정 — 시민(소상공인) 직접조회 기능 제외 (2026-08-18 확정)
+
+중간발표 피드백을 반영해 **공무원 정책 의사결정 지원 단일 목적**으로 범위를 좁혔다.
+`ConsultPage`·`/api/consultation/`·시민 로그인·역할 선택 화면을 모두 제거했다.
+
+**제외 사유 (보고서·발표에서 이 논리를 그대로 쓴다):**
+1. **데이터 원칙과의 충돌** — "읍면동×업종 집계 단위, 개별 점포 노출 없음"이라는 프라이버시 원칙과
+   "내 가게의 위험도"라는 개인화 조회는 구조적으로 양립할 수 없다. 개별 점포 레코드가 없으므로
+   개인화는 원리상 불가능하며, 억지로 구현하면 집계값을 개인값처럼 오인시키게 된다.
+2. **도달 방식의 역전** — 위험한 상황의 소상공인일수록 행정 서비스를 스스로 찾아올 여력이 없다.
+   시민이 찾아오게 만드는 대신, 행정이 먼저 찾아가게 만드는 쪽을 택했다.
+3. **심사기준상 손실 없음** — 시민 체감효과 20점의 정의는 "시민 편익 증대, **행정효율 개선**,
+   사회적 가치 창출"이다. 행정효율 개선이 배점 항목에 명시돼 있어 공무원 전용 도구로도 정면 대응 가능하다.
+4. **범위 집중** — 남은 기간에 다수 기능을 얕게 만드는 것보다 조기경보·지도·정책자금 3개 화면의
+   완성도를 올리는 편이 산출물 품질에 유리하다고 판단했다.
+
+**보존한 것:** `backend/utils/business_number.py`와 그 테스트는 삭제하지 않는다.
+"시민 인증 수단을 검토했고, 주민등록번호가 아닌 사업자등록번호 형식검증까지 구현한 뒤
+의도적으로 제외했다"는 판단 근거를 결과보고서에서 인용하기 위함이다.
+
+**예상 Q&A:** "그럼 시민은 무엇을 하나?" →
+"시민은 아무것도 하지 않습니다. 그게 설계 목표입니다. 위험해지면 공무원이 먼저 찾아옵니다."
 
 ---
 
@@ -251,7 +269,7 @@ hwaseong-commercial-ai/
 ### Official
 공무원 계정 (로그인용, ML 파이프라인과 무관 — `backend/scripts/create_official.py`로 시딩)
 - 주요 컬럼: `username`(unique), `password_hash`(bcrypt), `name`(선택)
-- 시민은 별도 테이블 없음 — 사업자등록번호 형식검증만 하는 stateless 로그인이라 저장할 데이터가 없음
+- 사용자 역할은 공무원 하나뿐 — 시민 역할·테이블은 2026-08-18 설계 결정으로 제거
 
 ---
 
@@ -263,7 +281,6 @@ hwaseong-commercial-ai/
 | URL | 메서드 | 파라미터 | 설명 |
 |-----|--------|----------|------|
 | `/api/auth/official/login` | POST | `username`, `password` | 공무원 로그인 → JWT(`role=official`) |
-| `/api/auth/citizen/login` | POST | `business_number` | 시민 로그인. 사업자등록번호 **형식(체크섬) 검증만** 수행 — 실제 사업자 DB 매칭 아님 → JWT(`role=citizen`) |
 
 ### 조기경보 (`/api/alerts/`) — 공무원 전용
 | URL | 메서드 | 파라미터 | 설명 |
@@ -276,7 +293,7 @@ hwaseong-commercial-ai/
 |-----|--------|----------|------|
 | `/api/policy/fund-priority` | GET | `category`(선택) | 4분면 매트릭스 (Q1=고위험+고잠재력=1순위) |
 
-### 분석 (`/api/analysis/`) — 공개 (공무원·시민 페이지 공용이라 가드 없음)
+### 분석 (`/api/analysis/`) — 공개 (가드 없음)
 | URL | 메서드 | 파라미터 | 설명 |
 |-----|--------|----------|------|
 | `/api/analysis/dongs` | GET | - | 화성시 전체 읍면동 목록 |
@@ -284,11 +301,6 @@ hwaseong-commercial-ai/
 | `/api/analysis/score` | GET | `dong`, `category` | AI 성장확률 + 폐업위험점수 |
 | `/api/analysis/categories` | GET | - | 전체 업종 목록 |
 | `/api/analysis/quarters` | GET | `dong`(선택) | 가용 분기 목록 |
-
-### 창업 상담 (`/api/consultation/`) — 시민 전용
-| URL | 메서드 | 파라미터 | 설명 |
-|-----|--------|----------|------|
-| `/api/consultation/startup` | GET | `dong`, `category` | 창업 생존확률 + 근거 3가지 |
 
 ---
 
@@ -410,8 +422,10 @@ print(hw['dong_name'].tolist())
 발견(공실 지도) → 분석(조기경보 Top 10) → 행동(정책자금 우선순위)
 각 기능 → 화성시 담당 부서 즉시 적용 시나리오
 
-[시민 체감 — 20점]
-창업 상담 조회: 예약 없이 3분 내 창업 적합도 분석
+[시민 체감 — 20점]  ※ 심사기준 원문: "시민 편익 증대, 행정효율 개선, 사회적 가치 창출"
+   → 시민 직접조회 화면 없이 '행정효율 개선' 경로로 확보한다
+담당 공무원이 분기마다 고위험 읍면동×업종을 먼저 발견 → 실태조사·정책자금을 선제 배정
+= 소상공인이 행정을 찾아오게 만들지 않고, 행정이 먼저 찾아가게 만든다
 ```
 
 ---
@@ -449,7 +463,7 @@ Codex가 다시 제안하더라도 아래 결정사항은 바꾸지 않는다.
 | DB UniqueConstraint | 3개 테이블 모두 `(행정동명, 통합카테고리, 기준_년분기_코드)` 복합 제약 적용됨 |
 | CORS 오리진 | `CORS_ORIGINS` 환경변수로 관리. `main.py` 하드코딩 금지 |
 | 배포 전략 | 단일 VPS + Nginx. DB를 외부 서비스(Supabase 등)로 이전 금지 |
-| 로그인 방식 | 공무원=아이디/비번(DB 계정, bcrypt) / 시민=사업자등록번호 형식검증만(회원가입 없음). 주민등록번호 절대 사용 금지(배포 URL 공개 특성상 법적 리스크) |
+| 로그인 방식 | **공무원 단일 역할** — 아이디/비번(DB 계정, bcrypt). 시민 로그인은 2026-08-18 설계 결정으로 제거. 주민등록번호 절대 사용 금지(배포 URL 공개 특성상 법적 리스크) |
 | 계정 데이터 위치 | 공무원 계정은 DB 데이터이며 git에 포함 안 됨 — 팀원마다 `backend/scripts/create_official.py`로 각자 로컬에 시딩 필요 |
 
 ### 데이터 보안 (공모전 규정 — 위반 시 실격)

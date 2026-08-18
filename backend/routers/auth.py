@@ -5,12 +5,14 @@ from sqlalchemy.orm import Session
 from ..auth.security import create_access_token
 from ..database import get_db
 from ..models import Official
-from ..schemas import CitizenLoginRequest, OfficialLoginRequest, TokenResponse
-from ..utils.business_number import normalize_business_number, validate_business_number
+from ..schemas import OfficialLoginRequest, TokenResponse
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
+# 시민(사업자등록번호) 로그인은 2026-08-18 설계 결정으로 제거했다.
+# 검증 로직 자체(backend/utils/business_number.py)와 테스트는 "검토 후 의도적 제외"의
+# 근거로 리포에 보존한다 — 상세 사유는 CLAUDE.md '설계 결정' 절 참조.
 @router.post("/official/login", response_model=TokenResponse)
 def official_login(body: OfficialLoginRequest, db: Session = Depends(get_db)):
     official = db.query(Official).filter(Official.username == body.username).first()
@@ -21,13 +23,3 @@ def official_login(body: OfficialLoginRequest, db: Session = Depends(get_db)):
 
     token = create_access_token({"sub": str(official.id), "role": "official", "username": official.username})
     return TokenResponse(access_token=token, role="official", verification_type="credential")
-
-
-@router.post("/citizen/login", response_model=TokenResponse)
-def citizen_login(body: CitizenLoginRequest):
-    if not validate_business_number(body.business_number):
-        raise HTTPException(status_code=400, detail="사업자등록번호 형식이 올바르지 않습니다")
-
-    normalized = normalize_business_number(body.business_number)
-    token = create_access_token({"sub": normalized, "role": "citizen"})
-    return TokenResponse(access_token=token, role="citizen", verification_type="format_check_only")

@@ -14,7 +14,23 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(PROJECT_ROOT / ".env")
 
 RAW_DATA_DIR = Path(os.getenv("RAW_DATA_DIR", str(PROJECT_ROOT / "data" / "raw")))
-RAW_DIR = RAW_DATA_DIR / "Hwaseong-commercial-ai-main-dataset"
+
+
+def _resolve_raw_dir() -> Path:
+    """팀원별 데이터셋 폴더명 차이를 한 곳에서 흡수한다."""
+    override = os.getenv("RAW_DATASET_DIR")
+    if override:
+        return Path(override)
+
+    candidates = [
+        RAW_DATA_DIR / "hwaseong-commercial-dataset",
+        RAW_DATA_DIR / "Hwaseong-commercial-ai-main-dataset",
+        RAW_DATA_DIR,
+    ]
+    return next((path for path in candidates if path.exists()), candidates[0])
+
+
+RAW_DIR = _resolve_raw_dir()
 
 PROCESSED_DATA_DIR = Path(os.getenv("PROCESSED_DATA_DIR", str(PROJECT_ROOT / "data" / "processed")))
 

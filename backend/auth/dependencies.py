@@ -23,5 +23,5 @@ def require_role(role: str):
     return _checker
 
 
+# 현재 역할은 공무원 하나뿐이다(시민 역할은 2026-08-18 설계 결정으로 제거).
 get_current_official = require_role("official")
-get_current_citizen = require_role("citizen")

@@ -1,0 +1,43 @@
+{
+  // 단축키 연결: keybindings.json 의 cmd+shift+d → runTask "서버 전체 실행",
+  //              cmd+alt+shift+d → tasks.terminate "terminateAll"
+  // 라벨을 바꾸면 키바인딩의 args 도 같이 바꿔야 한다.
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "서버 전체 실행",
+      "dependsOrder": "parallel",
+      "dependsOn": ["백엔드 (FastAPI :8000)", "프론트엔드 (Vite :5174)"],
+      "problemMatcher": []
+    },
+    {
+      "label": "백엔드 (FastAPI :8000)",
+      "type": "shell",
+      "command": "\"${workspaceFolder}/.venv/bin/uvicorn\" backend.main:app --reload --port 8000",
+      "options": { "cwd": "${workspaceFolder}" },
+      "isBackground": true,
+      "presentation": {
+        "group": "servers",
+        "panel": "dedicated",
+        "reveal": "always",
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "프론트엔드 (Vite :5174)",
+      "type": "shell",
+      // 태스크 셸은 비대화형이라 .zshrc(nvm 로드)가 실행되지 않는다 → nvm.sh 를 직접 로드
+      "command": "[ -s \"$NVM_DIR/nvm.sh\" ] || export NVM_DIR=\"$HOME/.nvm\"; . \"$NVM_DIR/nvm.sh\" && npm run dev",
+      "options": { "cwd": "${workspaceFolder}/frontend" },
+      "isBackground": true,
+      "presentation": {
+        "group": "servers",
+        "panel": "dedicated",
+        "reveal": "always",
+        "clear": true
+      },
+      "problemMatcher": []
+    }
+  ]
+}

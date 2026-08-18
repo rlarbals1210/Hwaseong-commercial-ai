@@ -1,19 +1,17 @@
-import { Routes, Route, Link, useLocation, useNavigate } from "react-router-dom";
+import { Routes, Route, Link, Navigate, useLocation, useNavigate } from "react-router-dom";
 import DashboardPage from "./pages/DashboardPage";
 import MapPage from "./pages/MapPage";
 import PolicyPage from "./pages/PolicyPage";
-import ConsultPage from "./pages/ConsultPage";
-import RoleSelectPage from "./pages/RoleSelectPage";
 import OfficialLoginPage from "./pages/OfficialLoginPage";
-import CitizenLoginPage from "./pages/CitizenLoginPage";
 import RequireRole from "./components/RequireRole";
 import { useAuth } from "./context/AuthContext";
 
+// 공무원 정책 의사결정 지원 전용.
+// 시민(소상공인) 직접조회 화면은 2026-08-18 설계 결정으로 제외했다 — 상세 사유는 CLAUDE.md '설계 결정' 절 참조.
 const NAV = [
-  { path: "/dashboard", label: "조기경보 대시보드", icon: "dashboard", role: "official", Component: DashboardPage },
-  { path: "/map", label: "공실위험 지도", icon: "map", role: "official", Component: MapPage },
-  { path: "/policy", label: "정책자금 우선순위", icon: "grid_view", role: "official", Component: PolicyPage },
-  { path: "/consult", label: "창업 상담", icon: "chat_bubble", role: "citizen", Component: ConsultPage },
+  { path: "/dashboard", label: "조기경보 대시보드", icon: "dashboard", Component: DashboardPage },
+  { path: "/map", label: "공실위험 지도", icon: "map", Component: MapPage },
+  { path: "/policy", label: "정책자금 우선순위", icon: "grid_view", Component: PolicyPage },
 ];
 
 function Sidebar({ nav, pathname, username, onLogout }) {
@@ -133,25 +131,25 @@ export default function App() {
   const { pathname } = useLocation();
   const { isAuthenticated, role, username, logout } = useAuth();
   const navigate = useNavigate();
-  const visibleNav = NAV.filter((n) => n.role === role);
-  const isOfficialShell = role === "official";
+  const isOfficial = isAuthenticated && role === "official";
 
   const handleLogout = () => {
     logout();
     navigate("/");
   };
 
+  const loginElement = isOfficial ? <Navigate to="/dashboard" replace /> : <OfficialLoginPage />;
+
   const routes = (
     <Routes>
-      <Route path="/" element={<RoleSelectPage />} />
-      <Route path="/login/official" element={<OfficialLoginPage />} />
-      <Route path="/login/citizen" element={<CitizenLoginPage />} />
-      {NAV.map(({ path, role, Component }) => (
+      <Route path="/" element={loginElement} />
+      <Route path="/login/official" element={loginElement} />
+      {NAV.map(({ path, Component }) => (
         <Route
           key={path}
           path={path}
           element={
-            <RequireRole role={role}>
+            <RequireRole role="official">
               <Component />
             </RequireRole>
           }
@@ -160,68 +158,15 @@ export default function App() {
     </Routes>
   );
 
-  if (isOfficialShell) {
+  if (isOfficial) {
     return (
       <div style={{ minHeight: "100vh", background: "var(--surface-gray)" }}>
-        <Sidebar nav={visibleNav} pathname={pathname} username={username} onLogout={handleLogout} />
+        <Sidebar nav={NAV} pathname={pathname} username={username} onLogout={handleLogout} />
         <main style={{ marginLeft: 240, maxWidth: 1440, padding: "32px 40px", boxSizing: "border-box" }}>{routes}</main>
       </div>
     );
   }
 
-  return (
-    <div style={{ minHeight: "100vh", background: "var(--surface-gray)" }}>
-      <nav
-        className="print-hide"
-        style={{
-          background: "var(--primary)",
-          color: "#fff",
-          padding: "0 24px",
-          display: "flex",
-          alignItems: "center",
-          gap: 32,
-          height: 56,
-          position: "sticky",
-          top: 0,
-          zIndex: 100,
-        }}
-      >
-        <span style={{ fontWeight: 700, fontSize: 15, whiteSpace: "nowrap" }}>화성시 소상공인 AI</span>
-        {visibleNav.map(({ path, label }) => (
-          <Link
-            key={path}
-            to={path}
-            style={{
-              color: pathname === path ? "var(--secondary-container)" : "rgba(255,255,255,0.75)",
-              textDecoration: "none",
-              fontSize: 13,
-              fontWeight: pathname === path ? 700 : 400,
-              borderBottom: pathname === path ? "2px solid var(--secondary-container)" : "2px solid transparent",
-              paddingBottom: 2,
-            }}
-          >
-            {label}
-          </Link>
-        ))}
-        {isAuthenticated && (
-          <button
-            onClick={handleLogout}
-            style={{
-              marginLeft: "auto",
-              background: "none",
-              border: "none",
-              color: "rgba(255,255,255,0.75)",
-              fontSize: 13,
-              cursor: "pointer",
-              padding: 0,
-            }}
-          >
-            로그아웃
-          </button>
-        )}
-      </nav>
-
-      <main style={{ maxWidth: 1280, margin: "0 auto", padding: "24px 16px" }}>{routes}</main>
-    </div>
-  );
+  // 미인증 상태: 로그인 화면이 자체 전체화면 레이아웃을 가지므로 셸을 씌우지 않는다.
+  return <div style={{ minHeight: "100vh", background: "var(--surface-gray)" }}>{routes}</div>;
 }

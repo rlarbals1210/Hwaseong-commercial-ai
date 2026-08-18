@@ -4,9 +4,9 @@ from sqlalchemy import func
 from typing import Optional
 from ..auth.dependencies import get_current_official
 from ..database import get_db
-from ..models import RiskIndex
+from ..models import AdminArea, CommercialQuarter, IndustryCategory, ModelRun, RiskPrediction
 from ..schemas import ClosureRiskItem, ClosureRateRankingItem, VacancyRiskItem
-from ..services.risk import action_message, dong_risk_level
+from ..services.risk import DANGER_THRESHOLD_PCT, action_message, dong_risk_level, risk_level
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"], dependencies=[Depends(get_current_official)])
 
@@ -20,35 +20,39 @@ def get_closure_risk(
     """조기경보(예측) — AI 예측 폐업률로 셀 순위만 매긴다. 예측 절대값은 응답에 없음
     (예측폐업률이 실제 관측치보다 구조적으로 ~2.4배 높게 나오는 게 확인되어, 화면에 노출하면
     오해를 줌 — 순위만 신뢰할 수 있는 정보). 실제 관측 폐업률·개업률·추세는 팩트로 그대로 병기."""
-    latest = db.query(func.max(RiskIndex.기준_년분기_코드)).scalar()
-    if not latest:
-        return []
-
-    # 표본부족(점포수<30) 셀은 예측순위 산정에서 이미 제외됨(build_risk_index.py) — NULL 방어차 재확인
-    q = db.query(RiskIndex).filter(
-        RiskIndex.기준_년분기_코드 == latest,
-        RiskIndex.표본부족_플래그.is_(False),
-        RiskIndex.예측순위.isnot(None),
+    q = (
+        db.query(RiskPrediction, CommercialQuarter, AdminArea.area_name, IndustryCategory.industry_name)
+        .join(ModelRun, RiskPrediction.model_run_id == ModelRun.id)
+        .join(CommercialQuarter, RiskPrediction.commercial_quarter_id == CommercialQuarter.id)
+        .join(AdminArea, CommercialQuarter.area_id == AdminArea.id)
+        .join(IndustryCategory, CommercialQuarter.industry_id == IndustryCategory.id)
+        .filter(
+            ModelRun.is_active.is_(True),
+            RiskPrediction.sample_insufficient.is_(False),
+            RiskPrediction.predicted_rank.isnot(None),
+        )
     )
     if category:
-        q = q.filter(RiskIndex.통합카테고리 == category)
-    rows = q.order_by(RiskIndex.예측순위.asc()).limit(limit).all()
+        q = q.filter(IndustryCategory.industry_name == category)
+    rows = q.order_by(RiskPrediction.predicted_rank.asc()).limit(limit).all()
 
-    return [
-        ClosureRiskItem(
-            predicted_rank=r.예측순위,
-            dong=r.행정동명,
-            category=r.통합카테고리,
-            actual_closure_rate_pct=r.실제폐업률_pct,
-            growth_prob=r.성장확률,
-            open_rate_pct=r.개업률_pct,
-            trend_slope=round(r.트렌드_기울기 or 0.0, 3),
-            saturation=r.업종_포화도,
-            anomaly=r.이상탐지_플래그 or False,
-            action=action_message(r.위험등급, r.이상탐지_플래그 or False),
-        )
-        for r in rows
-    ]
+    result = []
+    for prediction, commercial, dong, industry in rows:
+        actual_pct = (commercial.closure_rate or 0.0) * 100
+        level = risk_level(actual_pct)[0]
+        result.append(ClosureRiskItem(
+            predicted_rank=prediction.predicted_rank,
+            dong=dong,
+            category=industry,
+            actual_closure_rate_pct=round(actual_pct, 2),
+            growth_prob=round((1 - prediction.predicted_closure_rate_internal) * 100, 1),
+            open_rate_pct=round((commercial.opening_rate or 0.0) * 100, 2),
+            trend_slope=round(commercial.trend_slope or 0.0, 3),
+            saturation=commercial.saturation_rate or 0.0,
+            anomaly=commercial.anomaly_flag,
+            action=action_message(level, commercial.anomaly_flag),
+        ))
+    return result
 
 
 @router.get("/closure-rate-ranking", response_model=list[ClosureRateRankingItem])
@@ -58,62 +62,66 @@ def get_closure_rate_ranking(
     db: Session = Depends(get_db),
 ):
     """상권 순위표(현황) — 실제 관측 폐업률로만 정렬. 보정·예측 관여 없음."""
-    latest = db.query(func.max(RiskIndex.기준_년분기_코드)).scalar()
+    latest = db.query(func.max(CommercialQuarter.quarter_code)).scalar()
     if not latest:
         return []
 
-    q = db.query(RiskIndex).filter(
-        RiskIndex.기준_년분기_코드 == latest,
-        RiskIndex.표본부족_플래그.is_(False),
+    q = (
+        db.query(CommercialQuarter, AdminArea.area_name, IndustryCategory.industry_name)
+        .join(AdminArea, CommercialQuarter.area_id == AdminArea.id)
+        .join(IndustryCategory, CommercialQuarter.industry_id == IndustryCategory.id)
+        .filter(CommercialQuarter.quarter_code == latest, CommercialQuarter.store_count >= 30)
     )
     if category:
-        q = q.filter(RiskIndex.통합카테고리 == category)
-    rows = q.order_by(RiskIndex.실제폐업률_pct.desc()).limit(limit).all()
+        q = q.filter(IndustryCategory.industry_name == category)
+    rows = q.order_by(CommercialQuarter.closure_rate.desc()).limit(limit).all()
 
     return [
         ClosureRateRankingItem(
             rank=i,
-            dong=r.행정동명,
-            category=r.통합카테고리,
-            closure_rate_pct=r.실제폐업률_pct,
-            store_count=r.점포수,
+            dong=dong,
+            category=industry,
+            closure_rate_pct=round((commercial.closure_rate or 0.0) * 100, 2),
+            store_count=commercial.store_count,
         )
-        for i, r in enumerate(rows, 1)
+        for i, (commercial, dong, industry) in enumerate(rows, 1)
     ]
 
 
 @router.get("/vacancy-risk/map", response_model=list[VacancyRiskItem])
 def get_vacancy_risk_map(db: Session = Depends(get_db)):
     """지도(현황) — 읍면동별 위험 업종 비율(실제 폐업률 기준 셀 등급의 집계). 예측값 관여 없음."""
-    latest = db.query(func.max(RiskIndex.기준_년분기_코드)).scalar()
+    latest = db.query(func.max(CommercialQuarter.quarter_code)).scalar()
     if not latest:
         return []
 
-    # 위험업종비율은 build_risk_index.py가 동단위로 미리 계산해 각 셀에 동일값을 채워둔 필드라
-    # 동별 아무 값이나 하나(min/max/avg 무관하게 동일)만 집계하면 된다. 트렌드는 표본부족 셀의
-    # 노이즈를 배제하기 위해 표본충분 셀만으로 평균낸다.
     rows = (
         db.query(
-            RiskIndex.행정동명,
-            func.avg(RiskIndex.위험업종비율).label("risk_ratio"),
-            func.avg(RiskIndex.트렌드_기울기).label("avg_slope"),
+            AdminArea.area_name,
+            CommercialQuarter.closure_rate,
+            CommercialQuarter.trend_slope,
         )
-        .filter(RiskIndex.기준_년분기_코드 == latest, RiskIndex.표본부족_플래그.is_(False))
-        .group_by(RiskIndex.행정동명)
+        .join(AdminArea, CommercialQuarter.area_id == AdminArea.id)
+        .filter(CommercialQuarter.quarter_code == latest, CommercialQuarter.store_count >= 30)
         .all()
     )
 
+    grouped: dict[str, list[tuple[float, float]]] = {}
+    for dong, closure_rate, trend_slope in rows:
+        grouped.setdefault(dong, []).append(((closure_rate or 0.0) * 100, trend_slope or 0.0))
+
     result = []
-    for r in rows:
-        ratio = r.risk_ratio or 0.0
+    for dong, values in grouped.items():
+        ratio = round(sum(rate >= DANGER_THRESHOLD_PCT for rate, _ in values) / len(values) * 100, 1)
+        avg_slope = sum(slope for _, slope in values) / len(values)
         level, color = dong_risk_level(ratio)
         result.append(
             VacancyRiskItem(
-                dong=r.행정동명,
-                risk_ratio=round(ratio, 1),
+                dong=dong,
+                risk_ratio=ratio,
                 risk_level=level,
                 color=color,
-                trend=round(r.avg_slope or 0.0, 3),
+                trend=round(avg_slope, 3),
             )
         )
-    return result
+    return sorted(result, key=lambda item: item.dong)

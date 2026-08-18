@@ -1,0 +1,450 @@
+"""검증된 CSV 산출물을 정규화 PostgreSQL 스키마에 이력 보존 방식으로 적재한다.
+
+실행 전:
+    # 기존 DB는 최초 1회 baseline stamp 후 신규 테이블 생성
+    alembic stamp 20260818_0000
+    alembic upgrade head
+
+    # 신규 DB는 바로 전체 migration 실행
+    alembic upgrade head
+
+사용법:
+    python ai/import_normalized_db.py
+
+기존 import_to_db.py의 TRUNCATE 방식과 달리 관측 팩트는 복합키 upsert, 모델 결과는
+model_run별 append/upsert한다. 예측 절대값은 내부 감사용으로만 저장하며 API에서 노출하지 않는다.
+"""
+from __future__ import annotations
+
+import argparse
+import hashlib
+import json
+from pathlib import Path
+import sys
+
+import numpy as np
+import pandas as pd
+from sqlalchemy import inspect
+from sqlalchemy.dialects.postgresql import insert as postgres_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.orm import Session
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(PROJECT_ROOT))
+
+from backend.database import engine  # noqa: E402
+from backend.models import (  # noqa: E402
+    AdminArea,
+    CommercialQuarter,
+    DataBatch,
+    IndustryCategory,
+    ModelRun,
+    PolicyProgram,
+    RiskPrediction,
+)
+from eda import paths as eda_paths  # noqa: E402
+
+
+COMMERCIAL_REQUIRED = {
+    "행정동명", "통합카테고리", "기준_년분기_코드", "점포수",
+    "개업_율_평균", "폐업_률_평균", "업종_포화도", "경쟁강도",
+}
+SCORES_REQUIRED = {
+    "행정동명", "통합카테고리", "기준_년분기_코드", "성장확률", "등급",
+    "업종내_순위", "업종내_전체동수", "상위_퍼센트",
+}
+SAMPLE_MIN = 30
+POLICY_PROGRAMS = [
+    {
+        "program_code": "SPECIAL_GUARANTEE",
+        "program_name": "특례보증",
+        "description": "경영안정자금 접근성 개선을 위한 보증 지원",
+        "is_active": True,
+    },
+    {
+        "program_code": "BUSINESS_ENVIRONMENT",
+        "program_name": "경영환경개선",
+        "description": "점포 시설·홍보·경영환경 개선 지원",
+        "is_active": True,
+    },
+    {
+        "program_code": "DISTRICT_REVITALIZATION",
+        "program_name": "상권 활성화",
+        "description": "공동 마케팅·행사·공간 개선 등 상권 단위 지원",
+        "is_active": True,
+    },
+    {
+        "program_code": "NEW_POLICY_REVIEW",
+        "program_name": "신규 정책 검토",
+        "description": "기존 사업으로 대응하기 어려운 확인 원인에 대한 신규 정책 검토",
+        "is_active": True,
+    },
+]
+
+
+def _require_columns(df: pd.DataFrame, required: set[str], label: str) -> None:
+    missing = sorted(required - set(df.columns))
+    if missing:
+        raise ValueError(f"{label} 필수 컬럼 누락: {missing}")
+
+
+def _read_csv(path: Path, **kwargs) -> pd.DataFrame:
+    for encoding in ("utf-8-sig", "utf-8", "cp949"):
+        try:
+            return pd.read_csv(path, encoding=encoding, low_memory=False, **kwargs)
+        except UnicodeDecodeError:
+            continue
+    raise UnicodeDecodeError("unknown", b"", 0, 1, f"인코딩 판별 실패: {path}")
+
+
+def _stable_fallback_code(prefix: str, value: str, length: int) -> str:
+    digest = hashlib.sha1(value.encode("utf-8")).hexdigest().upper()
+    return f"{prefix}{digest}"[:length]
+
+
+def _quarter_add(code: int, count: int) -> int:
+    year, quarter = divmod(int(code), 10)
+    offset = year * 4 + quarter - 1 + count
+    return (offset // 4) * 10 + (offset % 4) + 1
+
+
+def _slope(values: pd.Series) -> float:
+    clean = values.dropna().astype(float).to_numpy()
+    if len(clean) < 2:
+        return 0.0
+    return float(np.polyfit(np.arange(len(clean)), clean, 1)[0])
+
+
+def _build_latest_signals(commercial: pd.DataFrame, scores: pd.DataFrame) -> pd.DataFrame:
+    latest = int(commercial["기준_년분기_코드"].max())
+    quarters = sorted(commercial["기준_년분기_코드"].unique())[-4:]
+    slopes = (
+        commercial[commercial["기준_년분기_코드"].isin(quarters)]
+        .sort_values("기준_년분기_코드")
+        .groupby(["행정동명", "통합카테고리"])["폐업_률_평균"]
+        .apply(_slope)
+        .reset_index(name="trend_slope")
+    )
+    slope_std = float(slopes["trend_slope"].std())
+    slopes["anomaly_flag"] = slopes["trend_slope"] > slope_std
+
+    latest_fact = commercial[commercial["기준_년분기_코드"] == latest][
+        ["행정동명", "통합카테고리", "점포수"]
+    ]
+    result = scores.merge(latest_fact, on=["행정동명", "통합카테고리"], how="left")
+    result = result.merge(slopes, on=["행정동명", "통합카테고리"], how="left")
+    result["sample_insufficient"] = result["점포수"].fillna(0) < SAMPLE_MIN
+    result["predicted_closure_rate_internal"] = ((100 - result["성장확률"]) / 100).clip(0, 1)
+    result["predicted_rank"] = pd.NA
+    ok = ~result["sample_insufficient"]
+    result.loc[ok, "predicted_rank"] = (
+        result.loc[ok, "predicted_closure_rate_internal"]
+        .rank(ascending=False, method="first")
+        .astype(int)
+    )
+    return result
+
+
+def _supplement_score_only_cells(
+    commercial: pd.DataFrame, scores: pd.DataFrame, cell_table_path: Path
+) -> pd.DataFrame:
+    """직전 분기 셀이 없어 트레일링 비율이 미산출된 최신 예측 셀을 점포수 팩트로 보존한다."""
+    key = ["행정동명", "통합카테고리"]
+    latest = int(commercial["기준_년분기_코드"].max())
+    current = commercial[commercial["기준_년분기_코드"] == latest][key]
+    missing = scores[key].merge(current, on=key, how="left", indicator=True)
+    missing = missing[missing["_merge"] == "left_only"][key]
+    if missing.empty:
+        return commercial
+
+    cell = _read_csv(cell_table_path)
+    quarter_label = f"{latest // 10}Q{latest % 10}"
+    cell = cell[cell["기준분기"] == quarter_label].rename(
+        columns={"상권업종중분류명": "통합카테고리"}
+    )
+    missing = missing.merge(cell[[*key, "점포수"]], on=key, how="left", validate="one_to_one")
+    if missing["점포수"].isna().any():
+        unresolved = missing.loc[missing["점포수"].isna(), key].to_dict("records")
+        raise ValueError(f"cell_train_table에서 최신 예측 셀 점포수를 찾지 못했습니다: {unresolved}")
+
+    additions = missing.assign(
+        기준_년분기_코드=latest,
+        개업_율_평균=np.nan,
+        폐업_률_평균=np.nan,
+        업종_포화도=np.nan,
+        경쟁강도=np.nan,
+    )
+    combined = pd.concat([commercial, additions[commercial.columns]], ignore_index=True)
+    current_mask = combined["기준_년분기_코드"] == latest
+    current_total = combined.loc[current_mask].groupby("행정동명")["점포수"].transform("sum")
+    combined.loc[current_mask, "업종_포화도"] = combined.loc[current_mask, "업종_포화도"].fillna(
+        combined.loc[current_mask, "점포수"] / current_total
+    )
+    combined.loc[current_mask, "경쟁강도"] = combined.loc[current_mask, "경쟁강도"].fillna(
+        (current_total - combined.loc[current_mask, "점포수"]) / combined.loc[current_mask, "점포수"]
+    )
+    return combined
+
+
+def _nullable_float(value) -> float | None:
+    return None if pd.isna(value) else float(value)
+
+
+def _upsert(
+    session: Session,
+    model,
+    rows: list[dict],
+    key_columns: list[str],
+    update_columns: list[str],
+    chunk_size: int = 1000,
+) -> None:
+    if not rows:
+        return
+    table = model.__table__
+    dialect = session.get_bind().dialect.name
+    for start in range(0, len(rows), chunk_size):
+        chunk = rows[start:start + chunk_size]
+        if dialect == "postgresql":
+            stmt = postgres_insert(table).values(chunk)
+        elif dialect == "sqlite":
+            stmt = sqlite_insert(table).values(chunk)
+        else:
+            for row in chunk:
+                existing = session.query(model).filter_by(**{k: row[k] for k in key_columns}).one_or_none()
+                if existing is None:
+                    session.add(model(**row))
+                else:
+                    for column in update_columns:
+                        setattr(existing, column, row[column])
+            session.flush()
+            continue
+        stmt = stmt.on_conflict_do_update(
+            index_elements=[table.c[column] for column in key_columns],
+            set_={column: getattr(stmt.excluded, column) for column in update_columns},
+        )
+        session.execute(stmt)
+
+
+def _area_rows(area_names: list[str]) -> list[dict]:
+    code_df = _read_csv(eda_paths.GYEONGGI_DONG_LIST_CSV, dtype=str)
+    code_df = code_df.drop_duplicates("읍면동명")
+    lookup = code_df.set_index("읍면동명").to_dict("index")
+    rows = []
+    for name in sorted(area_names):
+        raw = lookup.get(name, {})
+        registered = str(raw.get("등록일자", ""))
+        valid_from = f"{registered[:4]}-{registered[4:6]}" if len(registered) >= 6 else None
+        area_type = "읍" if name.endswith("읍") else "면" if name.endswith("면") else "동"
+        rows.append({
+            "area_code": str(raw.get("읍면동코드") or _stable_fallback_code("A", name, 10)),
+            "area_name": name,
+            "area_type": area_type,
+            "valid_from": valid_from,
+            "valid_to": None,
+            "is_current": True,
+        })
+    return rows
+
+
+def _industry_rows(industry_names: list[str]) -> list[dict]:
+    codes = _read_csv(eda_paths.SBIZ_CATEGORY_CODE_CSV, dtype=str)
+    codes = codes[["중분류코드", "중분류명"]].drop_duplicates("중분류명")
+    lookup = codes.set_index("중분류명")["중분류코드"].to_dict()
+    return [
+        {
+            "source_system": "sbiz",
+            "industry_code": lookup.get(name, _stable_fallback_code("M", name, 20)),
+            "industry_name": name,
+            "level": "medium",
+            "is_active": True,
+        }
+        for name in sorted(industry_names)
+    ]
+
+
+def _file_checksum(path: Path) -> str | None:
+    if not path.exists():
+        return None
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        for chunk in iter(lambda: file.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def import_normalized(
+    session: Session,
+    commercial_path: Path,
+    scores_path: Path,
+    cell_table_path: Path,
+    metrics_path: Path,
+    model_artifact_path: Path,
+    model_version: str = "phase6-cell-lgbm",
+) -> dict:
+    required_tables = {"admin_areas", "industry_categories", "commercial_quarters", "model_runs"}
+    missing_tables = required_tables - set(inspect(session.get_bind()).get_table_names())
+    if missing_tables:
+        raise RuntimeError(f"Alembic migration이 필요합니다. 누락 테이블: {sorted(missing_tables)}")
+
+    commercial = _read_csv(commercial_path)
+    scores = _read_csv(scores_path)
+    _require_columns(commercial, COMMERCIAL_REQUIRED, commercial_path.name)
+    _require_columns(scores, SCORES_REQUIRED, scores_path.name)
+
+    commercial_key = ["행정동명", "통합카테고리", "기준_년분기_코드"]
+    if commercial.duplicated(commercial_key).any():
+        raise ValueError("final_dataset.csv에 행정동×업종×분기 중복키가 있습니다")
+    if scores.duplicated(commercial_key).any():
+        raise ValueError("scores.csv에 행정동×업종×분기 중복키가 있습니다")
+
+    latest = int(commercial["기준_년분기_코드"].max())
+    if set(scores["기준_년분기_코드"].astype(int).unique()) != {latest}:
+        raise ValueError("scores.csv는 final_dataset.csv의 최신 분기 한 개만 포함해야 합니다")
+    commercial = _supplement_score_only_cells(commercial, scores, cell_table_path)
+    signals = _build_latest_signals(commercial, scores)
+    signal_lookup = signals.set_index(["행정동명", "통합카테고리"]).to_dict("index")
+
+    _upsert(
+        session, AdminArea, _area_rows(commercial["행정동명"].unique().tolist()),
+        ["area_code"], ["area_name", "area_type", "valid_from", "valid_to", "is_current"],
+    )
+    _upsert(
+        session, IndustryCategory, _industry_rows(commercial["통합카테고리"].unique().tolist()),
+        ["source_system", "industry_code"], ["industry_name", "level", "is_active"],
+    )
+    session.flush()
+    areas = {row.area_name: row.id for row in session.query(AdminArea).filter(AdminArea.is_current.is_(True))}
+    industries = {
+        row.industry_name: row.id
+        for row in session.query(IndustryCategory).filter(IndustryCategory.source_system == "sbiz")
+    }
+
+    batch_key = f"sbiz-gapfill-t11-{latest}"
+    batch_rows = [{
+        "batch_key": batch_key,
+        "source_name": "소상공인시장진흥공단 분기 스냅샷",
+        "method_version": "gapfill-t11-trailing-stats-v1",
+        "source_start_quarter": int(commercial["기준_년분기_코드"].min()),
+        "source_end_quarter": latest,
+        "row_count": int(len(commercial)),
+        "quality_notes": "2023Q1 원천 결함을 threshold=11 갭필링 패널로 보정",
+    }]
+    _upsert(
+        session, DataBatch, batch_rows, ["batch_key"],
+        ["source_name", "method_version", "source_start_quarter", "source_end_quarter", "row_count", "quality_notes"],
+    )
+    session.flush()
+    batch_id = session.query(DataBatch.id).filter(DataBatch.batch_key == batch_key).scalar()
+
+    commercial_rows = []
+    for row in commercial.itertuples(index=False):
+        signal = signal_lookup.get((row.행정동명, row.통합카테고리), {}) if row.기준_년분기_코드 == latest else {}
+        commercial_rows.append({
+            "area_id": areas[row.행정동명],
+            "industry_id": industries[row.통합카테고리],
+            "quarter_code": int(row.기준_년분기_코드),
+            "store_count": int(row.점포수),
+            "opening_rate": _nullable_float(row.개업_율_평균),
+            "closure_rate": _nullable_float(row.폐업_률_평균),
+            "saturation_rate": _nullable_float(row.업종_포화도),
+            "competition_index": _nullable_float(row.경쟁강도),
+            "trend_slope": float(signal.get("trend_slope", 0.0)) if signal else None,
+            "anomaly_flag": bool(signal.get("anomaly_flag", False)),
+            "batch_id": batch_id,
+        })
+    _upsert(
+        session, CommercialQuarter, commercial_rows,
+        ["area_id", "industry_id", "quarter_code"],
+        ["store_count", "opening_rate", "closure_rate", "saturation_rate", "competition_index", "trend_slope", "anomaly_flag", "batch_id"],
+    )
+    session.flush()
+
+    metrics = json.loads(metrics_path.read_text(encoding="utf-8")) if metrics_path.exists() else {}
+    run_key = f"cell-lightgbm-{model_version}-{latest}"
+    session.query(ModelRun).filter(ModelRun.is_active.is_(True), ModelRun.run_key != run_key).update(
+        {ModelRun.is_active: False}, synchronize_session=False
+    )
+    run_rows = [{
+        "run_key": run_key,
+        "model_name": "LightGBM cell closure-rate regressor",
+        "model_version": model_version,
+        "observation_quarter": latest,
+        "prediction_horizon_quarters": 2,
+        "train_end_quarter": 20232,
+        "validation_end_quarter": 20242,
+        "metrics": metrics,
+        "artifact_path": str(model_artifact_path),
+        "artifact_checksum": _file_checksum(model_artifact_path),
+        "status": "ready",
+        "is_active": True,
+    }]
+    _upsert(
+        session, ModelRun, run_rows, ["run_key"],
+        ["model_name", "model_version", "observation_quarter", "prediction_horizon_quarters", "train_end_quarter", "validation_end_quarter", "metrics", "artifact_path", "artifact_checksum", "status", "is_active"],
+    )
+    session.flush()
+    model_run_id = session.query(ModelRun.id).filter(ModelRun.run_key == run_key).scalar()
+
+    latest_cells = {
+        (area_id, industry_id): cell_id
+        for cell_id, area_id, industry_id in session.query(
+            CommercialQuarter.id, CommercialQuarter.area_id, CommercialQuarter.industry_id
+        ).filter(CommercialQuarter.quarter_code == latest)
+    }
+    prediction_rows = []
+    for row in signals.itertuples(index=False):
+        cell_id = latest_cells[(areas[row.행정동명], industries[row.통합카테고리])]
+        predicted_rank = None if pd.isna(row.predicted_rank) else int(row.predicted_rank)
+        prediction_rows.append({
+            "model_run_id": model_run_id,
+            "commercial_quarter_id": cell_id,
+            "target_quarter_code": _quarter_add(latest, 2),
+            "predicted_closure_rate_internal": float(row.predicted_closure_rate_internal),
+            "predicted_rank": predicted_rank,
+            "grade": str(row.등급),
+            "industry_rank": int(row.업종내_순위),
+            "industry_total_areas": int(row.업종내_전체동수),
+            "top_percent": float(row.상위_퍼센트),
+            "sample_insufficient": bool(row.sample_insufficient),
+        })
+    _upsert(
+        session, RiskPrediction, prediction_rows,
+        ["model_run_id", "commercial_quarter_id"],
+        ["target_quarter_code", "predicted_closure_rate_internal", "predicted_rank", "grade", "industry_rank", "industry_total_areas", "top_percent", "sample_insufficient"],
+    )
+    _upsert(
+        session, PolicyProgram, POLICY_PROGRAMS, ["program_code"],
+        ["program_name", "description", "is_active"],
+    )
+    session.commit()
+
+    return {
+        "areas": len(areas),
+        "industries": len(industries),
+        "commercial_quarters": len(commercial_rows),
+        "predictions": len(prediction_rows),
+        "ranked_predictions": sum(row["predicted_rank"] is not None for row in prediction_rows),
+        "latest_quarter": latest,
+        "model_run": run_key,
+    }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--commercial", type=Path, default=PROJECT_ROOT / "data/processed/final_dataset.csv")
+    parser.add_argument("--scores", type=Path, default=PROJECT_ROOT / "data/processed/scores.csv")
+    parser.add_argument("--cell-table", type=Path, default=PROJECT_ROOT / "data/processed/cell_train_table.csv")
+    parser.add_argument("--metrics", type=Path, default=PROJECT_ROOT / "data/processed/model_cell_results.json")
+    parser.add_argument("--model", type=Path, default=PROJECT_ROOT / "data/processed/lgbm_model_cell.pkl")
+    parser.add_argument("--model-version", default="phase6-cell-lgbm")
+    args = parser.parse_args()
+
+    with Session(engine) as session:
+        result = import_normalized(
+            session, args.commercial, args.scores, args.cell_table, args.metrics, args.model, args.model_version
+        )
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    main()
