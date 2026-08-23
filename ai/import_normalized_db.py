@@ -180,13 +180,14 @@ def _supplement_score_only_cells(
         unresolved = missing.loc[missing["점포수"].isna(), key].to_dict("records")
         raise ValueError(f"cell_train_table에서 최신 예측 셀 점포수를 찾지 못했습니다: {unresolved}")
 
-    additions = missing.assign(
-        기준_년분기_코드=latest,
-        개업_율_평균=np.nan,
-        폐업_률_평균=np.nan,
-        업종_포화도=np.nan,
-        경쟁강도=np.nan,
-    )
+    # final_dataset.csv에 컬럼이 추가돼도 여기서 다시 KeyError가 나지 않도록,
+    # 채울 컬럼을 하드코딩하지 않고 commercial의 스키마에서 자동으로 맞춘다.
+    # (2026-08-20: fix_opening_rate.py가 개업_율_보정 계열 4개를 추가하면서 실제로 터졌던 지점)
+    # 점포수와 키 컬럼은 이미 채워져 있고, 나머지 지표는 직전 분기가 없어 산출 불가하므로 NaN.
+    additions = missing.assign(기준_년분기_코드=latest)
+    for column in commercial.columns:
+        if column not in additions.columns:
+            additions[column] = np.nan
     combined = pd.concat([commercial, additions[commercial.columns]], ignore_index=True)
     current_mask = combined["기준_년분기_코드"] == latest
     current_total = combined.loc[current_mask].groupby("행정동명")["점포수"].transform("sum")

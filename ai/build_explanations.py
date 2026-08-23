@@ -32,7 +32,9 @@ from backend.models import (  # noqa: E402
 )
 
 
-CATEGORICAL_FEATURES = ["행정동명", "상권업종중분류명", "임대료_매핑그룹"]
+# train_model.py의 CELL_CAT과 반드시 일치해야 한다(불일치 시 아래 missing 검사에서 실패).
+# 임대료_매핑그룹은 2026-08-20에 모델 feature에서 제거했다.
+CATEGORICAL_FEATURES = ["행정동명", "상권업종중분류명"]
 FACTOR_GROUPS = [
     {
         "code": "area_industry_pattern",
