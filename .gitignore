@@ -1,4 +1,5 @@
 .env
+_to_delete/
 __pycache__/
 *.pyc
 .venv/
