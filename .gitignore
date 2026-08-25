@@ -48,3 +48,5 @@ ai/*.csv
 ai/*.pkl
 
 data/processed_backup/
+
+.pptx-build/

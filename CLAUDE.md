@@ -133,13 +133,17 @@ hwaseong-commercial-ai/
 │   │   └── create_official.py  # 공무원 계정 시딩 CLI
 │   ├── tests/
 │   │   └── test_business_number.py
+│   ├── migrations/             # Alembic — pull 후 `alembic upgrade head` 필수
+│   │   └── versions/           # 0003 누적지표 / 0004 상권유형 / 0005 지원사업 매칭요건
 │   ├── routers/
 │   │   ├── auth.py             # /api/auth/ (공무원 로그인)
 │   │   ├── alerts.py           # /api/alerts/ (공무원 전용)
+│   │   ├── cells.py            # /api/cells/ (공무원 전용) — 셀 상세, 네 화면의 종착지
 │   │   ├── policy.py           # /api/policy/ (공무원 전용)
+│   │   ├── workflow.py         # /api/workflow/ (업무 이력 — 현재 가드 없음, 확인 필요)
 │   │   └── analysis.py         # /api/analysis/ (공개)
 │   └── services/
-│       └── risk.py             # 등급 판정 + 후속 조치 검토안 문구(규칙 기반, LLM 미사용)
+│       └── risk.py             # 등급 기준선 로드(risk_thresholds.json) + 후속 조치 검토안 문구(규칙 기반, LLM 미사용)
 │
 ├── frontend/                   # React 19 + Vite
 │   ├── .env
@@ -156,7 +160,9 @@ hwaseong-commercial-ai/
 │           ├── OfficialLoginPage.jsx  # 진입 화면 (역할 선택 없음)
 │           ├── DashboardPage.jsx   # 조기경보 Top 10 카드
 │           ├── MapPage.jsx         # Naver Maps choropleth
-│           └── PolicyPage.jsx      # 4분면 정책자금 매트릭스
+│           ├── PolicyPage.jsx      # 현장점검 우선순위 4분면
+│           ├── BlindspotPage.jsx   # 사각지대(표본부족 상권) 목록
+│           └── CellDetailPage.jsx  # 셀 상세 (/cells/:areaId/:industryId)
 │
 ├── eda/                         # EDA→전처리→모델링 재작업 노트북 (ai/ 파이프라인의 로직 근거)
 │   ├── paths.py                 # 원본/산출물 경로 상수 (ai/build_dataset.py, train_model.py가 import)
@@ -167,8 +173,11 @@ hwaseong-commercial-ai/
 │
 ├── ai/                          # ML 파이프라인 (순서대로 실행)
 │   ├── build_dataset.py         # raw zip → 갭필링 패널 → label_h2 → final_dataset.csv/store_train_table.csv/cell_train_table.csv
+│   ├── fix_opening_rate.py      # 개업률 수록지연 결함 보정 → 개업_율_보정 계열 4개 컬럼 추가 (원본 필요)
 │   ├── train_model.py           # LightGBM 학습(셀단위 중분류 주력 + 점포단위 참고) → scores.csv
-│   ├── build_risk_index.py      # 폐업위험점수 + 이상탐지 → risk_index.csv
+│   ├── cumulative.py            # 4분기 누적 지표·등급 기준선·상권유형 공용 모듈 (아래 스크립트 2개가 공유)
+│   ├── build_risk_index.py      # 누적 폐업률 + 등급 + 상권유형 + 이상탐지 → risk_index.csv
+│   ├── analyze_tenure.py        # 업력별 폐업률 분석(보고서용)
 │   ├── import_normalized_db.py  # 검증 CSV → 정규화 PostgreSQL(upsert)
 │   ├── build_explanations.py    # M1 검증 → 상대 기여 요인 적재
 │   ├── import_to_db.py          # 레거시 3테이블 적재(롤백용)
@@ -179,7 +188,8 @@ hwaseong-commercial-ai/
     └── processed/
         ├── final_dataset.csv
         ├── scores.csv
-        └── risk_index.csv
+        ├── risk_index.csv
+        └── risk_thresholds.json   # 등급 기준선 — backend/services/risk.py가 로드
 ```
 
 ---
@@ -199,6 +209,18 @@ hwaseong-commercial-ai/
      y축에 성장확률을 재사용하면 x축과 자기모순적 음의 상관이 생겨 점포 수로 대체했다.
    - **필드명 주의**: 구 `PolicyPriorityItem.growth_prob`은 실제로 점포 수를 담고 있었다.
      2026-08-18에 `store_count: int`로 정정했다. 되돌리지 말 것.
+   - **2026-08-25**: x축 기준을 등급에서 **누적 폐업률 중위값**으로 변경. `high_risk = (등급=="위험")`
+     이라 3단계 등급 중 "주의"가 통째로 하위 사분면으로 떨어져, 조기경보에서 주의로 뜬 상권이
+     여기서는 안전해 보이는 모순이 있었다. 하위 사분면 라벨의 "안정적 상권"도 "중위값 아래"로 교체.
+     사분면(확인 순서)과 등급(심각도)은 다른 축이므로 카드·CSV에 등급을 병기한다.
+5. **사각지대 트랙** — 표본부족(점포<50) 상권 목록 (BlindspotPage, `/api/alerts/blindspots`)
+   - 표본부족으로 빠지는 점포가 전체의 38%(16,901곳)이고 기배동·매송면은 커버율 0%라 아무리 나빠도
+     후보에 못 올랐다. 통계 판단은 계속 보류(등급 미부여)하되 목록에서 지우지 않는다.
+   - 정렬 기준은 폐업률이 아니라 **폐업 건수** — 점포 12곳에서 2곳이 닫히면 률은 노이즈지만 체감은 크다.
+6. **셀 상세** — 셀 하나(행정동×업종)의 종착지 (CellDetailPage, `/api/cells/{area_id}/{industry_id}`)
+   - 화면 넷이 전부 "찾기"였고 "그래서 무엇을 할 것인가"가 없었다. 확인된 위험 신호(3중 비교) ·
+     상권 유형 처방 · AI 기여 요인 · 공무원 확인 필요 항목 · 연결 가능 지원사업 · 안내문 초안을 한 곳에 모음.
+   - API만 있고 화면이 없던 기여 요인(`/api/alerts/{prediction_id}/contributions`)이 여기서 해소됨.
 
 ### 프라이버시 설계 원칙
 - 모든 출력은 **읍면동 × 업종 집계 단위** — 개별 점포 노출 없음 (원본 데이터가 집계 단위)
@@ -261,9 +283,11 @@ hwaseong-commercial-ai/
 (1-예측폐업률)×100이므로 `100-성장확률`이 곧 모델이 예측한 폐업률(%) 그 자체 — 이를 그대로 사용.
 
 - `폐업위험점수` = 모델 예측 폐업률(%) = `100 - 성장확률` (셀단위 LightGBM 회귀 출력 기반)
-- `위험등급`: 안정/주의/위험/표본부족. 안정<화성시 평균 폐업률(가중평균, 매 실행 시 재계산,
-  현재 3.22%) ≤ 주의 <평균의 2배(현재 6.44%) ≤ 위험. 기준값은 `data/processed/risk_thresholds.json`에
+- `위험등급`: 안정/주의/위험/표본부족. **2026-08-25에 "시평균 × 2" 고정 임계에서 "4분기 누적
+  폐업률의 분위수"로 교체**(아래 '4분기 누적 전환' 절 참조). 위험 = 상위 10%(현재 10.35%),
+  주의 = 상위 30%(현재 7.26%), 시 평균 5.9%. 기준값은 `data/processed/risk_thresholds.json`에
   저장되고 `backend/services/risk.py`가 이를 로드 — 코드에 하드코딩하지 않는다.
+  **등급은 절대 기준이 아니라 화성시 내 상대 순위다. 화면·보고서·발표 어디서든 이 점을 명시한다.**
 - `표본부족_플래그`: 점포수 < **SAMPLE_MIN(현재 50)**인 셀. 랭킹·색등급 산정에서 제외하고
   프론트에서 회색 처리("표본부족" 배지). CSV/DB에는 남아있음(목록 노출용).
   **2026-08-18에 30 → 50으로 상향.** 30 기준에서는 점포 35개 안팎의 경계 셀이 상위권을 차지해
@@ -271,13 +295,95 @@ hwaseong-commercial-ai/
   민감도 검증: 30→1.14배 / 40→2.07 / **50→1.85** / 60→1.79 / 80→1.74, 스피어만은 50에서 정점(+0.5293).
   50 기준 결과 — 분석 셀 231개(12.8%), **점포 커버율 61.8%**, 업종 33개.
   ※ 학습 필터(`train_model.py CELL_MIN_STORES`)는 **30을 유지**한다. 조회 기준만 올린 것이라
-  모델 재학습이 없고 성능 지표(스피어만 0.4193 / 리프트 1.444)가 그대로 유효하다.
+  모델 재학습이 없고 성능 지표(스피어만 0.4184 / 리프트 1.433)가 그대로 유효하다.
 - `성장확률`: ScoreData와 동일 값을 중복 보존 — 위험도(폐업 확률)와 완전히 분리된 "성장성" 지표로,
   이후 위험도×성장성 4사분면(균형발전 진단) 등에 재사용할 수 있도록 셀별로 남겨둔다.
 - `트렌드_기울기`: 최근 4분기 폐업률 선형회귀 기울기
 - `이상탐지_플래그`: 기울기 > 전체 기울기 1 std → True
 - `공실위험지수`: 읍면동 내 표본충분 셀만으로 평균 폐업위험점수 × 0.7 + 이상탐지 비율 × 0.3
   (표본충분 셀이 하나도 없는 동이면 전체로 폴백 — 현재 데이터는 29개 동 전부 해당 없음)
+
+### 정규화 스키마 변경 (2026-08-25 — migration 0003/0004/0005)
+
+신규 API가 실제로 조회하는 테이블은 아래 3개다(레거시 `RiskIndex`가 아니다).
+**추가만 하고 삭제·의미변경은 하지 않았다** — 되돌릴 때 데이터 손실이 없도록 한 의도적 설계.
+
+**`commercial_quarters`** (0003, 0004)
+| 컬럼 | 타입 | 설명 |
+|---|---|---|
+| `closure_rate` | Float | **기존 단일 분기 값, 의미 그대로 유지**. 등급 판정에 쓰지 말 것 |
+| `closure_rate_cum4` | Float | 4분기 누적 폐업률(0~1). 등급·화면 표시는 이 값 |
+| `closure_rate_lower4` | Float | 위 값의 Wilson 신뢰하한 — **정렬·순위 전용**, 등급 판정에 쓰지 않는다 |
+| `closure_count_cum4` | Integer | 4분기 누적 폐업 건수(화면 병기용) |
+| `cell_type` | String(20) | 고회전/쇠퇴/성장/정체/유형판정보류. `risk_grade`와 **다른 축** |
+
+인덱스 2개 추가: `(quarter_code, closure_rate_lower4)` — 조기경보 목록이 신뢰하한 내림차순으로
+최신 분기를 훑는다. `(quarter_code, cell_type)` — 유형별 필터.
+
+**`risk_threshold_sets`** (0003) — `caution_threshold_pct`(상위 30% 경계), `window_quarters`(기본 4),
+`method`(`cumulative_quantile`) 추가. 기존 `danger_threshold_pct`가 상위 10% 경계가 됐다.
+
+**`policy_programs`** (0005) — 매칭 조건 4개 + 자격 요건 7개 + `requires_verification` 추가.
+아래 'PolicyProgram' 절 참조.
+
+⚠ **pull 후 `alembic upgrade head`를 돌리지 않으면 서버가 `UndefinedColumn`으로 죽는다.**
+`alembic current`로 현재 리비전을 확인할 것 — head는 `20260823_0005`다.
+
+### 4분기 누적 전환 + 상권 유형 4분류 (2026-08-25)
+
+로직은 전부 [ai/cumulative.py](ai/cumulative.py) 한 곳에 있다 — `build_risk_index.py`와
+`import_normalized_db.py`가 각자 계산해서 CSV와 화면이 다른 등급을 보여주던 문제 때문에 통합했다.
+등급·누적·유형 관련 수정은 반드시 이 모듈에서 한다.
+
+**왜 4분기 누적인가**: 단일 분기는 점포 60곳 상권에서 폐업 1~2건 차이로 폐업률이 1.5%↔9.0%를
+오갔다. 분기 간 순위 상관 +0.296 / Top10 유지 1.0개로 사실상 무작위. 4분기 누적으로 +0.857 /
+5.4개가 됐다. "신호가 느려진다"는 반론은 실측으로 반박됨 — 과거 N분기로 미래 폐업률을 예측할 때
+상관이 1분기 +0.319 / 4분기 +0.345 / 8분기 +0.501로 긴 창이 오히려 미래를 더 잘 맞힌다.
+8분기가 아닌 4분기인 이유는 2년 전 실적으로 현재 예산을 짜는 셈이 되고 신규 상권이 통째로 빠지기 때문.
+
+**왜 분위수 기준인가**: 2025년 폐업이 평시의 1.85배인데 데이터 결함인지 실제인지 판정 불가하다
+(과거 같은 패턴 2건은 3~4분기 뒤 재등장으로 결함 확인, 2025년분은 관측 기간 부족). 고정 임계값을
+쓰면 그 미확인 급증이 그대로 "위험 셀 85개"라는 정책 판단이 된다(실측 2~85개, 42배 요동).
+분위수는 모든 셀이 같이 움직이면 상대 위치가 보존되므로 그 오염에 면역이다.
+→ **발표에서 "화성시 폐업이 최근 급증한다"를 근거로 쓰지 말 것.** 대신 지역 간 격차를 근거로 쓴다.
+
+**누적 계산 규칙**: 비율의 평균이 아니라 건수합/분모합. 분기마다 점포수가 달라 비율을 평균내면
+점포가 적은 분기가 과대 반영된다. 분모는 "직전 분기 점포수"(build_dataset.py의 trailing stats 정의).
+Wilson 신뢰하한은 **정렬·순위에만** 쓰고 등급 판정에는 쓰지 않는다 — 등급은 관측 사실이어야 감사에 방어된다.
+
+**상권 유형 4분류**: 위험도 한 축뿐이라 어느 셀이든 결론이 "현장 확인" 하나였다. 개업률 축을 얹어
+같은 위험 등급이라도 처방이 갈리게 했다. 기준은 표본충분 셀의 중위값(고정 임계값을 쓰면 성장 유형이
+4셀로 붕괴). 개업률은 반드시 `개업_율_보정_ma4`를 쓴다(단일 분기는 셀의 25%가 0, 원본은 2024Q3/Q4
+수록 지연 결함 포함).
+
+| 유형 | 상태 | 처방 |
+|---|---|---|
+| **고회전** | 폐업↑ 개업↑ | 창업 사전상담, 업종 과밀 관리 |
+| **쇠퇴** | 폐업↑ 개업↓ | 상권 활성화, 시설·환경 개선 — 진짜 위험 |
+| **성장** | 폐업↓ 개업↑ | 과열 조짐 관찰만 |
+| **정체** | 폐업↓ 개업↓ | 신규 유입 유도 |
+
+검증: 고회전 비중이 동탄7동 70% / 동탄4동 67% / 동탄9동 60%로 신흥개발지에 몰리고 서신면·우정읍·
+팔탄면은 0%. 유형별 실제 폐업률도 고회전 4.6% / 쇠퇴 4.1% / 성장 2.9% / 정체 2.0%로 논리가 맞는다.
+
+**문구 톤 (발표·보고서에서도 지킬 것)**: "고회전 상권에는 개별 자금지원 효과가 낮다"는 판단은 살리되
+**부정문을 쓰지 않고 주어를 상권 구조로** 둔다. 화성시가 잘못하고 있다는 인상을 주면 안 된다.
+
+| 쓰지 말 것 | 쓸 것 |
+|---|---|
+| 개별 자금지원 효과가 낮습니다 | 개별 점포 지원의 효과가 상권 단위에서는 상쇄될 수 있어, 창업 사전상담과 업종 과밀 관리를 먼저 검토하시길 권장합니다 |
+
+### PolicyProgram — 지원사업 매칭 요건 (2026-08-25, migration 0005)
+
+두 종류를 **반드시 구분**한다. 섞으면 담당자가 확인 안 된 요건을 그대로 안내하게 된다.
+
+| 구분 | 컬럼 | 출처 |
+|---|---|---|
+| (가) 매칭 조건 | `target_cell_types`, `target_risk_grades`, `discouraged_cell_types`, `match_reason` | 우리 처방 로직 — 근거 있음 |
+| (나) 자격 요건 | `tenure_min/max_quarters`, `support_limit_text`, `apply_period`, `legal_basis`, `exclusion_note` | **실제 공고문 확인 필요 — 추정해서 채우지 않는다** |
+
+(나)가 비어 있으면 `requires_verification=True`로 두고 화면에 "요건 확인 필요"를 그대로 노출한다.
+조건 불일치·우선순위 하향 사업도 **제외하지 않고 이유와 함께** 보여준다 — "왜 이건 안 되나"도 판단 재료다.
 
 ### Official
 공무원 계정 (로그인용, ML 파이프라인과 무관 — `backend/scripts/create_official.py`로 시딩)
@@ -299,12 +405,33 @@ hwaseong-commercial-ai/
 | URL | 메서드 | 파라미터 | 설명 |
 |-----|--------|----------|------|
 | `/api/alerts/closure-risk` | GET | `limit=10`, `category`(선택) | Top N 고위험 읍면동×업종 |
+| `/api/alerts/closure-rate-ranking` | GET | `limit`, `category`(선택) | 누적 폐업률 순위 (+`industry_rank`/`industry_total`) |
+| `/api/alerts/grade-notice` | GET | - | 등급 기준선 + 고지 문구. **프론트에 평균·기준선 하드코딩 금지 — 여기서 받는다** |
 | `/api/alerts/vacancy-risk/map` | GET | - | 읍면동별 공실위험지수 (choropleth용) |
+| `/api/alerts/blindspots` | GET | - | 표본부족 상권 목록 (등급 미부여, 폐업 건수 정렬) |
+| `/api/alerts/{prediction_id}/contributions` | GET | - | AI 예측 기여 요인 (`share_pct` 상대 비중만) |
+
+**Breaking change (2026-08-25)**: `closure-risk` 응답에서 `actual_closure_rate_pct` 삭제,
+`cumulative_closure_rate_pct` / `cumulative_closure_count` / `store_count` / `confidence_lower_pct` /
+`risk_grade` / `cell_type` / `cell_type_summary`·`advice`·`avoid` / `quarter_closure_rate_pct`(참고용) 추가.
+`closure-rate-ranking`의 `closure_rate_pct`는 **이름은 같지만 의미가 바뀌었다**(단일 분기 → 4분기 누적).
+
+### 셀 상세 (`/api/cells/`) — 공무원 전용
+| URL | 메서드 | 파라미터 | 설명 |
+|-----|--------|----------|------|
+| `/api/cells/{area_id}/{industry_id}` | GET | - | 확인된 위험 신호(3중 비교) + 유형 처방 + 기여 요인 + 확인 필요 항목 |
+| `/api/cells/{area_id}/{industry_id}/trend` | GET | - | 분기별 추이 (SVG 차트용, 외부 라이브러리 없음) |
+| `/api/cells/{area_id}/{industry_id}/programs` | GET | - | 연결 가능 지원사업 (`matched`/`discouraged`/`not_matched`) |
+| `/api/cells/{area_id}/{industry_id}/notice` | GET | - | 안내문 초안. **자동 발송 없음 — 담당자 확인·수정 전제** |
 
 ### 현장점검 우선순위 (`/api/policy/`) — 공무원 전용
 | URL | 메서드 | 파라미터 | 설명 |
 |-----|--------|----------|------|
 | `/api/policy/inspection-priority` | GET | `category`(선택) | 4분면 (Q1=고위험+다점포=확인 1순위). 구 `fund-priority` |
+
+### 업무 이력 (`/api/workflow/`) — ⚠ 현재 인증 가드 없음
+경보 케이스·접촉 이력·지원사업·조치·결과 CRUD. 다른 공무원 전용 라우터와 달리
+`dependencies=[Depends(get_current_official)]`가 붙어 있지 않다 — 배포 전 확인 필요.
 
 ### 분석 (`/api/analysis/`) — 공개 (가드 없음)
 | URL | 메서드 | 파라미터 | 설명 |
@@ -327,17 +454,24 @@ Phase 4(2026-08-03)에서 `eda/02_preprocessing.ipynb`·`03_modeling.ipynb`에�
 점포단위 분류기는 참고용으로만 `model_store_results.json`에 결과를 남긴다.
 
 ```bash
+# 0. 스키마 마이그레이션 — pull 후 반드시. 빠뜨리면 기동 시 UndefinedColumn으로 죽는다
+alembic upgrade head
+
 # 1. 화성시 raw 데이터(시군구코드=41590) + 인허가데이터 → 갭필링 패널 → label_h2 →
 #    final_dataset.csv(CommercialData 원천) / store_train_table.csv / cell_train_table.csv(모델 학습용)
 python ai/build_dataset.py
 
-# 2. LightGBM 학습(셀단위 중분류 주력, 스피어만 0.42 / 점포단위 참고, ROC-AUC 0.555) → scores.csv
+# 1-1. 개업률 수록지연 결함 보정 → 개업_율_보정 계열 4개 컬럼 추가
+#      build_dataset.py를 다시 돌렸으면 반드시 이어서 실행. 빠뜨리면 상권 유형 분류가 터진다
+python ai/fix_opening_rate.py
+
+# 2. LightGBM 학습(셀단위 중분류 주력, 스피어만 0.4184 / 리프트 1.433 / 점포단위 참고, ROC-AUC 0.555) → scores.csv
 python ai/train_model.py
 
-# 3. 폐업위험지수 계산 → risk_index.csv
+# 3. 4분기 누적 폐업률 + 등급 + 상권유형 + 이상탐지 → risk_index.csv, risk_thresholds.json
 python ai/build_risk_index.py
 
-# 4. 정규화 PostgreSQL 임포트(기준선·등급·동 요약 포함)
+# 4. 정규화 PostgreSQL 임포트(기준선·등급·상권유형·동 요약·지원사업 요건 포함)
 python ai/import_normalized_db.py
 
 # 5. 상대 기여 요인 M1 검증 후 적재(단일 요인 쏠림 90% 초과면 비움)
@@ -345,9 +479,21 @@ python ai/build_explanations.py --validate-only
 python ai/build_explanations.py
 ```
 
-`ai/build_dataset.py`는 raw zip 로딩 + 인허가 매칭 부분이 외장 SSD(`RAW_DATA_DIR`)에 의존한다 — SSD가
-마운트 안 된 상태에서는 실행할 수 없다(다른 3개 스크립트는 `data/processed/`의 기존 CSV만 있으면
-SSD 없이도 실행 가능).
+**3~4단계만 돌린 뒤에는 백엔드를 완전히 껐다 켠다.** `--reload`가 새 라우터를 못 잡아 화면에
+`NaN`이 뜨거나 신규 엔드포인트가 404가 나는 일이 실제로 있었다.
+
+`ai/build_dataset.py`와 `ai/fix_opening_rate.py`는 raw zip 로딩 + 인허가 매칭 부분이 외장
+SSD(`RAW_DATA_DIR`)에 의존한다 — SSD가 마운트 안 된 상태에서는 실행할 수 없다(나머지 스크립트는
+`data/processed/`의 기존 CSV만 있으면 SSD 없이도 실행 가능).
+
+**정상 확인**: `build_risk_index.py` 출력이 아래와 같으면 된다.
+```
+기준선(4분기 누적, 표본충분 231셀 분위수): 위험 상위10% >= 10.35% / 주의 상위30% >= 7.26%
+등급 분포: {'표본부족': 1579, '안정': 161, '주의': 46, '위험': 24}
+상권 유형 분포: {'고회전': 74, '정체': 73, '쇠퇴': 42, '성장': 42}
+```
+백엔드는 JWT를 붙여 `/api/alerts/grade-notice`를 호출해 확인한다 — alerts 라우터에 인증 가드가
+있으므로 브라우저 생주소로 열면 JSON이 아니라 401이 정상이다.
 
 ---
 
@@ -436,7 +582,7 @@ print(hw['dong_name'].tolist())
 → LightGBM 이진분류 + 트렌드 이상탐지 (선형회귀 기울기)
 
 [정책 적용 — 25점]
-발견(공실 지도) → 분석(조기경보 Top 10) → 행동(현장점검 우선순위 → 후속 조치 검토안)
+발견(공실 지도) → 분석(조기경보 Top 10) → 행동(현장점검 우선순위 → 셀 상세 → 후속 조치 검토안)
 각 기능 → 화성시 담당 부서 즉시 적용 시나리오
 
 [시민 체감 — 20점]  ※ 심사기준 원문: "시민 편익 증대, 행정효율 개선, 사회적 가치 창출"
@@ -483,6 +629,12 @@ AI 정책 제안 / AI 추천 정책 / AI가 지원 대상을 선정 / 정책자�
 | 정책자금 지원 우선 검토 | **현장 확인 우선순위 높음** |
 | 정책자금 배정을 우선 검토하세요 | **현장 확인을 우선 검토하세요** |
 
+**지원사업 연결 기능(2026-08-25)도 같은 원칙 아래 있다.** 상권 유형·등급으로 후보를 추릴 뿐
+지원 대상 결정이 아니며, 응답에 그 고지(`notice`)를 항상 함께 내린다. 개별 점포의 신청 자격은
+소관 부서 공고문으로 확인해야 한다. 안내문 초안은 **경고가 아니라 안내**로 쓴다 — "폐업 위험이
+높습니다"가 아니라 "신청 가능한 지원이 있습니다"이며, 개별 점포의 위험도는 말하지 않는다
+(판정은 상권 단위이고 점포 단위 예측 성능은 방어할 수 없다). 자동 발송 기능은 제공하지 않는다.
+
 ### 세 영역을 절대 섞지 않는다
 | 용어 | 정의 | 근거 |
 |---|---|---|
@@ -520,6 +672,9 @@ Claude가 다시 제안하더라도 아래 결정사항은 바꾸지 않는다.
 | 배포 전략 | 단일 VPS + Nginx. DB를 외부 서비스(Supabase 등)로 이전 금지 |
 | 로그인 방식 | **공무원 단일 역할** — 아이디/비번(DB 계정, bcrypt). 시민 로그인은 2026-08-18 설계 결정으로 제거. 주민등록번호 절대 사용 금지(배포 URL 공개 특성상 법적 리스크) |
 | 계정 데이터 위치 | 공무원 계정은 DB 데이터이며 git에 포함 안 됨 — 팀원마다 `backend/scripts/create_official.py`로 각자 로컬에 시딩 필요 |
+| 등급·기준선 수치 | 프론트에 하드코딩 금지 — `/api/alerts/grade-notice`에서 받는다. `DashboardPage.jsx`에 `CITY_AVG_PCT = 3.22`가 박혀 있어 파이프라인 갱신 후에도 화면이 계속 3.22%라고 말하던 사고가 있었다 |
+| 누적·등급·유형 로직 | `ai/cumulative.py` 단일 모듈. 스크립트별 재구현 금지(CSV와 화면이 다른 등급을 보여준 원인) |
+| 지표 기준 창 | **최근 4분기 누적**. 지도·조기경보·현장점검·셀 상세가 전부 같은 숫자를 말해야 한다. 단일 분기 값을 등급 판정에 넣지 말 것 |
 
 ### 데이터 보안 (공모전 규정 — 위반 시 실격)
 - **행정데이터 원본을 외부 AI API에 절대 전송 금지** (Gemini, GPT, Claude API 포함)
@@ -527,8 +682,10 @@ Claude가 다시 제안하더라도 아래 결정사항은 바꾸지 않는다.
 - `*.pkl`, `*.csv`, `*.env` 파일 커밋 금지
 
 ### AI 파이프라인 주의사항
-- 실행 순서 반드시 준수: `build_dataset.py` → `train_model.py` → `build_risk_index.py` →
-  `import_normalized_db.py` → `build_explanations.py`
+- 실행 순서 반드시 준수: `alembic upgrade head` → `build_dataset.py` → `fix_opening_rate.py` →
+  `train_model.py` → `build_risk_index.py` → `import_normalized_db.py` → `build_explanations.py`
+- `build_dataset.py`를 다시 돌렸으면 `fix_opening_rate.py`를 반드시 이어서 실행 — 보정 컬럼 4개가
+  사라져 상권 유형 분류가 실패한다
 - 학습된 모델은 `data/processed/lgbm_model_store.pkl`(점포단위, 참고용) / `lgbm_model_cell.pkl`(셀단위, 주력
   프로덕션)에 각각 저장됨 (joblib, `{"model", "features"}` 키)
 - `import_normalized_db.py`는 복합키 upsert 방식이며 업무 이력·과거 모델 실행을 삭제하지 않는다.
@@ -556,8 +713,13 @@ Claude가 다시 제안하더라도 아래 결정사항은 바꾸지 않는다.
 `store_panel.csv` 873,035행,
 `final_dataset.csv` 35,505행 — 앞서 fixture(노트북 산출물) 기준으로 미리 계산했던 예측치와 정확히
 일치(같은 알고리즘 + 같은 raw 데이터 → 같은 결과, 이식이 정확하다는 재확인). 셀단위 모델 스피어만
-0.4193/리프트 1.444x도 그대로 재현됨. `score_latest_quarter()`가 실제 최신 분기(2025Q4, `기준_년분기_코드
+0.4184/리프트 1.433x(임대료_매핑그룹 제거로 feature 4개)도 그대로 재현됨. `score_latest_quarter()`가 실제 최신 분기(2025Q4, `기준_년분기_코드
 20254`)를 정확히 스코어링하는 것까지 DB import→API 응답(`/api/alerts/closure-risk` 등)에서 확인 완료.
+
+**2026-08-25 팀원 커밋 반영** — 지표를 단일 분기에서 4분기 누적으로 전환, 등급 기준선을 분위수로 교체,
+상권 유형 4분류·사각지대 트랙·셀 상세·지원사업 연결 추가. 상세 배경은 [docs/8-25.md](docs/8-25.md).
+※ 그 문서 3절의 "MapPage·PolicyPage는 그대로"는 이후 커밋(`ff44e0b`·`72ca9b9`)에서 이미 반영되어
+더 이상 유효하지 않다. 1절의 "마이그레이션 2개"도 0005가 추가되어 3개다.
 
 ### 코딩 컨벤션
 - 새 API 엔드포인트 추가 시 `backend/schemas.py`에 Pydantic 스키마 먼저 정의
