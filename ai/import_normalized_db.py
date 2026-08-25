@@ -62,6 +62,10 @@ SCORES_REQUIRED = {
 }
 SAMPLE_MIN = 50  # 기본값. 실제로는 risk_thresholds.json의 sample_min을 우선 사용한다.
 
+# 동 단위 등급의 최소 분모. backend/services/risk.py의 AREA_MIN_SUFFICIENT_CELLS와
+# 같은 값이어야 한다(적재값과 화면 판정이 어긋나지 않도록).
+AREA_MIN_SUFFICIENT_CELLS = 5
+
 # 등급·누적 지표 로직은 ai/cumulative.py 한 곳에만 둔다. build_risk_index.py도 같은 모듈을 쓴다.
 # risk_index.csv는 .gitignore 대상이라 그 파일을 읽는 방식으로는 공유할 수 없어(팀원이 pull만
 # 받으면 파일이 없다) 모듈을 공유한다. 2026-08-20에 build_risk_index만 고쳤더니 CSV는 4분기
@@ -552,7 +556,14 @@ def import_normalized(
         cells = [row for row in latest_rows if row["area_id"] == area_id]
         sufficient = [row for row in cells if not row["sample_insufficient"]]
         risk_cells = sum(row["risk_grade"] == "위험" for row in sufficient)
+        # 분모가 0이면 비율은 "0%"가 아니라 "산출 불가"다. risk_industry_ratio_pct 컬럼이
+        # NOT NULL이라 값 자체는 0.0으로 두되, 등급은 아래에서 None으로 보류한다.
         ratio = round(risk_cells / len(sufficient) * 100, 1) if sufficient else 0.0
+        # 표본충분 셀이 적으면 비율이 노이즈다. 3개 중 2개가 위험이면 66.7%가 되어 기준선
+        # 34.64%를 훌쩍 넘는다 — 지도에서 가장 빨간 두 동이 그렇게 만들어지고 있었다
+        # (동탄8동 2/3, 새솔동 4/6. 2026-08-25 감사). 5개 미만은 판정을 보류하고, 5~9개는
+        # 판정하되 화면이 흐리게 칠한다(backend/services/risk.py의 AREA_THIN_EVIDENCE_CELLS).
+        judged = len(sufficient) >= AREA_MIN_SUFFICIENT_CELLS
         slopes = [
             row["trend_slope"]
             for row in sufficient
@@ -569,7 +580,7 @@ def import_normalized(
                 ratio,
                 float(thresholds["dong_ratio_avg_pct"]),
                 float(thresholds["dong_ratio_danger_pct"]),
-            ),
+            ) if judged else None,
             "avg_trend_slope": float(np.mean(slopes)) if slopes else None,
             "threshold_set_id": threshold_set_id,
             "batch_id": batch_id,

@@ -5,12 +5,18 @@ import ProvisionalNotice from "../components/ProvisionalNotice";
 
 const NAVER_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "";
 
+// 범례 색은 백엔드가 폴리곤에 쓰는 색과 반드시 같아야 한다.
+// 예전에는 여기가 CSS 변수(--error #ba1a1a)이고 백엔드가 #D51B4C를 보내서, 같은 화면에서
+// 폴리곤 색과 범례 점 색이 달랐다(2026-08-25 감사). 지금은 백엔드도 index.css 값을 쓴다.
 const LEGEND = [
   { label: "위험", color: "var(--error)" },
   { label: "주의", color: "var(--accent-orange)" },
   { label: "안정", color: "var(--accent-green)" },
-  { label: "데이터 없음", color: "var(--outline-variant)" },
+  { label: "판단보류", color: "var(--outline-variant)" },
 ];
+
+// 색은 등급, 진하기는 근거의 두께다. 범례 아래 한 줄로 그 규칙을 밝힌다.
+const OPACITY_NOTE = "흐리게 칠해진 동은 표본이 충분한 업종이 10개 미만이라 등급의 근거가 얕습니다.";
 
 let naverMapLoadPromise = null;
 
@@ -131,6 +137,11 @@ export default function MapPage() {
       const color = risk?.color || "#c1c6d5";
       const ratio = risk?.risk_ratio ?? null;
       const coverage = risk?.coverage_pct ?? null;
+      // 색은 등급, 진하기는 근거의 두께. 표본충분 업종이 적은 동은 등급을 내되 흐리게 칠해
+      // "이 색을 얼마나 믿을지"를 같이 보여준다. 숨기는 것보다 알려주는 쪽을 택했다.
+      const thin = Boolean(risk?.evidence_thin);
+      const baseOpacity = thin ? 0.22 : 0.5;
+      const hoverOpacity = thin ? 0.42 : 0.8;
 
       const coords = feat.geometry.type === "Polygon"
         ? [feat.geometry.coordinates]
@@ -139,19 +150,19 @@ export default function MapPage() {
       coords.forEach((rings) => {
         const path = rings[0].map(([lng, lat]) => new window.naver.maps.LatLng(lat, lng));
         const polygon = new window.naver.maps.Polygon({
-          map, paths: [path], fillColor: color, fillOpacity: 0.5,
+          map, paths: [path], fillColor: color, fillOpacity: baseOpacity,
           strokeColor: "#fff", strokeWeight: 1, clickable: true,
         });
 
         window.naver.maps.Event.addListener(polygon, "mouseover", (e) => {
-          polygon.setOptions({ fillOpacity: 0.8 });
-          setTooltip({ name, ratio, coverage, color, x: e.pointerEvent.clientX, y: e.pointerEvent.clientY });
+          polygon.setOptions({ fillOpacity: hoverOpacity });
+          setTooltip({ name, ratio, coverage, color, thin, x: e.pointerEvent.clientX, y: e.pointerEvent.clientY });
         });
         window.naver.maps.Event.addListener(polygon, "mousemove", (e) => {
           setTooltip((t) => t ? { ...t, x: e.pointerEvent.clientX, y: e.pointerEvent.clientY } : null);
         });
         window.naver.maps.Event.addListener(polygon, "mouseout", () => {
-          polygon.setOptions({ fillOpacity: 0.5 });
+          polygon.setOptions({ fillOpacity: baseOpacity });
           setTooltip(null);
         });
         window.naver.maps.Event.addListener(polygon, "click", () => {
@@ -272,6 +283,9 @@ export default function MapPage() {
                 </div>
               ))}
             </div>
+            <p className="t-caption" style={{ color: "var(--ink-faint)", margin: "10px 0 0", maxWidth: 190, lineHeight: 1.6 }}>
+              {OPACITY_NOTE}
+            </p>
           </div>
         </div>
 
@@ -317,6 +331,21 @@ export default function MapPage() {
                       표본 충족률 {selected.coverage_pct}% · 점포 수 50개 이상 기준
                     </div>
                   </div>
+                  {selected.evidence_thin && selected.hold_notice && (
+                    <div
+                      className="t-caption"
+                      style={{
+                        color: "var(--ink-secondary)",
+                        background: "var(--surface-container-low)",
+                        padding: "10px 12px",
+                        borderRadius: "var(--radius-md)",
+                        marginTop: 12,
+                        lineHeight: 1.6,
+                      }}
+                    >
+                      {selected.hold_notice}
+                    </div>
+                  )}
                   <Link
                     to="/dashboard"
                     className="btn-utility"
@@ -336,7 +365,36 @@ export default function MapPage() {
                   </Link>
                 </>
               ) : (
-                <div style={{ color: "var(--outline)", fontSize: 13, textAlign: "center", padding: "24px 0" }}>데이터 없음</div>
+                /* 비율을 안 내려준 동. "데이터 없음" 한 줄로 끝내면 담당자가 왜인지 모른다.
+                   분모를 보여줘야 "위험하지 않다"가 아니라 "판단할 근거가 없다"로 읽힌다. */
+                <div style={{ padding: "20px 0" }}>
+                  <div style={{ textAlign: "center" }}>
+                    <span className="badge" style={{ color: "var(--ink-muted)" }}>판단보류</span>
+                  </div>
+                  <div className="t-body-sm" style={{ color: "var(--ink-muted)", marginTop: 14, lineHeight: 1.7 }}>
+                    {selected.hold_notice ?? "동 단위 등급을 판정할 표본이 부족합니다."}
+                  </div>
+                  <div className="t-body-sm" style={{ color: "var(--ink-muted)", padding: "12px 0", marginTop: 8, borderTop: "1px solid var(--hairline)" }}>
+                    분석 가능 업종{" "}
+                    <b style={{ color: "var(--on-surface)" }}>
+                      {selected.sample_sufficient_cells}/{selected.total_cells}개
+                    </b>
+                    <div className="t-caption" style={{ marginTop: 4, color: "var(--ink-faint)" }}>
+                      표본 충족률 {selected.coverage_pct}% · 점포 수 50개 이상 기준
+                    </div>
+                  </div>
+                  <Link
+                    to="/blindspots"
+                    className="btn-utility"
+                    style={{
+                      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
+                      marginTop: 16, width: "100%", boxSizing: "border-box",
+                      color: "var(--primary)", textDecoration: "none",
+                    }}
+                  >
+                    사각지대에서 이 동 보기
+                  </Link>
+                </div>
               )}
             </>
           ) : (
@@ -373,6 +431,8 @@ export default function MapPage() {
         >
           <b>{tooltip.name}</b>
           {tooltip.ratio != null && <span style={{ marginLeft: 8, color: tooltip.color }}>위험 업종 비율 {tooltip.ratio}%</span>}
+          {tooltip.ratio == null && <span style={{ marginLeft: 8, color: "var(--ink-faint)" }}>판단보류</span>}
+          {tooltip.thin && <span style={{ marginLeft: 6, color: "var(--ink-faint)" }}>· 근거 얕음</span>}
           {tooltip.coverage != null && <span style={{ marginLeft: 8 }}>표본 충족 {tooltip.coverage}%</span>}
         </div>
       )}

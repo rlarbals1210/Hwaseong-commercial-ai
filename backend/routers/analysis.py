@@ -2,11 +2,20 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import Literal, Optional
+from ..auth.dependencies import get_current_official
 from ..database import get_db
 from ..models import AdminArea, CommercialQuarter, IndustryCategory, ModelRun, RiskPrediction
 from ..schemas import AnalysisDongResponse, ScoreResponse
 
-router = APIRouter(prefix="/api/analysis", tags=["analysis"])
+# 공무원 전용. /score가 grade·predicted_rank·top_percent를 반환하는데, 라우터 레벨
+# 가드가 없어 무인증으로 예측값이 나가고 있었다(2026-08-25 감사). public.py가
+# "예측값 계열은 어떤 형태로도 내지 않는다"고 선언한 항목이다.
+# 인증 없이 열려야 하는 화면은 routers/public.py를 쓴다.
+router = APIRouter(
+    prefix="/api/analysis",
+    tags=["analysis"],
+    dependencies=[Depends(get_current_official)],
+)
 
 
 @router.get("/dongs")

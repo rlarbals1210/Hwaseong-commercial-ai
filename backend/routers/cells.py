@@ -32,7 +32,8 @@ from ..models import (
     Official,
     RiskPrediction,
 )
-from ..services.risk import GRADE_NOTICE, WINDOW_QUARTERS, action_message
+from ..services.compare import cumulative_denominator
+from ..services.risk import GRADE_NOTICE, WINDOW_QUARTERS, action_message, pct
 
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "ai"))
@@ -53,8 +54,9 @@ FIELD_CHECK_ITEMS = [
 ]
 
 
-def _pct(value) -> float:
-    return round((value or 0.0) * 100, 2)
+# services.risk.pct를 쓴다(NULL을 0.0%로 바꾸지 않는 버전). 라우터마다 사본을 두면
+# 한쪽만 고쳐졌을 때 화면끼리 다른 숫자를 보여준다 — 이 프로젝트가 이미 겪은 실수다.
+_pct = pct
 
 
 def _latest_quarter(db: Session) -> int | None:
@@ -97,7 +99,7 @@ def get_cell_detail(area_id: int, industry_id: int, db: Session = Depends(get_db
             )
             .scalar()
         )
-        return _pct(value) if value is not None else None
+        return _pct(value)
 
     prediction = (
         db.query(RiskPrediction)
@@ -106,6 +108,13 @@ def get_cell_detail(area_id: int, industry_id: int, db: Session = Depends(get_db
         .first()
     )
     batch = db.get(DataBatch, cell.batch_id) if cell.batch_id else None
+    # 누적값 자체가 없는 셀(4분기 미충족)은 분모도 내리지 않는다. cumulative_denominator는
+    # 그런 셀에 대해 '현재 점포수 x 4' 근사를 돌려주는데, 비율이 없는 자리에 분모만
+    # 있으면 화면이 없는 값을 계산해 보여주게 된다.
+    if cell.closure_rate_cum4 is None:
+        _denominator, _denom_estimated = None, False
+    else:
+        _denominator, _denom_estimated = cumulative_denominator(cell)
     type_info = CELL_TYPES.get(cell.cell_type or "", {})
 
     return {
@@ -123,6 +132,12 @@ def get_cell_detail(area_id: int, industry_id: int, db: Session = Depends(get_db
         "risk_grade": cell.risk_grade,
         "cumulative_closure_rate_pct": _pct(cell.closure_rate_cum4),
         "cumulative_closure_count": cell.closure_count_cum4,
+        # 누적 폐업률의 분모는 "4개 분기 직전점포수의 합"이지 현재 분기 점포수가 아니다.
+        # 이걸 안 내려주면 화면이 건수 옆에 현재 점포수를 병기하게 되고, 읽는 사람이 눈으로
+        # 나눈 값과 큰 숫자가 4배쯤 어긋난다 — 동탄8동 일반 교육이 "16.04%"인데 그 아래
+        # "47곳 닫힘 / 전체 53곳"(89%)으로 보였다(2026-08-25 감사, 표본충분 231셀 전부 해당).
+        "cumulative_denominator": _denominator,
+        "denominator_estimated": _denom_estimated,
         "confidence_lower_pct": _pct(cell.closure_rate_lower4),
         "quarter_closure_rate_pct": _pct(cell.closure_rate),
         "opening_rate_pct": _pct(cell.opening_rate),

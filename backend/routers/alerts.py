@@ -26,6 +26,11 @@ from ..schemas import (
 )
 from ..services.explain import EXPLANATION_NOTICE
 from ..services.risk import (
+    AREA_HOLD_LEVEL,
+    AREA_HOLD_NOTICE,
+    AREA_MIN_SUFFICIENT_CELLS,
+    AREA_THIN_EVIDENCE_CELLS,
+    AREA_THIN_NOTICE,
     AVG_CLOSURE_RATE_PCT,
     CAUTION_THRESHOLD_PCT,
     DANGER_THRESHOLD_PCT,
@@ -221,22 +226,41 @@ def get_vacancy_risk_map(db: Session = Depends(get_db)):
         .all()
     )
 
-    colors = {"안정": "#10B981", "주의": "#F59E0B", "위험": "#D51B4C"}
-    result = [
+    # 색은 frontend/src/index.css의 팔레트와 같은 값이어야 한다. 예전에는 여기 값과
+    # 범례의 CSS 변수가 서로 달라(#D51B4C vs --error #ba1a1a) 폴리곤 색과 범례 점 색이
+    # 한 화면에서 어긋났다(2026-08-25 감사).
+    colors = {
+        "안정": "#1aae39",          # --accent-green
+        "주의": "#dd5b00",          # --accent-orange
+        "위험": "#ba1a1a",          # --error
+        AREA_HOLD_LEVEL: "#c1c6d5",  # --outline-variant
+    }
+
+    result = []
+    for summary, dong in rows:
+        # 저장된 등급을 그대로 믿지 않고 분모를 여기서 다시 본다. 파이프라인을 다시 돌리지
+        # 않아도 화면이 바로 교정되고, 적재 로직이 바뀌어도 화면 쪽 방어가 남는다.
+        judged = summary.sample_sufficient_cells >= AREA_MIN_SUFFICIENT_CELLS
+        thin = judged and summary.sample_sufficient_cells < AREA_THIN_EVIDENCE_CELLS
+        level = (summary.area_risk_grade or "안정") if judged else AREA_HOLD_LEVEL
+        result.append(
             VacancyRiskItem(
                 dong=dong,
-                risk_ratio=summary.risk_industry_ratio_pct,
-                risk_level=summary.area_risk_grade or "안정",
-                color=colors.get(summary.area_risk_grade, "#10B981"),
+                risk_ratio=summary.risk_industry_ratio_pct if judged else None,
+                risk_level=level,
+                color=colors.get(level, "#c1c6d5"),
                 trend=round(summary.avg_trend_slope or 0.0, 3),
                 total_cells=summary.total_cells,
                 sample_sufficient_cells=summary.sample_sufficient_cells,
                 coverage_pct=round(
                     summary.sample_sufficient_cells / summary.total_cells * 100, 1
                 ) if summary.total_cells else 0.0,
+                evidence_thin=thin,
+                hold_notice=(
+                    AREA_THIN_NOTICE if thin else (None if judged else AREA_HOLD_NOTICE)
+                ),
             )
-            for summary, dong in rows
-        ]
+        )
     return sorted(result, key=lambda item: item.dong)
 
 

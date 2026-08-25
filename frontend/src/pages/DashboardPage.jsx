@@ -126,10 +126,18 @@ function RiskCard({ item }) {
           <span style={{ fontSize: 14, color: "var(--ink-faint)", fontWeight: 500 }}>%</span>
         </div>
         {/* 비율만 두면 점포 60곳에서 6곳 닫힌 것과 600곳에서 60곳 닫힌 것이 같아 보인다.
-            담당자가 규모를 함께 판단할 수 있도록 원래 건수를 병기한다. */}
+            담당자가 규모를 함께 판단할 수 있도록 원래 건수를 병기한다.
+
+            "N곳 / 전체 M곳"으로 쓰지 않는다. 위 비율의 분모는 4개 분기 직전점포수의 합이지
+            현재 점포수가 아니라서, 슬래시로 묶으면 눈으로 나눈 값이 큰 숫자와 4배쯤
+            어긋난다(2026-08-25 감사). 두 수를 가운뎃점으로 분리해 각각의 사실로 읽히게 한다.
+            분모까지 보여주는 건 셀 상세에서 한다. */}
         {num(item.store_count) !== null && (
           <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
-            {num(item.cumulative_closure_count) ?? 0}곳 닫힘 / 전체 {item.store_count}곳
+            {num(item.cumulative_closure_count) !== null
+              ? `최근 1년 ${item.cumulative_closure_count.toLocaleString()}곳 닫힘`
+              : "누적 건수 미산출"}
+            {" · 현재 점포 "}{item.store_count.toLocaleString()}곳
           </div>
         )}
       </div>

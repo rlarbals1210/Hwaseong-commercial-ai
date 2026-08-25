@@ -98,13 +98,19 @@ class VacancyRiskItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     dong: str
-    risk_ratio: float
+    # 표본충분 셀이 적은 동은 비율을 내리지 않는다(None). 0.0으로 채우면 "판단 불가"가
+    # "위험 업종 0%"로 읽히고 지도가 초록으로 칠해진다(2026-08-25 감사).
+    risk_ratio: float | None = None
     risk_level: str
     color: str
     trend: float
     total_cells: int
     sample_sufficient_cells: int
     coverage_pct: float
+    # 판정은 했지만 표본충분 업종이 적은 동. 화면이 흐리게 칠하고 배지를 단다.
+    evidence_thin: bool = False
+    # 보류 사유 또는 근거 얕음 안내. 충분히 판정된 동은 None
+    hold_notice: str | None = None
 
 
 class PredictionContributionResponse(BaseModel):

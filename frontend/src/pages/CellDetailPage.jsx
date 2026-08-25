@@ -8,6 +8,8 @@ import ProvisionalNotice from "../components/ProvisionalNotice";
 //   ② AI 예측 기여 요인   모델의 내부 근거. 인과 아님
 //   ③ 공무원 확인 필요    데이터가 없어 모델이 보지 못한 원인 후보
 
+const WINDOW_LABEL = 4;
+
 const TYPE_TONE = {
   고회전: "var(--accent-orange)",
   쇠퇴: "var(--primary)",
@@ -30,9 +32,16 @@ function Section({ title, note, children }) {
   );
 }
 
-/** 누적 폐업률 추이. 외부 차트 라이브러리 없이 SVG로 그린다. */
+/** 누적 폐업률 추이. 외부 차트 라이브러리 없이 SVG로 그린다.
+ *
+ * 누적값은 4분기가 쌓여야 나오므로 셀의 앞 4분기는 값이 없다(null). 예전에는 백엔드가
+ * 그 null을 0.0%로 바꿔 내려서 모든 셀의 선이 0%에서 시작해 4분기째 급등하는 모양이
+ * 됐다 — "값이 없음"이 "폐업이 없었음"으로 읽혔다(2026-08-25 감사).
+ * 지금은 null이 그대로 오므로 걸러내고, 몇 분기가 빠졌는지 아래에 적는다.
+ */
 function TrendChart({ rows }) {
   const points = rows.filter((r) => Number.isFinite(r.cumulative_closure_rate_pct));
+  const skipped = rows.length - points.length;
   if (points.length < 2) {
     return <div className="t-caption" style={{ color: "var(--ink-muted)" }}>추이를 그릴 자료가 부족합니다.</div>;
   }
@@ -55,6 +64,11 @@ function TrendChart({ rows }) {
         <text x={PAD} y={H - 8} fontSize="11" fill="var(--ink-faint)">{points[0].label}</text>
         <text x={W - PAD} y={H - 8} fontSize="11" fill="var(--ink-faint)" textAnchor="end">{last.label}</text>
       </svg>
+      {skipped > 0 && (
+        <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 4 }}>
+          앞 {skipped}개 분기는 누적 {WINDOW_LABEL}분기가 채워지지 않아 값이 없습니다. 0%가 아니라 미산출입니다.
+        </div>
+      )}
     </div>
   );
 }
@@ -280,7 +294,23 @@ export default function CellDetailPage() {
             <span style={{ fontSize: 16, color: "var(--ink-faint)" }}>%</span>
           </div>
           <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
-            {cell.cumulative_closure_count ?? 0}곳 닫힘 / 전체 {cell.store_count}곳
+            {/* 분모는 현재 점포수가 아니라 4개 분기 직전점포수의 합이다. 예전에는 여기에
+                현재 점포수를 병기해서, 눈으로 나눈 값이 큰 숫자와 4배쯤 어긋났다
+                (동탄8동 일반 교육: 표시 16.04% vs "47곳 / 53곳" = 89%). */}
+            {Number.isFinite(cell.cumulative_closure_count) ? (
+              cell.cumulative_denominator ? (
+                <>
+                  최근 {cell.window_quarters ?? WINDOW_LABEL}분기 연 {cell.cumulative_denominator.toLocaleString()}곳 중{" "}
+                  <b style={{ color: "var(--on-surface)" }}>{cell.cumulative_closure_count.toLocaleString()}곳</b> 닫힘
+                  {cell.denominator_estimated && <span style={{ color: "var(--ink-faint)" }}> (분모 추정)</span>}
+                </>
+              ) : (
+                <>최근 {cell.window_quarters ?? WINDOW_LABEL}분기 {cell.cumulative_closure_count.toLocaleString()}곳 닫힘</>
+              )
+            ) : (
+              <>누적 폐업 건수 미산출</>
+            )}
+            {" · 현재 점포 "}{cell.store_count?.toLocaleString() ?? "—"}곳
             {" · "}신뢰하한 {fmt(cell.confidence_lower_pct)}%
           </div>
           <div style={{ marginTop: 16 }}>
