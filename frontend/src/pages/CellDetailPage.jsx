@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { apiFetchJson } from "../lib/api";
+import { apiFetch, apiFetchJson } from "../lib/api";
 import ProvisionalNotice from "../components/ProvisionalNotice";
 
 // 세 영역을 절대 섞지 않는다(CLAUDE.md 용어 규칙).
@@ -156,6 +156,10 @@ export default function CellDetailPage() {
   const [notice, setNotice] = useState(null);
   const [noticeLoading, setNoticeLoading] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [contacts, setContacts] = useState(null);
+  const [formOpen, setFormOpen] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -165,8 +169,10 @@ export default function CellDetailPage() {
       apiFetchJson(`/api/cells/${areaId}/${industryId}`),
       apiFetchJson(`/api/cells/${areaId}/${industryId}/trend`).catch(() => []),
       apiFetchJson(`/api/cells/${areaId}/${industryId}/programs`).catch(() => null),
+      apiFetchJson(`/api/cells/${areaId}/${industryId}/contacts`).catch(() => null),
     ])
-      .then(([detail, series, progs]) => {
+      .then(([detail, series, progs, logs]) => {
+        setContacts(logs);
         setCell(detail);
         setTrend(Array.isArray(series) ? series : []);
         setPrograms(progs);
@@ -180,7 +186,46 @@ export default function CellDetailPage() {
       .finally(() => setLoading(false));
     setNotice(null);
     setCopied(false);
+    setFormOpen(false);
+    setSaveError("");
   }, [areaId, industryId]);
+
+  const reloadContacts = () =>
+    apiFetchJson(`/api/cells/${areaId}/${industryId}/contacts`)
+      .then(setContacts)
+      .catch(() => {});
+
+  const submitContact = async (event) => {
+    event.preventDefault();
+    const form = new FormData(event.target);
+    const count = form.get("contacted_store_count");
+    setSaving(true);
+    setSaveError("");
+    try {
+      const response = await apiFetch(`/api/cells/${areaId}/${industryId}/contacts`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contacted_on: form.get("contacted_on"),
+          channel: form.get("channel"),
+          outcome: form.get("outcome"),
+          contacted_store_count: count ? Number(count) : null,
+          note: form.get("note") || null,
+        }),
+      });
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || "기록을 저장하지 못했습니다.");
+      }
+      event.target.reset();
+      setFormOpen(false);
+      await reloadContacts();
+    } catch (err) {
+      setSaveError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) return <div className="t-body-sm" style={{ color: "var(--ink-muted)" }}>불러오는 중…</div>;
   if (error || !cell) {
@@ -400,9 +445,146 @@ export default function CellDetailPage() {
                       {notice.notice}
                     </span>
                   </div>
+                  {copied && (
+                    <div className="t-caption" style={{ marginTop: 8, color: "var(--ink-secondary)" }}>
+                      발송하셨다면 아래 <b>접촉 이력</b>에 남겨주세요. 다른 부서가 같은 상권에 중복
+                      연락하는 것을 막습니다.
+                    </div>
+                  )}
                 </div>
               )}
             </div>
+          </div>
+        </Section>
+      )}
+
+      {/* ③-3 접촉 이력 */}
+      {contacts && (
+        <Section title="접촉 이력" note={contacts.notice}>
+          <div className="card" style={{ padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
+              <div>
+                {contacts.total === 0 ? (
+                  <span style={{ color: "var(--ink-muted)" }}>아직 접촉 기록이 없습니다.</span>
+                ) : (
+                  <span style={{ color: "var(--on-surface)" }}>
+                    총 <b>{contacts.total}</b>건 · 마지막 접촉{" "}
+                    <b>{contacts.last_contacted_on}</b>
+                    {Number.isFinite(contacts.days_since_last_contact) && (
+                      <span style={{ color: "var(--ink-muted)" }}>
+                        {" "}({contacts.days_since_last_contact}일 전)
+                      </span>
+                    )}
+                  </span>
+                )}
+              </div>
+              <button type="button" onClick={() => setFormOpen((v) => !v)}>
+                {formOpen ? "취소" : "기록 추가"}
+              </button>
+            </div>
+
+            {Object.keys(contacts.outcome_counts || {}).length > 0 && (
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
+                {Object.entries(contacts.outcome_counts).map(([label, n]) => (
+                  <span key={label} className="badge">{label} {n}</span>
+                ))}
+              </div>
+            )}
+
+            {formOpen && (
+              <form
+                onSubmit={submitContact}
+                style={{
+                  marginTop: 16,
+                  padding: 14,
+                  borderRadius: "var(--radius-md)",
+                  background: "var(--surface-container-low)",
+                  display: "grid",
+                  gap: 10,
+                }}
+              >
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <label className="t-caption" style={{ display: "grid", gap: 4, color: "var(--ink-muted)" }}>
+                    접촉일
+                    <input
+                      type="date"
+                      name="contacted_on"
+                      required
+                      max={new Date().toISOString().slice(0, 10)}
+                      defaultValue={new Date().toISOString().slice(0, 10)}
+                    />
+                  </label>
+                  <label className="t-caption" style={{ display: "grid", gap: 4, color: "var(--ink-muted)" }}>
+                    방법
+                    <select name="channel" required defaultValue="visit">
+                      {contacts.channels.map((c) => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="t-caption" style={{ display: "grid", gap: 4, color: "var(--ink-muted)" }}>
+                    결과
+                    <select name="outcome" required defaultValue="connected">
+                      {contacts.outcomes.map((o) => (
+                        <option key={o.value} value={o.value}>{o.label}</option>
+                      ))}
+                    </select>
+                  </label>
+                  <label className="t-caption" style={{ display: "grid", gap: 4, color: "var(--ink-muted)" }}>
+                    접촉 점포 수(선택)
+                    <input type="number" name="contacted_store_count" min="0" style={{ width: 110 }} />
+                  </label>
+                </div>
+                <label className="t-caption" style={{ display: "grid", gap: 4, color: "var(--ink-muted)" }}>
+                  메모
+                  <textarea name="note" rows={2} placeholder="현장에서 확인한 내용, 다음 조치 등" />
+                </label>
+                <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <button type="submit" disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
+                  {saveError && (
+                    <span className="t-caption" style={{ color: "var(--accent-orange)" }}>{saveError}</span>
+                  )}
+                </div>
+                <div className="t-caption" style={{ color: "var(--ink-faint)" }}>
+                  개별 점포의 상호·연락처는 입력하지 마세요. 이 기록은 상권 단위입니다.
+                </div>
+              </form>
+            )}
+
+            {contacts.items.length > 0 && (
+              <div style={{ marginTop: 18 }}>
+                {contacts.items.map((c) => (
+                  <div
+                    key={c.id}
+                    style={{
+                      display: "flex",
+                      gap: 12,
+                      padding: "10px 0",
+                      borderTop: "1px solid var(--hairline)",
+                    }}
+                  >
+                    <div
+                      className="t-caption"
+                      style={{ minWidth: 88, color: "var(--ink-muted)", fontVariantNumeric: "tabular-nums" }}
+                    >
+                      {c.contacted_on}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ color: "var(--on-surface)" }}>
+                        {c.channel_label} · {c.outcome_label}
+                        {Number.isFinite(c.contacted_store_count) && (
+                          <span style={{ color: "var(--ink-muted)" }}> · {c.contacted_store_count}곳</span>
+                        )}
+                      </div>
+                      {c.note && (
+                        <div className="t-caption" style={{ color: "var(--ink-secondary)", marginTop: 2 }}>{c.note}</div>
+                      )}
+                      <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 2 }}>{c.official}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </Section>
       )}

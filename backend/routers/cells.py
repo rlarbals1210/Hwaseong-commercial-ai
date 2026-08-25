@@ -9,21 +9,27 @@
     공무원 확인 필요    데이터가 없어 모델이 보지 못한 원인 후보
 """
 import sys
+from datetime import date
 from pathlib import Path
+from typing import Literal, Optional
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Body, Depends, HTTPException
+from pydantic import BaseModel, Field
 from sqlalchemy import func
 from sqlalchemy.orm import Session
 
-from ..auth.dependencies import get_current_official
+from ..auth.dependencies import decode_token, get_current_official
 from ..database import get_db
 from ..models import (
     AdminArea,
+    AlertCase,
+    AlertContact,
     PolicyProgram,
     CommercialQuarter,
     DataBatch,
     IndustryCategory,
     ModelRun,
+    Official,
     RiskPrediction,
 )
 from ..services.risk import GRADE_NOTICE, WINDOW_QUARTERS, action_message
@@ -301,3 +307,181 @@ def get_cell_notice(area_id: int, industry_id: int, db: Session = Depends(get_db
         "program_count": len(names),
         "notice": "발송 전 담당자가 내용을 확인하고 수정해 주세요. 자동 발송 기능은 제공하지 않습니다.",
     }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 접촉 이력
+#
+# 안내문을 만들 수 있게 됐으니 "보냈는지"를 남길 곳이 필요하다. 기록이 없으면
+# 같은 상권에 두 부서가 각각 연락하거나, 아무도 연락하지 않은 채 넘어간다.
+#
+# 기록 단위는 셀(행정동×업종)이다. 개별 점포 참조(store_refs)는 노출 원칙이
+# 확정되기 전까지 API에서 입력받지 않는다(models.py의 같은 주석 참조).
+#
+# 이력은 분기를 넘어 이어진다. 예측(risk_predictions)은 분기마다 새로 생기지만
+# 조회할 때 그 셀의 모든 분기 예측에 달린 사건을 모아서 보여준다.
+# 그렇게 하지 않으면 파이프라인을 돌릴 때마다 접촉 이력이 사라진 것처럼 보인다.
+# ─────────────────────────────────────────────────────────────────────────────
+
+CONTACT_CHANNELS = {
+    "visit": "현장 방문",
+    "phone": "전화",
+    "sms": "문자",
+    "email": "이메일",
+    "meeting": "간담회",
+    "other": "기타",
+}
+CONTACT_OUTCOMES = {
+    "connected": "연락됨",
+    "no_answer": "부재·무응답",
+    "declined": "거절",
+    "applied": "지원 신청",
+    "pending": "진행 중",
+}
+CONTACT_NOTICE = (
+    "이 기록은 상권 단위입니다. 개별 점포의 위험도를 근거로 접촉했다는 뜻이 아니며, "
+    "기록 자체가 지원 대상 선정이나 배제의 근거가 되지 않습니다."
+)
+
+
+class ContactCreate(BaseModel):
+    """접촉 1건 등록. 개별 점포 식별정보는 받지 않는다."""
+
+    contacted_on: date
+    channel: Literal["visit", "phone", "sms", "email", "meeting", "other"]
+    outcome: Literal["connected", "no_answer", "declined", "applied", "pending"]
+    contacted_store_count: Optional[int] = Field(default=None, ge=0, le=10000)
+    note: Optional[str] = Field(default=None, max_length=2000)
+
+
+def _cell_quarter_ids(db: Session, area_id: int, industry_id: int) -> list[int]:
+    """해당 셀의 모든 분기 행 id. 분기를 넘어 이력을 잇기 위해 쓴다."""
+    return [
+        row[0]
+        for row in db.query(CommercialQuarter.id).filter(
+            CommercialQuarter.area_id == area_id,
+            CommercialQuarter.industry_id == industry_id,
+        )
+    ]
+
+
+def _official_id(payload: dict) -> int:
+    try:
+        return int(payload["sub"])
+    except (KeyError, TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="인증 정보에 담당자 식별자가 없습니다")
+
+
+@router.get("/{area_id}/{industry_id}/contacts")
+def list_cell_contacts(area_id: int, industry_id: int, db: Session = Depends(get_db)):
+    quarter_ids = _cell_quarter_ids(db, area_id, industry_id)
+    items = []
+    if quarter_ids:
+        rows = (
+            db.query(AlertContact, Official.name, Official.username)
+            .join(AlertCase, AlertContact.alert_id == AlertCase.id)
+            .join(RiskPrediction, AlertCase.prediction_id == RiskPrediction.id)
+            .outerjoin(Official, AlertContact.official_id == Official.id)
+            .filter(RiskPrediction.commercial_quarter_id.in_(quarter_ids))
+            .order_by(AlertContact.contacted_on.desc(), AlertContact.id.desc())
+            .all()
+        )
+        for contact, official_name, username in rows:
+            items.append({
+                "id": contact.id,
+                "contacted_on": contact.contacted_on.isoformat(),
+                "channel": contact.channel,
+                "channel_label": CONTACT_CHANNELS.get(contact.channel, contact.channel),
+                "outcome": contact.outcome,
+                "outcome_label": CONTACT_OUTCOMES.get(contact.outcome, contact.outcome),
+                "contacted_store_count": contact.contacted_store_count,
+                "note": contact.note,
+                "official": official_name or username or "미상",
+            })
+
+    outcome_counts: dict[str, int] = {}
+    for item in items:
+        outcome_counts[item["outcome_label"]] = outcome_counts.get(item["outcome_label"], 0) + 1
+
+    last_on = items[0]["contacted_on"] if items else None
+    days_since = None
+    if last_on:
+        days_since = (date.today() - date.fromisoformat(last_on)).days
+
+    return {
+        "notice": CONTACT_NOTICE,
+        "channels": [{"value": k, "label": v} for k, v in CONTACT_CHANNELS.items()],
+        "outcomes": [{"value": k, "label": v} for k, v in CONTACT_OUTCOMES.items()],
+        "items": items,
+        "total": len(items),
+        "last_contacted_on": last_on,
+        "days_since_last_contact": days_since,
+        "outcome_counts": outcome_counts,
+    }
+
+
+@router.post("/{area_id}/{industry_id}/contacts", status_code=201)
+def create_cell_contact(
+    area_id: int,
+    industry_id: int,
+    body: ContactCreate = Body(...),
+    db: Session = Depends(get_db),
+    payload: dict = Depends(decode_token),
+):
+    official_id = _official_id(payload)
+    if not db.get(Official, official_id):
+        raise HTTPException(status_code=401, detail="담당자 계정을 찾을 수 없습니다")
+    if body.contacted_on > date.today():
+        raise HTTPException(status_code=400, detail="미래 날짜로는 기록할 수 없습니다")
+
+    latest = _latest_quarter(db)
+    cell = (
+        db.query(CommercialQuarter)
+        .filter(
+            CommercialQuarter.quarter_code == latest,
+            CommercialQuarter.area_id == area_id,
+            CommercialQuarter.industry_id == industry_id,
+        )
+        .first()
+    )
+    if not cell:
+        raise HTTPException(status_code=404, detail="해당 상권을 찾을 수 없습니다")
+
+    prediction = (
+        db.query(RiskPrediction)
+        .join(ModelRun, RiskPrediction.model_run_id == ModelRun.id)
+        .filter(ModelRun.is_active.is_(True), RiskPrediction.commercial_quarter_id == cell.id)
+        .first()
+    )
+    if not prediction:
+        # 예측이 없으면 사건을 만들 자리가 없다. 조용히 넘기지 않고 원인을 말한다.
+        raise HTTPException(
+            status_code=409,
+            detail="이 상권에 활성 모델 예측이 없어 기록할 수 없습니다. 파이프라인 적재 상태를 확인해 주세요.",
+        )
+
+    case = db.query(AlertCase).filter(AlertCase.prediction_id == prediction.id).first()
+    if not case:
+        case = AlertCase(prediction_id=prediction.id, status="new")
+        db.add(case)
+        db.flush()
+
+    contact = AlertContact(
+        alert_id=case.id,
+        official_id=official_id,
+        contacted_on=body.contacted_on,
+        channel=body.channel,
+        outcome=body.outcome,
+        target_scope="cell",
+        contacted_store_count=body.contacted_store_count,
+        note=body.note,
+    )
+    db.add(contact)
+
+    # 첫 접촉이 들어오면 사건 상태를 올린다. 목록에서 "손대지 않은 것"과 구분되게.
+    if case.status == "new":
+        case.status = "in_progress"
+        case.reviewed_at = func.now()
+
+    db.commit()
+    return {"id": contact.id, "alert_case_id": case.id, "status": case.status}
