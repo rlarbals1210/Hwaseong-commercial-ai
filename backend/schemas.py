@@ -349,10 +349,12 @@ class CompareDiff(BaseModel):
     label: str
     unit: str
     decimals: int = 2                   # 화면 표시 소수 자릿수. 건수·점포수는 0
+    kind: str = "rate"                  # "count"(관측 건수) | "rate"(비율·지수). 표본부족 처리가 갈린다
     left: float | None = None
     right: float | None = None
     delta: float | None = None          # left - right
-    comparable: bool = True             # False면 화면에서 "차이 없음"으로 표시
+    comparable: bool = True             # False면 화면에서 차이를 숫자로 말하지 않는다
+    reason: str | None = None           # comparable=False인 이유: "noise" | "sample" (화면 문구가 갈린다)
     note: str | None = None
 
 

@@ -37,14 +37,19 @@ router = APIRouter(prefix="/api/compare", tags=["compare"], dependencies=[Depend
 
 # 차이를 숫자로 보여줄 지표. 등급·유형·순위는 크기 비교가 성립하지 않으므로 여기 넣지 않고
 # 좌우 카드에서 값 그대로 보여준다.
+#
+# kind가 판단을 가른다. 표본부족 상권(점포 4곳짜리 셀이 실제로 있다)에서 비율은 아무 말도
+# 하지 못한다 — 폐업 0건이 "0.00%"로 찍히면 옆의 4.14%보다 안전해 보이지만 판단 자체가
+# 불가능한 표본이다. 반면 건수는 표본이 작아도 사실이고 행정이 움직일 근거가 된다.
+# 사각지대 화면이 폐업률이 아니라 폐업 건수로 정렬하는 것과 같은 원칙이다.
 DIFF_METRICS = [
-    ("cumulative_closure_rate_pct", f"{WINDOW_QUARTERS}분기 누적 폐업률", "%", 2),
-    ("cumulative_closure_count", "누적 폐업 건수", "건", 0),
-    ("store_count", "점포수", "개", 0),
-    ("opening_rate_pct", "보정 개업률", "%", 2),
-    ("saturation_rate", "업종 포화도", "", 2),
-    ("competition_index", "경쟁강도", "", 2),
-    ("trend_slope", "트렌드 기울기", "", 3),
+    ("cumulative_closure_rate_pct", f"{WINDOW_QUARTERS}분기 누적 폐업률", "%", 2, "rate"),
+    ("cumulative_closure_count", "누적 폐업 건수", "건", 0, "count"),
+    ("store_count", "점포수", "개", 0, "count"),
+    ("opening_rate_pct", "보정 개업률", "%", 2, "rate"),
+    ("saturation_rate", "업종 포화도", "", 2, "rate"),
+    ("competition_index", "경쟁강도", "", 2, "rate"),
+    ("trend_slope", "트렌드 기울기", "", 3, "rate"),
 ]
 
 
@@ -180,22 +185,21 @@ def compare_cells(
     either_short = l["sample_insufficient"] or r["sample_insufficient"]
 
     diffs = []
-    for metric, label, unit, decimals in DIFF_METRICS:
+    for metric, label, unit, decimals, kind in DIFF_METRICS:
         lv, rv = l.get(metric), r.get(metric)
         delta = round(lv - rv, 3) if lv is not None and rv is not None else None
-        # 신뢰구간 판정은 폐업률에만 적용한다. 점포수 같은 관측 카운트는 표본오차 개념이 없다.
-        if metric == "cumulative_closure_rate_pct":
-            comparable = distinguishable and not either_short
-            note = None
-            if either_short:
-                note = "표본부족 상권이 포함돼 통계 비교를 보류합니다"
-            elif not distinguishable:
-                note = "이 차이는 표본 크기로 설명될 수 있습니다 (두 비율 z검정, α=0.05)"
-        else:
-            comparable, note = True, None
+        comparable, reason, note = True, None, None
+        if kind == "rate" and either_short:
+            # 표본부족이 한쪽이라도 끼면 비율은 판단 재료가 아니다. 값은 그대로 내리되
+            # (감추면 왜 안 보이냐는 질문이 생긴다) 차이는 말하지 않는다.
+            comparable, reason = False, "sample"
+            note = "표본부족 상권이 포함돼 비율 지표로는 판단하지 않습니다"
+        elif metric == "cumulative_closure_rate_pct" and not distinguishable:
+            comparable, reason = False, "noise"
+            note = "이 차이는 표본 크기로 설명될 수 있습니다 (두 비율 z검정, α=0.05)"
         diffs.append(CompareDiff(
-            metric=metric, label=label, unit=unit, decimals=decimals,
-            left=lv, right=rv, delta=delta, comparable=comparable, note=note,
+            metric=metric, label=label, unit=unit, decimals=decimals, kind=kind,
+            left=lv, right=rv, delta=delta, comparable=comparable, reason=reason, note=note,
         ))
 
     return CompareResponse(

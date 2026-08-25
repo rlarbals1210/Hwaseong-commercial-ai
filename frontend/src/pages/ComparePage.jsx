@@ -194,29 +194,52 @@ export default function ComparePage() {
               <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 520 }}>
                 <tbody>
                   {data.diffs.map((d) => {
-                    const dim = !d.comparable && d.metric === "cumulative_closure_rate_pct";
+                    // 방향 화살표를 쓰지 않는다. 가운데 열에 놓인 ▲/▼는 "왼쪽이 크다"는 뜻인지
+                    // "늘었다"는 뜻인지 구별되지 않아 시계열 증감으로 오독된다. 두 값이 바로
+                    // 옆에 있으므로 대소는 눈으로 읽으면 되고, 작은 쪽을 흐리게 해서 거든다.
+                    // 어느 쪽이 "나쁜지"는 칠하지 않는다 — 폐업률은 높은 쪽이, 개업률은 낮은 쪽이
+                    // 나쁘고, 지표마다 방향을 판정해 색을 주면 AI가 판단한다는 인상이 된다.
+                    // 판단은 아래 콜아웃 한 곳에서만 한다.
+                    const muted = (side) => side?.sample_insufficient && d.kind === "rate";
+                    const diffUnit = d.unit === "%" ? "%p" : d.unit;
+                    const bigger =
+                      d.left === null || d.right === null || d.left === d.right
+                        ? null
+                        : d.left > d.right ? "left" : "right";
+                    const cell = (value, side, which) => (
+                      <td
+                        style={{
+                          padding: "12px 8px",
+                          textAlign: which === "left" ? "right" : "left",
+                          width: "30%",
+                          fontVariantNumeric: "tabular-nums",
+                          color: muted(side)
+                            ? "var(--ink-faint)"
+                            : bigger && bigger !== which
+                              ? "var(--ink-muted)"
+                              : "var(--on-surface)",
+                        }}
+                      >
+                        <b>{fmt(value, d.decimals)}</b>{d.unit}
+                        {muted(side) && (
+                          <span className="t-caption" style={{ color: "var(--ink-faint)" }}> (표본부족)</span>
+                        )}
+                      </td>
+                    );
                     return (
                       <tr key={d.metric} style={{ borderTop: "1px solid var(--hairline)" }}>
-                        <td
-                          style={{ padding: "12px 8px", textAlign: "right", width: "30%", fontVariantNumeric: "tabular-nums", color: dim ? "var(--ink-muted)" : "var(--on-surface)" }}
-                        >
-                          <b>{fmt(d.left, d.decimals)}</b>{d.unit}
-                        </td>
+                        {cell(d.left, data.left, "left")}
                         <td className="t-caption" style={{ padding: "12px 12px", textAlign: "center", color: "var(--ink-faint)", whiteSpace: "nowrap" }}>
                           <div>{d.label}</div>
-                          <div style={{ marginTop: 3, color: dim ? "var(--ink-faint)" : "var(--ink-muted)", fontVariantNumeric: "tabular-nums" }}>
-                            {dim
-                              ? "차이 없음"
+                          <div style={{ marginTop: 3, color: "var(--ink-muted)", fontVariantNumeric: "tabular-nums" }}>
+                            {!d.comparable
+                              ? (d.reason === "sample" ? "판단 보류" : "차이 없음")
                               : d.delta === null || d.delta === undefined
                                 ? "—"
-                                : `${d.delta > 0 ? "▲" : d.delta < 0 ? "▼" : ""} ${fmt(Math.abs(d.delta), d.decimals)}${d.unit}`}
+                                : `차이 ${fmt(Math.abs(d.delta), d.decimals)}${diffUnit}`}
                           </div>
                         </td>
-                        <td
-                          style={{ padding: "12px 8px", textAlign: "left", width: "30%", fontVariantNumeric: "tabular-nums", color: dim ? "var(--ink-muted)" : "var(--on-surface)" }}
-                        >
-                          <b>{fmt(d.right, d.decimals)}</b>{d.unit}
-                        </td>
+                        {cell(d.right, data.right, "right")}
                       </tr>
                     );
                   })}
@@ -224,7 +247,7 @@ export default function ComparePage() {
               </table>
             </div>
 
-            {data.diffs.find((d) => d.metric === "cumulative_closure_rate_pct")?.note && (
+            {data.diffs.find((d) => !d.comparable)?.note && (
               <div
                 className="t-caption"
                 style={{
@@ -236,7 +259,7 @@ export default function ComparePage() {
                   lineHeight: 1.6,
                 }}
               >
-                {data.diffs.find((d) => d.metric === "cumulative_closure_rate_pct").note}
+                {data.diffs.find((d) => !d.comparable).note}
               </div>
             )}
           </div>
