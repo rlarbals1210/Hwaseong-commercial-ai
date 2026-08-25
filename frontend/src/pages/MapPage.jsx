@@ -76,9 +76,9 @@ export default function MapPage() {
 
   useEffect(() => {
     apiFetch(`/api/alerts/vacancy-risk/map`)
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : []))
       .then(setRiskData)
-      .catch(() => {});
+      .catch(() => setRiskData([]));
     apiFetch(`/api/alerts/closure-rate-ranking?limit=10`)
       .then((r) => r.json())
       .then(setRanking)
