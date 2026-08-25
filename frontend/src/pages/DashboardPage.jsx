@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { apiFetchJson } from "../lib/api";
+import ProvisionalNotice from "../components/ProvisionalNotice";
 
 function downloadCsv(rows) {
   if (!rows.length) return;
@@ -252,6 +253,10 @@ export default function DashboardPage() {
         title="폐업 위험 조기경보"
         desc="AI가 2분기 뒤 폐업 위험이 높을 것으로 예측한 구역입니다. 절대 확률이 아닌 상대 순위입니다."
       />
+
+      <div style={{ marginBottom: 20 }}>
+        <ProvisionalNotice meta={meta} />
+      </div>
 
       {!loading && data.length > 0 && (
         <>

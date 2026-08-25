@@ -48,6 +48,29 @@ GRADE_NOTICE = (
     "화성시 내 상대 순위입니다(위험 = 상위 10%, 주의 = 상위 30%). 절대 기준이 아닙니다."
 )
 
+LATEST_QUARTER = _THRESHOLDS.get("quarter")
+
+
+def quarter_label(code) -> str:
+    """20254 -> '2025Q4'. 코드가 없거나 형식이 다르면 원값을 문자열로 돌려준다."""
+    try:
+        code = int(code)
+    except (TypeError, ValueError):
+        return str(code) if code is not None else ""
+    year, quarter = divmod(code, 10)
+    return f"{year}Q{quarter}" if 1 <= quarter <= 4 else str(code)
+
+
+# 최신 분기는 폐업 확정에 시간이 걸린다. 스냅샷에서 사라진 점포가 이후 분기에 다시 나타나는
+# 사례가 있어(2023Q1은 72.1%가 재등장) 사라짐이 곧 폐업이라고 단정할 수 없는데, 최근 분기는
+# 그 재등장 여부를 관측할 기간 자체가 아직 없다. 따라서 최신 분기 폐업은 과대 계상될 수 있다.
+# 등급은 화성시 내 상대 순위라 모든 셀이 같이 영향을 받으면 순위는 보존되지만, 절대 수치를
+# 확정치로 읽으면 안 되므로 화면에 그대로 고지한다.
+PROVISIONAL_NOTICE = (
+    f"{quarter_label(LATEST_QUARTER)}는 잠정치입니다. 최근 분기는 폐업 확정에 시간이 걸려 "
+    "실제보다 높게 나올 수 있습니다. 등급은 상대 순위라 영향이 적지만, 절대 수치는 확정치가 아닙니다."
+)
+
 
 def risk_level(cumulative_closure_rate_pct: float) -> tuple[str, str]:
     """셀 단위 등급 — 4분기 누적 관측 폐업률(%)만 사용. 예측값은 관여하지 않는다.

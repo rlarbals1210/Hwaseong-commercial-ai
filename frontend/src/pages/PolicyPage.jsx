@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useEffect } from "react";
 import { apiFetchJson } from "../lib/api";
+import ProvisionalNotice from "../components/ProvisionalNotice";
 
 const EMPTY_DATA = { Q1: [], Q2: [], Q3: [], Q4: [] };
 
@@ -212,6 +213,10 @@ export default function PolicyPage() {
         title="현장점검 우선순위"
         desc="최근 4분기 누적 관측 폐업률 × 영향 점포 수 기준 확인 순서입니다. 지원 대상 결정이 아닙니다."
       />
+
+      <div style={{ marginBottom: 20 }}>
+        <ProvisionalNotice />
+      </div>
 
       {!loading && total > 0 && (
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>

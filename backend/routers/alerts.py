@@ -30,9 +30,12 @@ from ..services.risk import (
     CAUTION_THRESHOLD_PCT,
     DANGER_THRESHOLD_PCT,
     GRADE_NOTICE,
+    LATEST_QUARTER,
+    PROVISIONAL_NOTICE,
     SAMPLE_MIN,
     WINDOW_QUARTERS,
     action_message,
+    quarter_label,
 )
 
 
@@ -195,6 +198,9 @@ def get_grade_notice():
         "caution_threshold_pct": CAUTION_THRESHOLD_PCT,
         "danger_threshold_pct": DANGER_THRESHOLD_PCT,
         "sample_min": SAMPLE_MIN,
+        "latest_quarter": LATEST_QUARTER,
+        "latest_quarter_label": quarter_label(LATEST_QUARTER),
+        "provisional_notice": PROVISIONAL_NOTICE,
     }
 
 

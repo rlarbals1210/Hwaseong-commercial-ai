@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { apiFetch } from "../lib/api";
+import ProvisionalNotice from "../components/ProvisionalNotice";
 
 const NAVER_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "";
 
@@ -203,6 +204,9 @@ export default function MapPage() {
         <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>
           읍면동별 위험 업종 비율 — 최근 4분기 누적 폐업률 기준(보정 없음). 구역을 클릭하면 상세 지표가 표시됩니다.
         </p>
+        <div style={{ marginTop: 12 }}>
+          <ProvisionalNotice />
+        </div>
       </div>
 
       <div style={{ display: "flex", gap: 16 }}>

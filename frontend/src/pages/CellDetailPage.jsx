@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
 import { apiFetchJson } from "../lib/api";
+import ProvisionalNotice from "../components/ProvisionalNotice";
 
 // 세 영역을 절대 섞지 않는다(CLAUDE.md 용어 규칙).
 //   ① 확인된 위험 신호   관측 데이터로 직접 계산된 사실
@@ -196,6 +197,10 @@ export default function CellDetailPage() {
       <Link to="/dashboard" className="t-caption" style={{ color: "var(--primary)", textDecoration: "none" }}>
         ← 조기경보
       </Link>
+
+      <div style={{ marginTop: 12 }}>
+        <ProvisionalNotice />
+      </div>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
         {cell.cell_type && cell.cell_type !== "유형판정보류" && (
