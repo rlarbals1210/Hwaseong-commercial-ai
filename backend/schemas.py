@@ -14,6 +14,8 @@ class ClosureRiskItem(BaseModel):
 
     prediction_id: int
     predicted_rank: int
+    area_id: int          # 셀 상세 페이지 링크용
+    industry_id: int
     dong: str
     category: str
     # 화면에 띄우는 근거는 4분기 누적이다. 단일 분기는 점포 60곳짜리 셀에서 폐업 1~2건 차이로
@@ -56,6 +58,38 @@ class ClosureRateRankingItem(BaseModel):
     risk_grade: str
     industry_rank: int | None = None      # 같은 업종 안에서의 순위
     industry_total: int | None = None     # 같은 업종의 표본충분 셀 수
+
+
+class BlindspotItem(BaseModel):
+    """사각지대 — 표본이 작아 통계 판단을 보류한 셀.
+
+    전체 점포의 38%가 여기 들어간다. 그리고 그게 서부·농촌권에 몰려 있어
+    "통계가 약한 곳이 정책적으로는 더 취약한 곳"이 되는 구조다.
+    버리지 않고 별도 트랙으로 뺀다.
+
+    정렬은 폐업'률'이 아니라 폐업 '건수'다 — 점포 12곳에서 2곳이 닫히면 률은 노이즈지만
+    체감은 크고, 반대로 률이 높아도 1곳이면 행정이 움직일 일이 아니다.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    area_id: int
+    industry_id: int
+    dong: str
+    category: str
+    store_count: int
+    cumulative_closure_count: int
+    cumulative_closure_rate_pct: float
+
+
+class BlindspotResponse(BaseModel):
+    notice: str
+    items: list[BlindspotItem]
+    total_cells: int
+    total_stores: int
+    total_closures: int
+    store_share_pct: float          # 전체 점포 중 사각지대 비중
+    sample_min: int
 
 
 class VacancyRiskItem(BaseModel):

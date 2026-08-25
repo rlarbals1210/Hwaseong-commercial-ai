@@ -17,6 +17,8 @@ from ..models import (
     RiskPrediction,
 )
 from ..schemas import (
+    BlindspotItem,
+    BlindspotResponse,
     ClosureRiskItem,
     ClosureRateRankingItem,
     PredictionExplanationResponse,
@@ -91,6 +93,8 @@ def get_closure_risk(
         result.append(ClosureRiskItem(
             prediction_id=prediction.id,
             predicted_rank=prediction.predicted_rank,
+            area_id=commercial.area_id,
+            industry_id=commercial.industry_id,
             dong=dong,
             category=industry,
             cumulative_closure_rate_pct=_pct(commercial.closure_rate_cum4),
@@ -228,6 +232,84 @@ def get_vacancy_risk_map(db: Session = Depends(get_db)):
             for summary, dong in rows
         ]
     return sorted(result, key=lambda item: item.dong)
+
+
+BLINDSPOT_NOTICE = (
+    "표본이 작아 통계적 판단을 보류한 상권입니다. 모델이 판단하지 않으며, "
+    "폐업 건수 순으로 정렬했습니다. 현장 확인을 권장합니다."
+)
+
+
+@router.get("/blindspots", response_model=BlindspotResponse)
+def get_blindspots(
+    limit: int = Query(30, ge=1, le=200),
+    dong: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+):
+    """사각지대 — 표본부족으로 등급·순위에서 빠진 셀.
+
+    조회 기준(점포 50곳)을 넘지 못하면 화면에서 아예 사라진다. 그렇게 빠지는 점포가
+    전체의 38%이고, 기배동·매송면은 커버율이 0%다. 아무리 상황이 나빠도 후보에 못 오른다.
+    정책 우선순위를 고르는 도구에서 이건 형평성 문제로 직결된다.
+
+    통계 판단은 계속 보류하되(등급을 매기지 않는다) 목록에서 지우지는 않는다.
+    """
+    latest = db.query(func.max(CommercialQuarter.quarter_code)).scalar()
+    if not latest:
+        return BlindspotResponse(
+            notice=BLINDSPOT_NOTICE, items=[], total_cells=0, total_stores=0,
+            total_closures=0, store_share_pct=0.0, sample_min=SAMPLE_MIN,
+        )
+
+    base = (
+        db.query(CommercialQuarter, AdminArea.area_name, IndustryCategory.industry_name)
+        .join(AdminArea, CommercialQuarter.area_id == AdminArea.id)
+        .join(IndustryCategory, CommercialQuarter.industry_id == IndustryCategory.id)
+        .filter(
+            CommercialQuarter.quarter_code == latest,
+            CommercialQuarter.sample_insufficient.is_(True),
+            CommercialQuarter.closure_count_cum4.isnot(None),
+        )
+    )
+
+    all_rows = base.all()
+    total_stores = sum(c.store_count for c, _, _ in all_rows)
+    total_closures = sum(c.closure_count_cum4 or 0 for c, _, _ in all_rows)
+    city_stores = (
+        db.query(func.sum(CommercialQuarter.store_count))
+        .filter(CommercialQuarter.quarter_code == latest)
+        .scalar()
+    ) or 0
+
+    q = base
+    if dong:
+        q = q.filter(AdminArea.area_name == dong)
+    rows = (
+        q.order_by(CommercialQuarter.closure_count_cum4.desc())
+        .limit(limit)
+        .all()
+    )
+
+    return BlindspotResponse(
+        notice=BLINDSPOT_NOTICE,
+        items=[
+            BlindspotItem(
+                area_id=commercial.area_id,
+                industry_id=commercial.industry_id,
+                dong=area,
+                category=industry,
+                store_count=commercial.store_count,
+                cumulative_closure_count=commercial.closure_count_cum4 or 0,
+                cumulative_closure_rate_pct=_pct(commercial.closure_rate_cum4),
+            )
+            for commercial, area, industry in rows
+        ],
+        total_cells=len(all_rows),
+        total_stores=total_stores,
+        total_closures=total_closures,
+        store_share_pct=round(total_stores / city_stores * 100, 1) if city_stores else 0.0,
+        sample_min=SAMPLE_MIN,
+    )
 
 
 @router.get(

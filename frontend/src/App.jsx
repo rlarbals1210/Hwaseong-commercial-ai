@@ -4,6 +4,7 @@ import DashboardPage from "./pages/DashboardPage";
 import MapPage from "./pages/MapPage";
 import PolicyPage from "./pages/PolicyPage";
 import OfficialLoginPage from "./pages/OfficialLoginPage";
+import CellDetailPage from "./pages/CellDetailPage";
 import RequireRole from "./components/RequireRole";
 import { useAuth } from "./context/auth-context";
 import { apiFetchJson } from "./lib/api";
@@ -261,6 +262,15 @@ export default function App() {
           }
         />
       ))}
+      {/* 셀 상세는 사이드바에 노출하지 않는다 — 목록에서 클릭해 들어오는 종착지다 */}
+      <Route
+        path="/cells/:areaId/:industryId"
+        element={
+          <RequireRole role="official">
+            <CellDetailPage />
+          </RequireRole>
+        }
+      />
     </Routes>
   );
 

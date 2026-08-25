@@ -108,10 +108,15 @@ function RiskCard({ item }) {
         )}
       </div>
 
-      <div>
+      <Link
+        to={`/cells/${item.area_id}/${item.industry_id}`}
+        style={{ textDecoration: "none" }}
+      >
         <div className="t-title" style={{ color: "var(--on-surface)" }}>{item.dong}</div>
-        <div className="t-caption" style={{ color: "var(--ink-muted)" }}>{item.category}</div>
-      </div>
+        <div className="t-caption" style={{ color: "var(--ink-muted)" }}>
+          {item.category} <span style={{ color: "var(--primary)" }}>· 상세 →</span>
+        </div>
+      </Link>
 
       <div style={{ marginTop: "auto" }}>
         <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 2 }}>최근 1년 폐업률</div>
