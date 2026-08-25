@@ -87,12 +87,74 @@ function Comparison({ value, comparison }) {
   );
 }
 
+/** 지원사업 1건. 매칭 조건(우리 로직)과 자격 요건(공고문 확인 필요)을 시각적으로 분리한다. */
+function ProgramCard({ p, tone }) {
+  const border =
+    tone === "match" ? "1px solid var(--primary)" : "1px solid var(--hairline)";
+  const dim = tone === "off" ? 0.6 : 1;
+  return (
+    <div
+      style={{
+        border,
+        borderRadius: "var(--radius-md)",
+        padding: 14,
+        marginBottom: 10,
+        opacity: dim,
+      }}
+    >
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }}>
+        <b style={{ color: "var(--on-surface)" }}>{p.program_name}</b>
+        {p.owner_department && (
+          <span className="t-caption" style={{ color: "var(--ink-faint)" }}>{p.owner_department}</span>
+        )}
+      </div>
+      {p.description && (
+        <p className="t-body-sm" style={{ margin: "4px 0 0", color: "var(--ink-secondary)" }}>{p.description}</p>
+      )}
+      {tone === "match" && p.match_reason && (
+        <p className="t-caption" style={{ margin: "8px 0 0", color: "var(--primary)" }}>
+          매칭 근거 — {p.match_reason}
+        </p>
+      )}
+      {tone !== "match" && p.reason && (
+        <p className="t-caption" style={{ margin: "8px 0 0", color: "var(--ink-muted)" }}>
+          {tone === "low" ? "낮춘 이유" : "조건 불일치"} — {p.reason}
+        </p>
+      )}
+      <div className="t-caption" style={{ marginTop: 8, color: "var(--ink-faint)", lineHeight: 1.7 }}>
+        <div>신청 기간 — {p.apply_period || "확인 필요"}</div>
+        <div>지원 한도 — {p.support_limit_text || "확인 필요"}</div>
+        {p.legal_basis && <div>근거 — {p.legal_basis}</div>}
+        {p.exclusion_note && <div>제외 — {p.exclusion_note}</div>}
+      </div>
+      {p.requires_verification && (
+        <div
+          className="t-caption"
+          style={{
+            marginTop: 8,
+            padding: "6px 10px",
+            borderRadius: "var(--radius-sm)",
+            background: "var(--surface-container-low)",
+            color: "var(--ink-secondary)",
+          }}
+        >
+          자격 요건은 실제 공고문으로 확인해야 합니다. 아직 입력되지 않았습니다.
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function CellDetailPage() {
   const { areaId, industryId } = useParams();
   const [cell, setCell] = useState(null);
   const [trend, setTrend] = useState([]);
   const [factors, setFactors] = useState(null);
   const [error, setError] = useState("");
+  const [programs, setPrograms] = useState(null);
+  const [notice, setNotice] = useState(null);
+  const [noticeLoading, setNoticeLoading] = useState(false);
+  const [copied, setCopied] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -101,10 +163,12 @@ export default function CellDetailPage() {
     Promise.all([
       apiFetchJson(`/api/cells/${areaId}/${industryId}`),
       apiFetchJson(`/api/cells/${areaId}/${industryId}/trend`).catch(() => []),
+      apiFetchJson(`/api/cells/${areaId}/${industryId}/programs`).catch(() => null),
     ])
-      .then(([detail, series]) => {
+      .then(([detail, series, progs]) => {
         setCell(detail);
         setTrend(Array.isArray(series) ? series : []);
+        setPrograms(progs);
         if (detail.prediction_id) {
           apiFetchJson(`/api/alerts/${detail.prediction_id}/contributions`)
             .then(setFactors)
@@ -113,6 +177,8 @@ export default function CellDetailPage() {
       })
       .catch(() => setError("상권 정보를 불러오지 못했습니다."))
       .finally(() => setLoading(false));
+    setNotice(null);
+    setCopied(false);
   }, [areaId, industryId]);
 
   if (loading) return <div className="t-body-sm" style={{ color: "var(--ink-muted)" }}>불러오는 중…</div>;
@@ -235,6 +301,106 @@ export default function CellDetailPage() {
           )}
         </div>
       </Section>
+
+      {/* ③-2 연결 가능 지원사업 */}
+      {programs && (
+        <Section
+          title="연결 가능 지원사업"
+          note={programs.notice}
+        >
+          <div className="card" style={{ padding: 20 }}>
+            {programs.matched.length === 0 && (
+              <div className="t-caption" style={{ color: "var(--ink-muted)" }}>
+                이 상권 조건({programs.cell_type || "유형 미판정"} · {programs.risk_grade})에
+                맞는 사업이 없습니다.
+              </div>
+            )}
+
+            {programs.matched.map((p) => (
+              <ProgramCard key={p.program_code} p={p} tone="match" />
+            ))}
+
+            {programs.discouraged.length > 0 && (
+              <>
+                <div className="t-eyebrow" style={{ color: "var(--ink-faint)", margin: "18px 0 8px" }}>
+                  우선순위를 낮춰 검토할 사업
+                </div>
+                {programs.discouraged.map((p) => (
+                  <ProgramCard key={p.program_code} p={p} tone="low" />
+                ))}
+              </>
+            )}
+
+            {programs.not_matched.length > 0 && (
+              <details style={{ marginTop: 18 }}>
+                <summary className="t-caption" style={{ color: "var(--ink-muted)", cursor: "pointer" }}>
+                  조건이 맞지 않는 사업 {programs.not_matched.length}건 보기
+                </summary>
+                <div style={{ marginTop: 10 }}>
+                  {programs.not_matched.map((p) => (
+                    <ProgramCard key={p.program_code} p={p} tone="off" />
+                  ))}
+                </div>
+              </details>
+            )}
+
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--hairline)" }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setNoticeLoading(true);
+                  setCopied(false);
+                  apiFetchJson(`/api/cells/${areaId}/${industryId}/notice`)
+                    .then(setNotice)
+                    .catch(() => setNotice({ text: "안내문을 불러오지 못했습니다.", notice: "" }))
+                    .finally(() => setNoticeLoading(false));
+                }}
+                disabled={noticeLoading}
+              >
+                {noticeLoading ? "생성 중…" : "안내문 초안 만들기"}
+              </button>
+
+              {notice && (
+                <div style={{ marginTop: 12 }}>
+                  <textarea
+                    readOnly
+                    value={notice.text}
+                    rows={Math.min(20, notice.text.split("\n").length + 1)}
+                    style={{
+                      width: "100%",
+                      fontFamily: "inherit",
+                      fontSize: 13,
+                      lineHeight: 1.7,
+                      padding: 12,
+                      borderRadius: "var(--radius-md)",
+                      border: "1px solid var(--hairline)",
+                      background: "var(--surface-container-low)",
+                      color: "var(--on-surface)",
+                      resize: "vertical",
+                    }}
+                  />
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard?.writeText(notice.text).then(
+                          () => setCopied(true),
+                          () => setCopied(false),
+                        );
+                      }}
+                    >
+                      {copied ? "복사됨" : "복사"}
+                    </button>
+                    <span className="t-caption" style={{ color: "var(--ink-faint)" }}>
+                      {notice.notice}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </Section>
+      )}
 
       {/* ④ 공무원 확인 필요 항목 */}
       <Section title="공무원 확인 필요 항목" note="데이터가 없어 모델이 보지 못한 것들입니다. 현장에서 확인해주세요.">

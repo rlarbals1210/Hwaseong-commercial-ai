@@ -77,29 +77,52 @@ THRESHOLD_REQUIRED = {
     "window_quarters",
 }
 POLICY_PROGRAMS = [
+    # 매칭 조건(target_*)은 상권 유형별 처방 로직에서 나온 것이라 근거가 있다.
+    # 자격 요건(업력·한도·신청 기간)은 실제 공고문에서 확인해야 하므로 비워 둔다.
+    # requires_verification=True인 동안 화면은 "요건 확인 필요"로 표시한다.
     {
         "program_code": "SPECIAL_GUARANTEE",
         "program_name": "특례보증",
         "description": "경영안정자금 접근성 개선을 위한 보증 지원",
         "is_active": True,
+        "target_cell_types": ["쇠퇴"],
+        "target_risk_grades": ["위험", "주의"],
+        "discouraged_cell_types": ["고회전"],
+        "match_reason": "나간 자리가 채워지지 않는 상권에서 개별 점포의 자금 접근성을 높입니다.",
+        "requires_verification": True,
     },
     {
         "program_code": "BUSINESS_ENVIRONMENT",
         "program_name": "경영환경개선",
         "description": "점포 시설·홍보·경영환경 개선 지원",
         "is_active": True,
+        "target_cell_types": ["쇠퇴", "정체"],
+        "target_risk_grades": ["위험", "주의", "안정"],
+        "discouraged_cell_types": [],
+        "match_reason": "시설·환경 노후가 이탈 요인일 수 있는 상권에 해당합니다.",
+        "requires_verification": True,
     },
     {
         "program_code": "DISTRICT_REVITALIZATION",
         "program_name": "상권 활성화",
         "description": "공동 마케팅·행사·공간 개선 등 상권 단위 지원",
         "is_active": True,
+        "target_cell_types": ["쇠퇴", "정체"],
+        "target_risk_grades": ["위험", "주의"],
+        "discouraged_cell_types": ["고회전"],
+        "match_reason": "개별 점포가 아니라 상권 단위로 유입을 늘려야 하는 경우입니다.",
+        "requires_verification": True,
     },
     {
         "program_code": "NEW_POLICY_REVIEW",
         "program_name": "신규 정책 검토",
         "description": "기존 사업으로 대응하기 어려운 확인 원인에 대한 신규 정책 검토",
         "is_active": True,
+        "target_cell_types": ["고회전", "정체"],
+        "target_risk_grades": ["위험", "주의"],
+        "discouraged_cell_types": [],
+        "match_reason": "기존 사업의 틀로는 대응이 어려운 구조라 별도 검토가 필요합니다.",
+        "requires_verification": True,
     },
 ]
 
@@ -624,7 +647,11 @@ def import_normalized(
     )
     _upsert(
         session, PolicyProgram, POLICY_PROGRAMS, ["program_code"],
-        ["program_name", "description", "is_active"],
+        [
+            "program_name", "description", "is_active",
+            "target_cell_types", "target_risk_grades", "discouraged_cell_types",
+            "match_reason", "requires_verification",
+        ],
     )
     session.commit()
 

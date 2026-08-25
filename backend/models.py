@@ -399,6 +399,23 @@ class PolicyProgram(Base):
     description = Column(Text, nullable=True)
     is_active = Column(Boolean, nullable=False, default=True)
 
+    # (가) 매칭 조건 — 상권 유형·등급 기반. 우리 처방 로직이라 근거가 있다.
+    target_cell_types = Column(JSON, nullable=True)        # ["쇠퇴", "정체"]
+    target_risk_grades = Column(JSON, nullable=True)       # ["위험", "주의"]
+    discouraged_cell_types = Column(JSON, nullable=True)   # 상충하는 유형 — 이유와 함께 표시
+    match_reason = Column(Text, nullable=True)
+
+    # (나) 자격 요건 — 실제 공고문에서 확인해야 한다. 추정해서 채우지 않는다.
+    owner_department = Column(String(80), nullable=True)
+    legal_basis = Column(String(200), nullable=True)
+    apply_period = Column(String(120), nullable=True)
+    support_limit_text = Column(String(120), nullable=True)
+    exclusion_note = Column(Text, nullable=True)
+    tenure_min_quarters = Column(Integer, nullable=True)
+    tenure_max_quarters = Column(Integer, nullable=True)
+    # (나)가 비어 있으면 True. 화면에 "요건 확인 필요"로 표시된다.
+    requires_verification = Column(Boolean, nullable=False, default=True)
+
 
 class PolicyAction(Base):
     __tablename__ = "policy_actions"
