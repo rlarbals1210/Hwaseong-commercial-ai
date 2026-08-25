@@ -4,9 +4,16 @@ import { apiFetchJson } from "../lib/api";
 
 function downloadCsv(rows) {
   if (!rows.length) return;
-  const headers = ["예측순위", "읍면동", "업종", "실제폐업률(%)", "개업률(%)", "트렌드이상", "후속조치_검토안"];
+  const headers = [
+    "예측순위", "읍면동", "업종", "등급", "상권유형",
+    "최근1년_폐업률(%)", "최근1년_폐업건수", "점포수", "개업률(%)", "트렌드이상", "후속조치_검토안",
+  ];
   const lines = rows.map((r) =>
-    [r.predicted_rank, r.dong, r.category, r.actual_closure_rate_pct, r.open_rate_pct, r.anomaly ? "Y" : "N", r.action]
+    [
+      r.predicted_rank, r.dong, r.category, r.risk_grade, r.cell_type ?? "",
+      r.cumulative_closure_rate_pct, r.cumulative_closure_count, r.store_count,
+      r.open_rate_pct, r.anomaly ? "Y" : "N", r.action,
+    ]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(",")
   );
@@ -20,9 +27,27 @@ function downloadCsv(rows) {
   URL.revokeObjectURL(url);
 }
 
-// 화성시 전체 평균 실제 폐업률(점포수 가중). ai/build_risk_index.py가 매 실행 재계산해
-// risk_thresholds.json에 저장하는 값과 동일하다 — 값이 바뀌면 여기도 함께 갱신할 것.
-const CITY_AVG_PCT = 3.22;
+// 화성시 평균은 서버에서 받는다(GET /api/alerts/grade-notice).
+// 예전에는 3.22를 상수로 박아뒀는데, 파이프라인을 다시 돌리면 값이 어긋나 화면이 거짓말을 했다.
+// 서버 응답 전에는 이 값을 쓰되, 도착하면 즉시 교체된다.
+const CITY_AVG_FALLBACK_PCT = 5.9;
+
+// 응답에 필드가 없거나 null이면 화면이 NaN을 그대로 뿌린다. 서버를 재시작하지 않아
+// 옛 응답이 오는 동안 실제로 "평균 NaN%로 화성시 전체의 NaN배"가 노출됐다.
+// 값이 없으면 계산을 포기하고 "—"를 보여준다.
+// 유형은 위험도가 아니라 성격이다. 등급(빨강)과 색이 겹치지 않게 중립 톤으로 둔다.
+const TYPE_TONE = {
+  고회전: "var(--accent-orange)",
+  쇠퇴: "var(--primary)",
+  성장: "var(--ink-muted)",
+  정체: "var(--ink-muted)",
+};
+
+const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
+const fmtPct = (v, digits = 1) => {
+  const n = num(v);
+  return n === null ? "—" : n.toFixed(digits);
+};
 
 function PageHeader({ title, desc }) {
   return (
@@ -59,6 +84,22 @@ function RiskCard({ item }) {
         <span className="badge" style={{ background: "var(--primary-fixed)", color: "var(--primary)" }}>
           예측 #{item.predicted_rank}
         </span>
+        <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+          {item.cell_type && item.cell_type !== "유형판정보류" && (
+            <span
+              className="badge"
+              title={item.cell_type_summary ?? ""}
+              style={{ color: TYPE_TONE[item.cell_type] ?? "var(--ink-muted)" }}
+            >
+              {item.cell_type}
+            </span>
+          )}
+          {item.risk_grade && item.risk_grade !== "안정" && (
+            <span className={item.risk_grade === "위험" ? "badge badge-danger" : "badge"}>
+              {item.risk_grade}
+            </span>
+          )}
+        </span>
         {item.anomaly && (
           <span className="badge badge-danger">
             <span className="material-symbols-outlined" style={{ fontSize: 14 }}>trending_up</span>
@@ -73,11 +114,18 @@ function RiskCard({ item }) {
       </div>
 
       <div style={{ marginTop: "auto" }}>
-        <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 2 }}>실제 최근 폐업률</div>
+        <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 2 }}>최근 1년 폐업률</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-          <span className="t-metric" style={{ fontSize: 30 }}>{item.actual_closure_rate_pct}</span>
+          <span className="t-metric" style={{ fontSize: 30 }}>{fmtPct(item.cumulative_closure_rate_pct)}</span>
           <span style={{ fontSize: 14, color: "var(--ink-faint)", fontWeight: 500 }}>%</span>
         </div>
+        {/* 비율만 두면 점포 60곳에서 6곳 닫힌 것과 600곳에서 60곳 닫힌 것이 같아 보인다.
+            담당자가 규모를 함께 판단할 수 있도록 원래 건수를 병기한다. */}
+        {num(item.store_count) !== null && (
+          <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
+            {num(item.cumulative_closure_count) ?? 0}곳 닫힘 / 전체 {item.store_count}곳
+          </div>
+        )}
       </div>
 
       {/* 보조 지표는 hairline 위에 얹어 주 지표와 위계를 분리 */}
@@ -108,6 +156,17 @@ function RiskCard({ item }) {
         style={{ color: "var(--ink-secondary)", background: "var(--surface-container-low)", padding: "8px 10px", borderRadius: "var(--radius-md)" }}
       >
         {item.action}
+        {item.cell_type_advice && (
+          <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--hairline)" }}>
+            <div style={{ color: "var(--on-surface)" }}>{item.cell_type_summary}</div>
+            <div style={{ marginTop: 2 }}>{item.cell_type_advice}</div>
+            {item.cell_type_avoid && (
+              <div style={{ marginTop: 2, color: "var(--ink-faint)" }}>
+                우선순위 낮음 — {item.cell_type_avoid}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -137,6 +196,14 @@ export default function DashboardPage() {
   const [categories, setCategories] = useState([]);
   const [error, setError] = useState("");
   const [categoryError, setCategoryError] = useState(false);
+  // 기준선·고지 문구는 서버에서 받는다. 실패해도 화면은 폴백 값으로 그대로 뜬다.
+  const [meta, setMeta] = useState(null);
+
+  useEffect(() => {
+    apiFetchJson(`/api/alerts/grade-notice`)
+      .then(setMeta)
+      .catch(() => setMeta(null));
+  }, []);
 
   useEffect(() => {
     apiFetchJson(`/api/analysis/categories?purpose=alert`)
@@ -166,8 +233,12 @@ export default function DashboardPage() {
   }, [category]);
 
   const anomalyCount = data.filter((d) => d.anomaly).length;
-  const avgActual = data.length ? (data.reduce((s, d) => s + d.actual_closure_rate_pct, 0) / data.length).toFixed(1) : 0;
-  const ratio = data.length ? (avgActual / CITY_AVG_PCT).toFixed(2) : 0;
+  const cityAvg = meta?.city_average_pct ?? CITY_AVG_FALLBACK_PCT;
+  const cumValues = data.map((d) => num(d.cumulative_closure_rate_pct)).filter((v) => v !== null);
+  const avgActual = cumValues.length
+    ? Number((cumValues.reduce((s, v) => s + v, 0) / cumValues.length).toFixed(1))
+    : null;
+  const ratio = avgActual !== null && cityAvg ? (avgActual / cityAvg).toFixed(2) : null;
   const topReviewItems = data.slice(0, 2);
 
   return (
@@ -200,32 +271,39 @@ export default function DashboardPage() {
                 예측 상위 {data.length}개 구역
               </span>
               <div className="t-h2" style={{ marginTop: 12, lineHeight: 1.35 }}>
-                현재 폐업률이 평균{" "}
-                <span style={{ color: "var(--primary)" }}>{avgActual}%</span>로
-                <br />
-                화성시 전체({CITY_AVG_PCT}%)의{" "}
-                <span style={{ color: "var(--primary)" }}>{ratio}배</span>입니다
+                {avgActual === null ? (
+                  <>최근 1년 폐업률을 계산할 수 없습니다</>
+                ) : (
+                  <>
+                    최근 1년 폐업률이 평균{" "}
+                    <span style={{ color: "var(--primary)" }}>{avgActual}%</span>로
+                    <br />
+                    화성시 전체({cityAvg}%)의{" "}
+                    <span style={{ color: "var(--primary)" }}>{ratio}배</span>입니다
+                  </>
+                )}
               </div>
               <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "12px 0 0", lineHeight: 1.6 }}>
-                예측은 관측 시점 기준 2분기 뒤를 봅니다. 개별 구역의 현재 폐업률이 낮아도 상위 순위에 오를 수 있습니다.
+                예측은 관측 시점 기준 2분기 뒤를 봅니다. 개별 구역의 폐업률이 낮아도 상위 순위에 오를 수 있습니다.
+                {meta?.notice ? ` ${meta.notice}` : ""}
               </p>
             </div>
 
             {/* 비교 막대 — 숫자 두 개보다 길이 대비가 즉시 읽힌다 */}
             <div style={{ minWidth: 260, flex: "0 0 auto" }}>
               {[
-                { label: `예측 상위 ${data.length}개`, value: Number(avgActual), tone: "var(--primary)" },
-                { label: "화성시 전체", value: CITY_AVG_PCT, tone: "var(--outline-variant)" },
+                { label: `예측 상위 ${data.length}개`, value: avgActual ?? 0, tone: "var(--primary)" },
+                { label: "화성시 전체", value: cityAvg, tone: "var(--outline-variant)" },
               ].map((row) => (
                 <div key={row.label} style={{ marginBottom: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
                     <span className="t-caption" style={{ color: "var(--ink-muted)" }}>{row.label}</span>
-                    <span className="t-metric" style={{ fontSize: 18 }}>{row.value}%</span>
+                    <span className="t-metric" style={{ fontSize: 18 }}>{fmtPct(row.value)}%</span>
                   </div>
                   <div style={{ height: 8, background: "var(--surface-container)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
                     <div
                       style={{
-                        width: `${Math.min(100, (row.value / Math.max(Number(avgActual), CITY_AVG_PCT)) * 100)}%`,
+                        width: `${Math.min(100, (row.value / Math.max(avgActual ?? 0, cityAvg, 1)) * 100)}%`,
                         height: "100%",
                         background: row.tone,
                         borderRadius: "var(--radius-full)",
@@ -245,7 +323,7 @@ export default function DashboardPage() {
               unit="개"
               tone={anomalyCount > 0 ? "var(--error)" : "var(--on-surface)"}
             />
-            <StatCard label="상위권 평균 폐업률" value={avgActual} unit="%" tone="var(--primary)" />
+            <StatCard label="상위권 평균 폐업률" value={fmtPct(avgActual)} unit="%" tone="var(--primary)" />
           </div>
         </>
       )}

@@ -13,12 +13,17 @@ _PROCESSED_DIR = Path(os.getenv("PROCESSED_DATA_DIR", "data/processed"))
 _PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 _THRESHOLDS_PATH = _PROJECT_ROOT / _PROCESSED_DIR / "risk_thresholds.json"
 
+# 2026-08-20: 기준선이 "단일 분기 시평균 x 2"에서 "4분기 누적 폐업률의 분위수"로 바뀌었다.
+# danger = 상위 10% 경계, caution = 상위 30% 경계. 절대 임계가 아니라 화성시 내 상대 순위이며,
+# 화면에 그 점을 명시해야 한다. 산출 근거는 ai/cumulative.py 주석 참조.
 _DEFAULT_THRESHOLDS = {
-    "avg_closure_rate_pct": 3.2,
-    "danger_threshold_pct": 6.4,
-    "dong_ratio_avg_pct": 11.6,
-    "dong_ratio_danger_pct": 23.2,
+    "avg_closure_rate_pct": 5.9,
+    "danger_threshold_pct": 10.35,
+    "caution_threshold_pct": 7.26,
+    "dong_ratio_avg_pct": 12.5,
+    "dong_ratio_danger_pct": 34.6,
     "sample_min": 50,
+    "window_quarters": 4,
 }
 
 
@@ -35,14 +40,24 @@ AVG_CLOSURE_RATE_PCT = _THRESHOLDS["avg_closure_rate_pct"]
 DANGER_THRESHOLD_PCT = _THRESHOLDS["danger_threshold_pct"]
 DONG_RATIO_AVG_PCT = _THRESHOLDS["dong_ratio_avg_pct"]
 DONG_RATIO_DANGER_PCT = _THRESHOLDS["dong_ratio_danger_pct"]
+CAUTION_THRESHOLD_PCT = _THRESHOLDS.get("caution_threshold_pct", AVG_CLOSURE_RATE_PCT)
 SAMPLE_MIN = _THRESHOLDS["sample_min"]
+WINDOW_QUARTERS = _THRESHOLDS.get("window_quarters", 4)
+GRADE_NOTICE = (
+    f"등급은 최근 {WINDOW_QUARTERS}분기 누적 폐업률 기준이며, "
+    "화성시 내 상대 순위입니다(위험 = 상위 10%, 주의 = 상위 30%). 절대 기준이 아닙니다."
+)
 
 
-def risk_level(closure_rate_pct: float) -> tuple[str, str]:
-    """셀 단위 등급 — 실제 관측 폐업률(%)만 사용. 예측값은 관여하지 않는다."""
-    if closure_rate_pct >= DANGER_THRESHOLD_PCT:
+def risk_level(cumulative_closure_rate_pct: float) -> tuple[str, str]:
+    """셀 단위 등급 — 4분기 누적 관측 폐업률(%)만 사용. 예측값은 관여하지 않는다.
+
+    주의: 단일 분기 폐업률을 넣으면 안 된다. 기준선이 누적 기준이라 거의 전부 "안정"으로 나온다.
+    정규화 DB를 쓰는 신규 라우터는 저장된 risk_grade를 그대로 읽으므로 이 함수를 쓰지 않는다.
+    """
+    if cumulative_closure_rate_pct >= DANGER_THRESHOLD_PCT:
         return "위험", "#D51B4C"
-    if closure_rate_pct >= AVG_CLOSURE_RATE_PCT:
+    if cumulative_closure_rate_pct >= CAUTION_THRESHOLD_PCT:
         return "주의", "#F59E0B"
     return "안정", "#10B981"
 

@@ -16,7 +16,19 @@ class ClosureRiskItem(BaseModel):
     predicted_rank: int
     dong: str
     category: str
-    actual_closure_rate_pct: float
+    # 화면에 띄우는 근거는 4분기 누적이다. 단일 분기는 점포 60곳짜리 셀에서 폐업 1~2건 차이로
+    # 1.5%와 9.0%를 오가서 담당자가 신뢰할 수 없다(분기 간 순위 상관 +0.296).
+    cumulative_closure_rate_pct: float   # 최근 4분기 누적 폐업률
+    cumulative_closure_count: int        # 같은 창의 폐업 건수 — "23곳 닫힘" 형태로 병기
+    store_count: int
+    confidence_lower_pct: float          # Wilson 신뢰하한. 소표본 여부를 담당자가 가늠하는 근거
+    risk_grade: str
+    # 유형은 등급과 별개 축이다. 등급은 "얼마나 위험한가", 유형은 "그래서 무엇을 할 것인가".
+    cell_type: str | None = None
+    cell_type_summary: str | None = None
+    cell_type_advice: str | None = None
+    cell_type_avoid: str | None = None
+    quarter_closure_rate_pct: float      # 단일 분기(참고용, 정렬·판정에 쓰지 않음)
     open_rate_pct: float
     trend_slope: float
     saturation: float
@@ -25,15 +37,25 @@ class ClosureRiskItem(BaseModel):
 
 
 class ClosureRateRankingItem(BaseModel):
-    """상권 순위표(현황) — 실제 관측 폐업률로만 정렬, 절대 % 그대로 표시."""
+    """상권 순위표(현황) — 실제 관측 폐업률로만 정렬, 절대 % 그대로 표시.
+
+    2026-08-20부터 4분기 누적 기준이다. 업종 내 순위를 함께 주는 이유는 목록이 한 업종으로
+    덮이기 때문이다 — 실측에서 위험 등급 24개 중 18개가 교육 계열이었다(데이터 결함이 아니라
+    학원가가 점포의 14.9%인데 폐업의 28.8%를 차지하는 실제 현상).
+    """
 
     model_config = ConfigDict(from_attributes=True)
 
     rank: int
     dong: str
     category: str
-    closure_rate_pct: float
+    closure_rate_pct: float              # 4분기 누적 폐업률 (정렬 기준과 동일)
+    cumulative_closure_count: int
+    confidence_lower_pct: float
     store_count: int
+    risk_grade: str
+    industry_rank: int | None = None      # 같은 업종 안에서의 순위
+    industry_total: int | None = None     # 같은 업종의 표본충분 셀 수
 
 
 class VacancyRiskItem(BaseModel):

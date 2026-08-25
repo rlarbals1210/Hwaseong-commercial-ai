@@ -46,3 +46,5 @@ eda/*.csv
 eda/*.pkl
 ai/*.csv
 ai/*.pkl
+
+data/processed_backup/

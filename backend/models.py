@@ -185,6 +185,10 @@ class RiskThresholdSet(Base):
     area_ratio_avg_pct = Column(Float, nullable=False)
     area_ratio_danger_pct = Column(Float, nullable=False)
     sample_min = Column(Integer, nullable=False, default=50)
+    # 상위 30% 경계(주의 등급). danger_threshold_pct는 상위 10% 경계다.
+    caution_threshold_pct = Column(Float, nullable=True)
+    window_quarters = Column(Integer, nullable=True, default=4)
+    method = Column(String(40), nullable=True)  # cumulative_quantile
     computed_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
@@ -200,12 +204,20 @@ class CommercialQuarter(Base):
     quarter_code = Column(Integer, nullable=False, index=True)
     store_count = Column(Integer, nullable=False)
     opening_rate = Column(Float, nullable=True)  # 0~1 비율
-    closure_rate = Column(Float, nullable=True)  # 0~1 비율
+    closure_rate = Column(Float, nullable=True)  # 0~1 비율 (단일 분기, 기존 의미 유지)
+    # 4분기 누적 지표 (2026-08-20 추가). 등급·화면 표시는 이 값을 쓴다.
+    # 단일 분기는 노이즈가 커서 분기 간 순위 상관이 +0.296에 불과했다(누적은 +0.857).
+    closure_rate_cum4 = Column(Float, nullable=True)      # 4분기 누적 폐업률 0~1
+    closure_rate_lower4 = Column(Float, nullable=True)    # 위 값의 Wilson 신뢰하한 (정렬용)
+    closure_count_cum4 = Column(Integer, nullable=True)   # 4분기 누적 폐업 건수 (화면 병기용)
     saturation_rate = Column(Float, nullable=True)
     competition_index = Column(Float, nullable=True)
     trend_slope = Column(Float, nullable=True)
     anomaly_flag = Column(Boolean, nullable=False, default=False)
     risk_grade = Column(String(10), nullable=True)
+    # 상권 유형 — 고회전/쇠퇴/성장/정체/유형판정보류. 등급과 별개 축이며 섞지 않는다.
+    # 등급은 "얼마나 위험한가", 유형은 "그래서 무엇을 할 것인가"를 가른다.
+    cell_type = Column(String(20), nullable=True)
     sample_insufficient = Column(Boolean, nullable=False, default=False, index=True)
     threshold_set_id = Column(
         Integer, ForeignKey("risk_threshold_sets.id"), nullable=True, index=True

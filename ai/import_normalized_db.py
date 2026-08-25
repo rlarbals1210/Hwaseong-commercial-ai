@@ -20,11 +20,15 @@ import argparse
 from datetime import datetime, timezone
 import hashlib
 import json
+import sys
 from pathlib import Path
 import sys
 
 import numpy as np
 import pandas as pd
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import cumulative as cum  # noqa: E402
 from sqlalchemy import inspect
 from sqlalchemy.dialects.postgresql import insert as postgres_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
@@ -57,6 +61,11 @@ SCORES_REQUIRED = {
     "업종내_순위", "업종내_전체동수", "상위_퍼센트",
 }
 SAMPLE_MIN = 50  # 기본값. 실제로는 risk_thresholds.json의 sample_min을 우선 사용한다.
+
+# 등급·누적 지표 로직은 ai/cumulative.py 한 곳에만 둔다. build_risk_index.py도 같은 모듈을 쓴다.
+# risk_index.csv는 .gitignore 대상이라 그 파일을 읽는 방식으로는 공유할 수 없어(팀원이 pull만
+# 받으면 파일이 없다) 모듈을 공유한다. 2026-08-20에 build_risk_index만 고쳤더니 CSV는 4분기
+# 누적 등급인데 화면은 단일 분기 등급이던 문제가 있었다.
 THRESHOLD_REQUIRED = {
     "avg_closure_rate_pct",
     "danger_threshold_pct",
@@ -64,6 +73,8 @@ THRESHOLD_REQUIRED = {
     "dong_ratio_danger_pct",
     "sample_min",
     "quarter",
+    "caution_threshold_pct",
+    "window_quarters",
 }
 POLICY_PROGRAMS = [
     {
@@ -134,7 +145,7 @@ def _build_latest_signals(
     slopes = (
         commercial[commercial["기준_년분기_코드"].isin(quarters)]
         .sort_values("기준_년분기_코드")
-        .groupby(["행정동명", "통합카테고리"])["폐업_률_평균"]
+        .groupby(["행정동명", "통합카테고리"])["누적폐업률_pct"]
         .apply(_slope)
         .reset_index(name="trend_slope")
     )
@@ -222,21 +233,21 @@ def _load_thresholds(path: Path, latest_quarter: int) -> dict:
 
 
 def _cell_risk_grade(
-    closure_rate: float | None,
+    cumulative_pct: float | None,
     sample_insufficient: bool,
-    avg_pct: float,
+    caution_pct: float,
     danger_pct: float,
 ) -> str | None:
+    """등급은 4분기 누적 폐업률로 판정한다(단일 분기가 아니다).
+
+    기준선은 그 분기 표본충분 셀의 분위수라 절대 임계가 아니라 화성시 내 상대 순위다.
+    신뢰하한은 정렬에만 쓰고 등급에는 쓰지 않는다 — 등급은 관측 사실이어야 감사에 방어된다.
+    """
     if sample_insufficient:
         return "표본부족"
-    if closure_rate is None:
+    if cumulative_pct is None or pd.isna(cumulative_pct):
         return None
-    actual_pct = closure_rate * 100
-    if actual_pct >= danger_pct:
-        return "위험"
-    if actual_pct >= avg_pct:
-        return "주의"
-    return "안정"
+    return cum.grade(cumulative_pct, True, danger_pct, caution_pct)
 
 
 def _area_risk_grade(ratio_pct: float, avg_pct: float, danger_pct: float) -> str:
@@ -368,6 +379,15 @@ def import_normalized(
     if set(scores["기준_년분기_코드"].astype(int).unique()) != {latest}:
         raise ValueError("scores.csv는 final_dataset.csv의 최신 분기 한 개만 포함해야 합니다")
     commercial = _supplement_score_only_cells(commercial, scores, cell_table_path)
+    commercial = cum.add_cumulative(commercial, int(thresholds.get("window_quarters", cum.WINDOW)))
+    # 유형은 최신 분기에만 매긴다. 과거 분기는 기준 중위값이 달라 비교 의미가 없다.
+    latest_quarter = int(commercial["기준_년분기_코드"].max())
+    typed = cum.add_cell_type(
+        commercial[commercial["기준_년분기_코드"] == latest_quarter], sample_min
+    )
+    cell_type_lookup = {
+        (r.행정동명, r.통합카테고리): r.상권유형 for r in typed.itertuples(index=False)
+    }
     signals = _build_latest_signals(commercial, scores, sample_min)
     signal_lookup = signals.set_index(["행정동명", "통합카테고리"]).to_dict("index")
 
@@ -410,6 +430,9 @@ def import_normalized(
         "danger_threshold_pct": float(thresholds["danger_threshold_pct"]),
         "area_ratio_avg_pct": float(thresholds["dong_ratio_avg_pct"]),
         "area_ratio_danger_pct": float(thresholds["dong_ratio_danger_pct"]),
+        "caution_threshold_pct": float(thresholds["caution_threshold_pct"]),
+        "window_quarters": int(thresholds.get("window_quarters", cum.WINDOW)),
+        "method": str(thresholds.get("method", "cumulative_quantile")),
         "sample_min": sample_min,
         "computed_at": datetime.now(timezone.utc),
     }]
@@ -423,6 +446,9 @@ def import_normalized(
             "danger_threshold_pct",
             "area_ratio_avg_pct",
             "area_ratio_danger_pct",
+            "caution_threshold_pct",
+            "window_quarters",
+            "method",
             "sample_min",
             "computed_at",
         ],
@@ -450,16 +476,26 @@ def import_normalized(
             "store_count": int(row.점포수),
             "opening_rate": _nullable_float(row.개업_율_평균),
             "closure_rate": closure_rate,
+            "closure_rate_cum4": _nullable_float(
+                row.누적폐업률_pct / 100 if pd.notna(row.누적폐업률_pct) else None
+            ),
+            "closure_rate_lower4": _nullable_float(
+                row.위험도_하한_pct / 100 if pd.notna(row.위험도_하한_pct) else None
+            ),
+            "closure_count_cum4": (
+                int(row.누적폐업건수) if pd.notna(row.누적폐업건수) else None
+            ),
             "saturation_rate": _nullable_float(row.업종_포화도),
             "competition_index": _nullable_float(row.경쟁강도),
             "trend_slope": float(signal.get("trend_slope", 0.0)) if signal else None,
             "anomaly_flag": bool(signal.get("anomaly_flag", False)),
             "risk_grade": _cell_risk_grade(
-                closure_rate,
+                row.누적폐업률_pct,
                 sample_insufficient,
-                float(thresholds["avg_closure_rate_pct"]),
+                float(thresholds["caution_threshold_pct"]),
                 float(thresholds["danger_threshold_pct"]),
             ) if is_latest else None,
+            "cell_type": cell_type_lookup.get((row.행정동명, row.통합카테고리)) if is_latest else None,
             "sample_insufficient": sample_insufficient,
             "threshold_set_id": threshold_set_id if is_latest else None,
             "batch_id": batch_id,
@@ -471,11 +507,15 @@ def import_normalized(
             "store_count",
             "opening_rate",
             "closure_rate",
+            "closure_rate_cum4",
+            "closure_rate_lower4",
+            "closure_count_cum4",
             "saturation_rate",
             "competition_index",
             "trend_slope",
             "anomaly_flag",
             "risk_grade",
+            "cell_type",
             "sample_insufficient",
             "threshold_set_id",
             "batch_id",
