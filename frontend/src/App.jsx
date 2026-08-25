@@ -5,6 +5,7 @@ import MapPage from "./pages/MapPage";
 import PolicyPage from "./pages/PolicyPage";
 import OfficialLoginPage from "./pages/OfficialLoginPage";
 import CellDetailPage from "./pages/CellDetailPage";
+import BlindspotPage from "./pages/BlindspotPage";
 import RequireRole from "./components/RequireRole";
 import { useAuth } from "./context/auth-context";
 import { apiFetchJson } from "./lib/api";
@@ -15,6 +16,8 @@ const NAV = [
   { path: "/dashboard", label: "조기경보 대시보드", icon: "dashboard", Component: DashboardPage },
   { path: "/map", label: "공실위험 지도", icon: "map", Component: MapPage },
   { path: "/policy", label: "현장점검 우선순위", icon: "grid_view", Component: PolicyPage },
+  // 표본부족으로 다른 화면에서 빠지는 상권(전체 점포의 38%)을 별도 트랙으로 남긴다
+  { path: "/blindspots", label: "사각지대", icon: "visibility_off", Component: BlindspotPage },
 ];
 
 // 사이드바는 짙은 남색 대신 캔버스와 같은 톤 + hairline 경계로 처리한다.
