@@ -4,6 +4,9 @@ import { apiFetchJson } from "../lib/api";
 
 const EMPTY_DATA = { Q1: [], Q2: [], Q3: [], Q4: [] };
 
+// 사분면은 "어느 순서로 볼까"이고 등급은 "얼마나 심각한가"다. 서로 다른 축이라
+// 사분면 라벨에 "안전"류 표현을 쓰면 안 된다 — 조기경보에서 주의로 뜬 상권이
+// 여기서는 안전해 보이는 모순이 실제로 있었다. 하위 사분면은 "중위값 아래"로만 말한다.
 // AI는 확인 순서만 제시하고 지원 대상은 결정하지 않는다 — 라벨에 "지원/배분" 표현을 쓰지 않는다.
 // 강조는 색 테두리·리본이 아니라 톤 차이로만 한다(디자인 시스템 원칙: 입체감은 hairline과 톤으로).
 const QUADRANT_META = {
@@ -26,14 +29,14 @@ const QUADRANT_META = {
     label: "예방 관찰",
     tone: "var(--accent-teal)",
     soft: "var(--teal-soft)",
-    desc: "최근 1년 폐업률 낮으나 영향 점포 많음. 변화 추이 관찰",
+    desc: "폐업률은 중위값 아래지만 영향 점포가 많음. 변화 추이 관찰",
   },
   Q4: {
     order: "4순위",
     label: "일반 관찰",
     tone: "var(--accent-green)",
     soft: "var(--green-soft)",
-    desc: "안정적 상권. 정기 모니터링 유지",
+    desc: "폐업률·영향 규모 모두 중위값 아래. 정기 모니터링 유지",
   },
 };
 
@@ -111,6 +114,7 @@ function QuadrantPanel({ meta, items, highlight }) {
                 <div className="t-body-sm" style={{ fontWeight: 600, color: "var(--on-surface)" }}>{item.dong}</div>
                 <div className="t-caption" style={{ color: "var(--ink-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {item.category}
+                  {item.risk_grade && item.risk_grade !== "안정" ? ` · ${item.risk_grade}` : ""}
                   {item.cell_type && item.cell_type !== "유형판정보류" ? ` · ${item.cell_type}` : ""}
                   {" · 최근 1년 "}
                   <b style={{ color: meta.tone, fontVariantNumeric: "tabular-nums" }}>{item.actual_closure_rate_pct}%</b>
@@ -144,9 +148,9 @@ function EmptyState({ icon, title, desc, tone }) {
 function downloadCsv(data) {
   const rows = Object.entries(data).flatMap(([q, items]) => items.map((item) => ({ ...item, quadrant: q })));
   if (!rows.length) return;
-  const headers = ["우선순위", "읍면동", "업종", "최근1년_폐업률(%)", "최근1년_폐업건수", "영향 점포 수", "상권유형"];
+  const headers = ["우선순위", "읍면동", "업종", "등급", "최근1년_폐업률(%)", "최근1년_폐업건수", "영향 점포 수", "상권유형"];
   const lines = rows.map((r) =>
-    [r.quadrant, r.dong, r.category, r.actual_closure_rate_pct, r.cumulative_closure_count, r.store_count, r.cell_type ?? ""]
+    [r.quadrant, r.dong, r.category, r.risk_grade, r.actual_closure_rate_pct, r.cumulative_closure_count, r.store_count, r.cell_type ?? ""]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(",")
   );

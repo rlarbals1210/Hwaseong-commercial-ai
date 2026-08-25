@@ -138,6 +138,9 @@ class PolicyPriorityItem(BaseModel):
     actual_closure_rate_pct: float
     cumulative_closure_count: int = 0
     cell_type: str | None = None
+    # 사분면과 등급은 서로 다른 축이다. 사분면은 "어느 순서로 볼까"(중위값 기준 상대 배치),
+    # 등급은 "얼마나 심각한가"(상위 10%/30%). 화면에 둘 다 보여줘 혼동을 막는다.
+    risk_grade: str = "안정"
     store_count: int
     quadrant: int
     sample_insufficient: bool

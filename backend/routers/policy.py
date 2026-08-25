@@ -53,12 +53,22 @@ def get_inspection_priority(
     store_counts = [commercial.store_count for commercial, _, _ in risks]
     median_stores = statistics.median(store_counts) if store_counts else 0
 
+    # x축 기준을 등급이 아니라 누적 폐업률 중위값으로 잡는다.
+    # 이전에는 high_risk = (risk_grade == "위험")이었는데, 등급은 위험/주의/안정 3단계인 반면
+    # 사분면은 2단계라 "주의" 등급이 통째로 하위 사분면(Q3/Q4)으로 떨어졌다.
+    # Q4 설명이 "안정적 상권"이라 조기경보에서 주의로 뜬 상권이 여기서는 안전해 보이는
+    # 모순이 실제로 발생했다(동탄9동 한식).
+    # 중위값 기준으로 바꾸면 위험(상위 10%)·주의(상위 30%) 등급은 반드시 중위값 위에 있으므로
+    # 항상 Q1 또는 Q2로 간다. 사분면 본래 의미(연속 변수 두 개를 중위값으로 자르기)와도 맞다.
+    rates = [(commercial.closure_rate_cum4 or 0.0) * 100 for commercial, _, _ in risks]
+    median_rate = statistics.median(rates) if rates else 0.0
+
     result: dict[str, list] = {"Q1": [], "Q2": [], "Q3": [], "Q4": []}
     for commercial, dong, industry in risks:
         store_count = commercial.store_count
         risk = (commercial.closure_rate_cum4 or 0.0) * 100
 
-        high_risk = commercial.risk_grade == "위험"
+        high_risk = risk >= median_rate
         high_impact = store_count >= median_stores
         if high_risk and high_impact:
             quadrant = 1
@@ -76,6 +86,7 @@ def get_inspection_priority(
                 actual_closure_rate_pct=round(risk, 1),
                 cumulative_closure_count=commercial.closure_count_cum4 or 0,
                 cell_type=commercial.cell_type,
+                risk_grade=commercial.risk_grade or "안정",
                 store_count=store_count,
                 quadrant=quadrant,
                 sample_insufficient=False,
