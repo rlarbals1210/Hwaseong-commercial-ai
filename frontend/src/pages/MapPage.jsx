@@ -26,7 +26,15 @@ function loadNaverMap() {
   return naverMapLoadPromise;
 }
 
-function RankingTable({ rows, loading }) {
+// 실패를 조용히 빈 배열로 삼키면 담당자가 "데이터가 없다"로 읽고 DB 적재를 의심하게 된다.
+// (실제로 백엔드가 꺼져 있었을 때 그렇게 진단이 헛돌았다.) 원인을 화면에 그대로 말한다.
+function loadErrorMessage(status) {
+  if (status === 401 || status === 403) return "로그인이 만료되었습니다. 다시 로그인해주세요.";
+  if (status) return `데이터를 불러오지 못했습니다 (HTTP ${status}).`;
+  return "서버에 연결하지 못했습니다. 백엔드가 실행 중인지 확인해주세요.";
+}
+
+function RankingTable({ rows, loading, error }) {
   return (
     <div className="card" style={{ marginTop: 16 }}>
       <h3 className="t-h3" style={{ margin: 0 }}>상권 순위표 — 최근 1년 누적 폐업률</h3>
@@ -36,6 +44,8 @@ function RankingTable({ rows, loading }) {
       </p>
       {loading ? (
         <div className="t-body-sm" style={{ padding: 24, textAlign: "center", color: "var(--ink-faint)" }}>불러오는 중...</div>
+      ) : error ? (
+        <div className="t-body-sm" style={{ padding: 24, textAlign: "center", color: "var(--error)" }}>{error}</div>
       ) : rows.length === 0 ? (
         <div className="t-body-sm" style={{ padding: 24, textAlign: "center", color: "var(--ink-faint)" }}>데이터 없음</div>
       ) : (
@@ -82,16 +92,31 @@ export default function MapPage() {
   const [tooltip, setTooltip] = useState(null);
   const [ranking, setRanking] = useState([]);
   const [rankingLoading, setRankingLoading] = useState(true);
+  const [mapError, setMapError] = useState("");
+  const [rankingError, setRankingError] = useState("");
 
   useEffect(() => {
     apiFetch(`/api/alerts/vacancy-risk/map`)
-      .then((r) => (r.ok ? r.json() : []))
-      .then(setRiskData)
-      .catch(() => setRiskData([]));
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d) => {
+        setRiskData(Array.isArray(d) ? d : []);
+        setMapError("");
+      })
+      .catch((reason) => {
+        setRiskData([]);
+        setMapError(loadErrorMessage(typeof reason === "number" ? reason : null));
+      });
     apiFetch(`/api/alerts/closure-rate-ranking?limit=10`)
-      .then((r) => r.json())
-      .then(setRanking)
-      .catch(() => setRanking([]))
+      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+      .then((d) => {
+        // 401 본문은 배열이 아니라 {detail: ...}라 그대로 넣으면 rows.map()에서 터진다
+        setRanking(Array.isArray(d) ? d : []);
+        setRankingError("");
+      })
+      .catch((reason) => {
+        setRanking([]);
+        setRankingError(loadErrorMessage(typeof reason === "number" ? reason : null));
+      })
       .finally(() => setRankingLoading(false));
   }, []);
 
@@ -182,6 +207,29 @@ export default function MapPage() {
 
       <div style={{ display: "flex", gap: 16 }}>
         <div style={{ position: "relative", flex: 1 }}>
+          {mapError && (
+            <div
+              role="alert"
+              style={{
+                position: "absolute",
+                top: 16,
+                left: 16,
+                right: 16,
+                zIndex: 20,
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                background: "rgba(255,255,255,0.96)",
+                border: "1px solid var(--error)",
+                borderRadius: "var(--radius-lg)",
+                padding: "12px 14px",
+                boxShadow: "var(--elev-1)",
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--error)" }}>error</span>
+              <span className="t-body-sm" style={{ color: "var(--on-surface)" }}>{mapError}</span>
+            </div>
+          )}
           <div
             ref={mapRef}
             style={{ height: 580, borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--hairline)" }}
@@ -301,7 +349,7 @@ export default function MapPage() {
         </div>
       </div>
 
-      <RankingTable rows={ranking} loading={rankingLoading} />
+      <RankingTable rows={ranking} loading={rankingLoading} error={rankingError} />
 
       {tooltip && (
         <div
