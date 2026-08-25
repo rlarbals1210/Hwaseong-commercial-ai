@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { apiFetch } from "../lib/api";
 import { useAuth } from "../context/auth-context";
 
@@ -191,6 +191,16 @@ export default function OfficialLoginPage() {
           <br />
           계정 문의는 소관 부서에 요청하세요.
         </p>
+
+        {/* 예비 창업자용 공개 화면 입구. 로그인 없이 들어간다. */}
+        <div style={{ borderTop: "1px solid var(--hairline)", marginTop: 20, paddingTop: 20, textAlign: "center" }}>
+          <Link to="/browse" className="t-body-sm" style={{ color: "var(--primary)", textDecoration: "none" }}>
+            상권 둘러보기
+          </Link>
+          <p className="t-caption" style={{ color: "var(--ink-faint)", margin: "6px 0 0", lineHeight: 1.6 }}>
+            읍면동·업종별 상권 현황은 로그인 없이 볼 수 있습니다.
+          </p>
+        </div>
       </div>
     </div>
   );
