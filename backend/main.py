@@ -1,7 +1,7 @@
 import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from .routers import alerts, cells, policy, analysis, auth, workflow
+from .routers import alerts, cells, compare, policy, analysis, auth, workflow
 
 app = FastAPI(title="화성시 소상공인 AI 정책지원 플랫폼", version="1.0.0")
 
@@ -23,6 +23,7 @@ app.add_middleware(
 app.include_router(auth.router)
 app.include_router(alerts.router)
 app.include_router(cells.router)
+app.include_router(compare.router)
 app.include_router(policy.router)
 app.include_router(analysis.router)
 app.include_router(workflow.router)

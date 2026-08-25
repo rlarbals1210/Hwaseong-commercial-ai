@@ -6,6 +6,7 @@ import PolicyPage from "./pages/PolicyPage";
 import OfficialLoginPage from "./pages/OfficialLoginPage";
 import CellDetailPage from "./pages/CellDetailPage";
 import BlindspotPage from "./pages/BlindspotPage";
+import ComparePage from "./pages/ComparePage";
 import RequireRole from "./components/RequireRole";
 import { useAuth } from "./context/auth-context";
 import { apiFetchJson } from "./lib/api";
@@ -18,6 +19,8 @@ const NAV = [
   { path: "/policy", label: "현장점검 우선순위", icon: "grid_view", Component: PolicyPage },
   // 표본부족으로 다른 화면에서 빠지는 상권(전체 점포의 38%)을 별도 트랙으로 남긴다
   { path: "/blindspots", label: "사각지대", icon: "visibility_off", Component: BlindspotPage },
+  // 두 상권을 나란히 놓는 화면. 차이가 표본 크기로 설명될 수 있으면 "차이 없음"으로 표시한다.
+  { path: "/compare", label: "상권 비교", icon: "compare_arrows", Component: ComparePage },
 ];
 
 // 사이드바는 짙은 남색 대신 캔버스와 같은 톤 + hairline 경계로 처리한다.

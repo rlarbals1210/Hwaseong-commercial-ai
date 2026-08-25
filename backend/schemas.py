@@ -303,3 +303,63 @@ class PolicyOutcomeResponse(PolicyOutcomeCreate):
     id: int
     action_id: int
     created_at: datetime
+
+
+# ── 상권 비교 (2026-08-25) ──────────────────────────────────────────────────
+# 노다지(서울 프로젝트)의 지역 비교/업종 비교 두 기능을 하나로 합쳤다. 화성시의 분석 단위가
+# (행정동 x 업종) 셀이라 셀 두 개를 받으면 "같은 업종 다른 동" "같은 동 다른 업종" "자유 조합"이
+# 모두 커버된다. 3개 이상 비교는 넣지 않는다 — 그건 랭킹이고 closure-rate-ranking이 담당한다.
+
+
+class CompareInterval(BaseModel):
+    lower_pct: float
+    upper_pct: float
+    denominator: int
+    approximate: bool  # 폐업 0건 셀은 분모를 비율로 복원할 수 없어 근사한다
+
+
+class CompareCellItem(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    area_id: int
+    industry_id: int
+    area_name: str
+    industry_name: str
+    quarter_code: int
+    store_count: int
+    cumulative_closure_rate_pct: float
+    cumulative_closure_count: int | None = None
+    confidence_lower_pct: float | None = None      # 저장된 Wilson 하한(정렬용)
+    interval: CompareInterval | None = None        # 비교 판정에 쓰는 구간
+    opening_rate_pct: float | None = None
+    saturation_rate: float | None = None
+    competition_index: float | None = None
+    trend_slope: float | None = None
+    anomaly: bool = False
+    risk_grade: str | None = None
+    cell_type: str | None = None
+    cell_type_summary: str | None = None
+    industry_rank: int | None = None
+    industry_total_areas: int | None = None
+    sample_insufficient: bool = False
+
+
+class CompareDiff(BaseModel):
+    metric: str
+    label: str
+    unit: str
+    decimals: int = 2                   # 화면 표시 소수 자릿수. 건수·점포수는 0
+    left: float | None = None
+    right: float | None = None
+    delta: float | None = None          # left - right
+    comparable: bool = True             # False면 화면에서 "차이 없음"으로 표시
+    note: str | None = None
+
+
+class CompareResponse(BaseModel):
+    left: CompareCellItem
+    right: CompareCellItem
+    diffs: list[CompareDiff]
+    verdict: str
+    notice: str
+    basis: dict
