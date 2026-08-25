@@ -21,7 +21,11 @@ def get_inspection_priority(
 
     이 API는 정책자금 배분 대상을 결정하지 않는다. 담당자가 '어디부터 현장을 확인할지'
     순서를 좁히는 보조 자료이며, 최종 판단과 지원 결정은 공무원이 한다.
-    x축은 예측값이 아니라 실제 관측 폐업률이고, 표본부족(점포수<30) 셀은 제외한다.
+    x축은 예측값이 아니라 실제 관측 폐업률이고, 표본부족 셀은 제외한다.
+
+    2026-08-20: x축을 단일 분기에서 4분기 누적으로 바꿨다. 등급(risk_grade)은 이미 누적
+    기준인데 x축만 단일 분기라 사분면 분류가 두 기준을 섞어 쓰고 있었다. 같은 상권이
+    조기경보에서는 6.2%, 여기서는 1.5%로 보이는 상태이기도 했다.
     """
     latest = db.query(func.max(CommercialQuarter.quarter_code)).scalar()
     if not latest:
@@ -35,6 +39,7 @@ def get_inspection_priority(
         .filter(
             CommercialQuarter.quarter_code == latest,
             CommercialQuarter.sample_insufficient.is_(False),
+            CommercialQuarter.closure_rate_cum4.isnot(None),
         )
     )
     if category:
@@ -51,7 +56,7 @@ def get_inspection_priority(
     result: dict[str, list] = {"Q1": [], "Q2": [], "Q3": [], "Q4": []}
     for commercial, dong, industry in risks:
         store_count = commercial.store_count
-        risk = (commercial.closure_rate or 0.0) * 100
+        risk = (commercial.closure_rate_cum4 or 0.0) * 100
 
         high_risk = commercial.risk_grade == "위험"
         high_impact = store_count >= median_stores
@@ -69,6 +74,8 @@ def get_inspection_priority(
                 dong=dong,
                 category=industry,
                 actual_closure_rate_pct=round(risk, 1),
+                cumulative_closure_count=commercial.closure_count_cum4 or 0,
+                cell_type=commercial.cell_type,
                 store_count=store_count,
                 quadrant=quadrant,
                 sample_insufficient=False,

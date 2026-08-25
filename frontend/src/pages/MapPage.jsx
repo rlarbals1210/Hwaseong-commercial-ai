@@ -29,8 +29,11 @@ function loadNaverMap() {
 function RankingTable({ rows, loading }) {
   return (
     <div className="card" style={{ marginTop: 16 }}>
-      <h3 className="t-h3" style={{ margin: 0 }}>상권 순위표 — 실제 폐업률 기준</h3>
-      <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--outline)" }}>순수 관측치 정렬, 보정·예측 없음(표본 50개 이상 업종만 집계)</p>
+      <h3 className="t-h3" style={{ margin: 0 }}>상권 순위표 — 최근 1년 누적 폐업률</h3>
+      <p style={{ margin: "0 0 16px", fontSize: 12, color: "var(--outline)" }}>
+        순수 관측치 정렬, 보정·예측 없음(표본 50개 이상 업종만 집계).
+        단일 분기는 폐업 1~2건 차이로 값이 크게 튀어 4분기 누적으로 봅니다.
+      </p>
       {loading ? (
         <div className="t-body-sm" style={{ padding: 24, textAlign: "center", color: "var(--ink-faint)" }}>불러오는 중...</div>
       ) : rows.length === 0 ? (
@@ -42,8 +45,10 @@ function RankingTable({ rows, loading }) {
               <th style={{ fontWeight: 600 }}>순위</th>
               <th style={{ fontWeight: 600 }}>읍면동</th>
               <th style={{ fontWeight: 600 }}>업종</th>
-              <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>실제 폐업률</th>
+              <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>최근 1년 폐업률</th>
+              <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>폐업</th>
               <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>점포수</th>
+              <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>업종 내</th>
             </tr>
           </thead>
           <tbody>
@@ -53,7 +58,11 @@ function RankingTable({ rows, loading }) {
                 <td style={{ padding: "8px 4px", fontWeight: 600, color: "var(--on-surface)" }}>{r.dong}</td>
                 <td style={{ color: "var(--ink-muted)" }}>{r.category}</td>
                 <td className="t-metric" style={{ textAlign: "right", color: "var(--error)" }}>{r.closure_rate_pct}%</td>
+                <td className="t-metric" style={{ textAlign: "right", fontWeight: 400, color: "var(--ink-muted)" }}>{r.cumulative_closure_count ?? "—"}곳</td>
                 <td className="t-metric" style={{ textAlign: "right", fontWeight: 400, color: "var(--ink-muted)" }}>{r.store_count}</td>
+                <td className="t-metric" style={{ textAlign: "right", fontWeight: 400, color: "var(--ink-faint)" }}>
+                  {r.industry_rank ? `${r.industry_rank}/${r.industry_total}` : "—"}
+                </td>
               </tr>
             ))}
           </tbody>
@@ -167,7 +176,7 @@ export default function MapPage() {
       <div style={{ marginBottom: 24 }}>
         <h1 className="t-h1" style={{ margin: 0 }}>공실위험 지도</h1>
         <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>
-          읍면동별 위험 업종 비율 — 실제 폐업률 기준(보정 없음). 구역을 클릭하면 상세 지표가 표시됩니다.
+          읍면동별 위험 업종 비율 — 최근 4분기 누적 폐업률 기준(보정 없음). 구역을 클릭하면 상세 지표가 표시됩니다.
         </p>
       </div>
 
@@ -231,7 +240,7 @@ export default function MapPage() {
                 <>
                   <div style={{ textAlign: "center", margin: "18px 0 20px" }}>
                     <div className="t-metric" style={{ fontSize: 44, color: selected.color, lineHeight: 1.1 }}>{selected.risk_ratio}%</div>
-                    <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 6 }}>위험 업종 비율 (실제 폐업률 기준)</div>
+                    <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 6 }}>위험 업종 비율 (최근 1년 누적 기준)</div>
                     <span
                       style={{
                         display: "inline-block",

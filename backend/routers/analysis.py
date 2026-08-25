@@ -91,7 +91,9 @@ def get_score(
         raise HTTPException(status_code=404, detail="점수 데이터 없음")
     prediction, commercial = result
 
-    actual_rate = (commercial.closure_rate or 0.0) * 100
+    # 등급(risk_grade)이 4분기 누적 기준이므로 함께 보여주는 폐업률도 누적이어야 한다.
+    # 단일 분기를 쓰면 "위험 등급인데 폐업률 1.5%" 같은 모순이 화면에 그대로 노출된다.
+    actual_rate = (commercial.closure_rate_cum4 or 0.0) * 100
     sample_insufficient = commercial.sample_insufficient
     level = commercial.risk_grade or ("표본부족" if sample_insufficient else "판정없음")
 

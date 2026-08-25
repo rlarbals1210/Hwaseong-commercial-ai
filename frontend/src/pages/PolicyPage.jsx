@@ -12,21 +12,21 @@ const QUADRANT_META = {
     label: "현장 확인 권고",
     tone: "var(--error)",
     soft: "var(--error-soft)",
-    desc: "실제 폐업률 높고 영향 점포 많음. 가장 먼저 확인",
+    desc: "최근 1년 폐업률 높고 영향 점포 많음. 가장 먼저 확인",
   },
   Q2: {
     order: "2순위",
     label: "개별 확인 권고",
     tone: "var(--accent-orange)",
     soft: "var(--orange-soft)",
-    desc: "실제 폐업률 높으나 영향 점포 적음. 개별 확인",
+    desc: "최근 1년 폐업률 높으나 영향 점포 적음. 개별 확인",
   },
   Q3: {
     order: "3순위",
     label: "예방 관찰",
     tone: "var(--accent-teal)",
     soft: "var(--teal-soft)",
-    desc: "폐업률 낮으나 영향 점포 많음. 변화 추이 관찰",
+    desc: "최근 1년 폐업률 낮으나 영향 점포 많음. 변화 추이 관찰",
   },
   Q4: {
     order: "4순위",
@@ -110,8 +110,13 @@ function QuadrantPanel({ meta, items, highlight }) {
               <div style={{ minWidth: 0 }}>
                 <div className="t-body-sm" style={{ fontWeight: 600, color: "var(--on-surface)" }}>{item.dong}</div>
                 <div className="t-caption" style={{ color: "var(--ink-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {item.category} · 폐업률{" "}
+                  {item.category}
+                  {item.cell_type && item.cell_type !== "유형판정보류" ? ` · ${item.cell_type}` : ""}
+                  {" · 최근 1년 "}
                   <b style={{ color: meta.tone, fontVariantNumeric: "tabular-nums" }}>{item.actual_closure_rate_pct}%</b>
+                  {item.cumulative_closure_count ? (
+                    <span style={{ color: "var(--ink-faint)" }}> ({item.cumulative_closure_count}곳)</span>
+                  ) : null}
                 </div>
               </div>
               <div style={{ textAlign: "right", flexShrink: 0 }}>
@@ -139,9 +144,9 @@ function EmptyState({ icon, title, desc, tone }) {
 function downloadCsv(data) {
   const rows = Object.entries(data).flatMap(([q, items]) => items.map((item) => ({ ...item, quadrant: q })));
   if (!rows.length) return;
-  const headers = ["우선순위", "읍면동", "업종", "실제폐업률(%)", "영향 점포 수"];
+  const headers = ["우선순위", "읍면동", "업종", "최근1년_폐업률(%)", "최근1년_폐업건수", "영향 점포 수", "상권유형"];
   const lines = rows.map((r) =>
-    [r.quadrant, r.dong, r.category, r.actual_closure_rate_pct, r.store_count]
+    [r.quadrant, r.dong, r.category, r.actual_closure_rate_pct, r.cumulative_closure_count, r.store_count, r.cell_type ?? ""]
       .map((v) => `"${String(v).replace(/"/g, '""')}"`)
       .join(",")
   );
@@ -201,7 +206,7 @@ export default function PolicyPage() {
     <div>
       <PageHeader
         title="현장점검 우선순위"
-        desc="실제 관측 폐업률 × 영향 점포 수 기준 확인 순서입니다. 지원 대상 결정이 아닙니다."
+        desc="최근 4분기 누적 관측 폐업률 × 영향 점포 수 기준 확인 순서입니다. 지원 대상 결정이 아닙니다."
       />
 
       {!loading && total > 0 && (
@@ -286,7 +291,7 @@ export default function PolicyPage() {
               </div>
               <div className="t-caption" style={{ display: "flex", justifyContent: "space-between", color: "var(--ink-faint)", marginTop: 10 }}>
                 <span>낮음</span>
-                <span style={{ color: "var(--ink-muted)" }}>실제 폐업률 →</span>
+                <span style={{ color: "var(--ink-muted)" }}>최근 1년 폐업률 →</span>
                 <span>높음</span>
               </div>
             </div>

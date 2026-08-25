@@ -134,7 +134,10 @@ class PolicyPriorityItem(BaseModel):
 
     dong: str
     category: str
+    # 2026-08-20부터 4분기 누적 기준이다(이름은 유지 — 프론트·CSV가 참조 중).
     actual_closure_rate_pct: float
+    cumulative_closure_count: int = 0
+    cell_type: str | None = None
     store_count: int
     quadrant: int
     sample_insufficient: bool
