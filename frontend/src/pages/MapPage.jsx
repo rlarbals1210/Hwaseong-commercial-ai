@@ -3,6 +3,11 @@ import { Link } from "react-router-dom";
 import { apiFetch } from "../lib/api";
 import ProvisionalNotice from "../components/ProvisionalNotice";
 
+// 다른 화면과 같은 정의. 이 파일에만 사본이 없어 백엔드 raw 값(2자리)이 그대로 찍혔다 —
+// 같은 상권이 대시보드에서 7.1%, 여기서 7.14%로 보였다.
+const fmt = (v, d = 1) =>
+  typeof v === "number" && Number.isFinite(v) ? v.toFixed(d) : "—";
+
 const NAVER_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "";
 
 // 범례 색은 백엔드가 폴리곤에 쓰는 색과 반드시 같아야 한다.
@@ -56,13 +61,15 @@ function RankingTable({ rows, loading, error }) {
       ) : rows.length === 0 ? (
         <div className="t-body-sm" style={{ padding: 24, textAlign: "center", color: "var(--ink-faint)" }}>데이터 없음</div>
       ) : (
-        <table>
+        /* 사각지대·비교 화면과 같은 패턴. 이 표만 스크롤 래퍼가 없어 1280px에서 헤더가 줄바꿈됐다. */
+        <div style={{ overflowX: "auto" }}>
+        <table style={{ minWidth: 560 }}>
           <thead>
             <tr>
               <th style={{ fontWeight: 600 }}>순위</th>
               <th style={{ fontWeight: 600 }}>읍면동</th>
               <th style={{ fontWeight: 600 }}>업종</th>
-              <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>최근 1년 폐업률</th>
+              <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>최근 1년 누적 폐업률</th>
               <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>폐업</th>
               <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>점포수</th>
               <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>업종 내</th>
@@ -70,11 +77,20 @@ function RankingTable({ rows, loading, error }) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <tr key={`${r.dong}-${r.category}`}>
+              <tr key={`${r.area_id}-${r.industry_id}`}>
                 <td style={{ padding: "8px 4px", color: "var(--outline)" }}>{r.rank}</td>
-                <td style={{ padding: "8px 4px", fontWeight: 600, color: "var(--on-surface)" }}>{r.dong}</td>
+                {/* 읍면동 칸을 셀 상세로 잇는다. 폐업률 최악 목록을 보여주고 클릭할 수 없으면
+                    담당자의 다음 행동이 끊긴다(사각지대 표와 같은 처리). */}
+                <td style={{ padding: "8px 4px", fontWeight: 600 }}>
+                  <Link
+                    to={`/cells/${r.area_id}/${r.industry_id}`}
+                    style={{ color: "var(--on-surface)", textDecoration: "none" }}
+                  >
+                    {r.dong}
+                  </Link>
+                </td>
                 <td style={{ color: "var(--ink-muted)" }}>{r.category}</td>
-                <td className="t-metric" style={{ textAlign: "right", color: "var(--error)" }}>{r.closure_rate_pct}%</td>
+                <td className="t-metric" style={{ textAlign: "right", color: "var(--error)" }}>{fmt(r.closure_rate_pct)}%</td>
                 <td className="t-metric" style={{ textAlign: "right", fontWeight: 400, color: "var(--ink-muted)" }}>{r.cumulative_closure_count ?? "—"}곳</td>
                 <td className="t-metric" style={{ textAlign: "right", fontWeight: 400, color: "var(--ink-muted)" }}>{r.store_count}</td>
                 <td className="t-metric" style={{ textAlign: "right", fontWeight: 400, color: "var(--ink-faint)" }}>
@@ -84,6 +100,7 @@ function RankingTable({ rows, loading, error }) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </div>
   );
@@ -213,7 +230,7 @@ export default function MapPage() {
       <div style={{ marginBottom: 24 }}>
         <h1 className="t-h1" style={{ margin: 0 }}>공실위험 지도</h1>
         <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>
-          읍면동별 위험 업종 비율 — 최근 4분기 누적 폐업률 기준(보정 없음). 구역을 클릭하면 상세 지표가 표시됩니다.
+          읍면동별 위험 업종 비율 — 최근 1년 누적 폐업률 기준(4분기 합산, 보정 없음). 읍면동을 클릭하면 상세 지표가 표시됩니다.
         </p>
         <div style={{ marginTop: 12 }}>
           <ProvisionalNotice />
@@ -262,7 +279,7 @@ export default function MapPage() {
               position: "absolute",
               bottom: 16,
               left: 16,
-              width: 172,
+              maxWidth: 240,
               background: "rgba(255,255,255,0.94)",
               backdropFilter: "blur(6px)",
               border: "1px solid var(--hairline)",
@@ -283,7 +300,7 @@ export default function MapPage() {
                 </div>
               ))}
             </div>
-            <p className="t-caption" style={{ color: "var(--ink-faint)", margin: "10px 0 0", maxWidth: 190, lineHeight: 1.6 }}>
+            <p className="t-caption" style={{ color: "var(--ink-faint)", margin: "10px 0 0", lineHeight: 1.6 }}>
               {OPACITY_NOTE}
             </p>
           </div>
@@ -305,7 +322,7 @@ export default function MapPage() {
               {selected.risk_ratio != null ? (
                 <>
                   <div style={{ textAlign: "center", margin: "18px 0 20px" }}>
-                    <div className="t-metric" style={{ fontSize: 44, color: selected.color, lineHeight: 1.1 }}>{selected.risk_ratio}%</div>
+                    <div className="t-metric" style={{ fontSize: 44, color: selected.color, lineHeight: 1.1 }}>{fmt(selected.risk_ratio)}%</div>
                     <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 6 }}>위험 업종 비율 (최근 1년 누적 기준)</div>
                     <span
                       style={{
@@ -372,7 +389,7 @@ export default function MapPage() {
                     <span className="badge" style={{ color: "var(--ink-muted)" }}>판단보류</span>
                   </div>
                   <div className="t-body-sm" style={{ color: "var(--ink-muted)", marginTop: 14, lineHeight: 1.7 }}>
-                    {selected.hold_notice ?? "동 단위 등급을 판정할 표본이 부족합니다."}
+                    {selected.hold_notice ?? "읍면동 단위 등급을 판정할 표본이 부족합니다."}
                   </div>
                   <div className="t-body-sm" style={{ color: "var(--ink-muted)", padding: "12px 0", marginTop: 8, borderTop: "1px solid var(--hairline)" }}>
                     분석 가능 업종{" "}
@@ -384,7 +401,7 @@ export default function MapPage() {
                     </div>
                   </div>
                   <Link
-                    to="/blindspots"
+                    to={`/blindspots?dong=${encodeURIComponent(selected.name)}`}
                     className="btn-utility"
                     style={{
                       display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
@@ -392,7 +409,7 @@ export default function MapPage() {
                       color: "var(--primary)", textDecoration: "none",
                     }}
                   >
-                    사각지대에서 이 동 보기
+                    사각지대에서 이 읍면동 보기
                   </Link>
                 </div>
               )}
@@ -402,9 +419,9 @@ export default function MapPage() {
               <span className="material-symbols-outlined" style={{ fontSize: 36, color: "var(--ink-faint)", display: "block", marginBottom: 12 }}>
                 touch_app
               </span>
-              <p className="t-title" style={{ color: "var(--on-surface)", margin: "0 0 8px" }}>구역을 선택하세요</p>
+              <p className="t-title" style={{ color: "var(--on-surface)", margin: "0 0 8px" }}>읍면동을 선택하세요</p>
               <p className="t-caption" style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
-                지도에서 구역을 클릭하면 위험 지표가 표시됩니다.
+                지도에서 읍면동을 클릭하면 위험 지표가 표시됩니다.
               </p>
             </div>
           )}

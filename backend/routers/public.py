@@ -78,8 +78,9 @@ SUPPORT_NOTICE = (
 )
 
 
-def _pct(value) -> float:
-    return round((value or 0.0) * 100, 2)
+# services.risk.pct 사용(NULL 보존). 공개 화면은 sample_insufficient 게이트로 한 번 더
+# 막지만, 게이트를 통과한 셀에서도 누적값이 없을 수 있다.
+_pct = pct
 
 
 def _latest(db: Session) -> int:
@@ -154,7 +155,7 @@ def get_public_cell(
             )
             .scalar()
         )
-        return _pct(value) if value is not None else None
+        return _pct(value)
 
     # 관측 폐업률 기준 순위. 예측 순위(RiskPrediction.industry_rank)는 쓰지 않는다 —
     # 공개 화면에 AI가 매긴 순위를 올리면 "시가 우리 동네를 몇 위로 매겼다"가 된다.

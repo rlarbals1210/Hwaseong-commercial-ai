@@ -25,7 +25,7 @@ from ..models import (
 )
 from ..schemas import CompareCellItem, CompareDiff, CompareResponse
 from ..services.compare import build_verdict, closure_interval_pct, rates_distinguishable
-from ..services.risk import GRADE_NOTICE, PROVISIONAL_NOTICE, WINDOW_QUARTERS, quarter_label
+from ..services.risk import pct, GRADE_NOTICE, PROVISIONAL_NOTICE, WINDOW_QUARTERS, quarter_label
 
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "ai"))
@@ -42,19 +42,29 @@ router = APIRouter(prefix="/api/compare", tags=["compare"], dependencies=[Depend
 # 하지 못한다 — 폐업 0건이 "0.00%"로 찍히면 옆의 4.14%보다 안전해 보이지만 판단 자체가
 # 불가능한 표본이다. 반면 건수는 표본이 작아도 사실이고 행정이 움직일 근거가 된다.
 # 사각지대 화면이 폐업률이 아니라 폐업 건수로 정렬하는 것과 같은 원칙이다.
+# 라벨과 자릿수 규칙 —
+#   폐업률 이름은 화면 전체에서 "최근 1년 누적 폐업률" 하나로 통일한다. 예전에는 화면마다
+#   7가지로 불렸고, 현장점검 한 화면 안에서만 세 번 다르게 나왔다(2026-08-25 감사).
+#   비율 표시는 소수 1자리. 2자리로 두면 같은 상권이 대시보드 7.1%, 여기 7.14%로 보인다.
+#   폐업률 둘째 자리는 폐업 1건이 못 만드는 정밀도라 정보가 아니라 잡음이다.
 DIFF_METRICS = [
-    ("cumulative_closure_rate_pct", f"{WINDOW_QUARTERS}분기 누적 폐업률", "%", 2, "rate"),
+    ("cumulative_closure_rate_pct", "최근 1년 누적 폐업률", "%", 1, "rate"),
     ("cumulative_closure_count", "누적 폐업 건수", "건", 0, "count"),
-    ("store_count", "점포수", "개", 0, "count"),
-    ("opening_rate_pct", "보정 개업률", "%", 2, "rate"),
+    ("store_count", "점포 수", "개", 0, "count"),
+    # 라벨이 "보정 개업률"이었는데 DB에 적재된 값은 fix_opening_rate.py의 보정 컬럼이 아니라
+    # 원본(개업_율_평균)이다. 원본에는 수록 지연 결함이 남아 있다(2024Q3 0.13% -> 2024Q4 25.77%).
+    # 상권유형 판정은 보정값으로 하므로 이 화면의 배지와 숫자는 서로 다른 컬럼 기반이다.
+    # 보정값 적재는 마이그레이션이 필요해 미뤘고, 지금은 라벨을 사실대로 고쳐만 둔다.
+    ("opening_rate_pct", "개업률(원본)", "%", 1, "rate"),
     ("saturation_rate", "업종 포화도", "", 2, "rate"),
     ("competition_index", "경쟁강도", "", 2, "rate"),
     ("trend_slope", "트렌드 기울기", "", 3, "rate"),
 ]
 
 
-def _pct(value) -> float:
-    return round((value or 0.0) * 100, 2)
+# services.risk.pct 사용(NULL 보존). 라우터마다 사본을 두면 한쪽만 고쳐졌을 때
+# 같은 셀이 화면에 따라 "—"와 "0.00%"로 다르게 뜬다.
+_pct = pct
 
 
 def _parse_cell(raw: str, side: str) -> tuple[int, int]:

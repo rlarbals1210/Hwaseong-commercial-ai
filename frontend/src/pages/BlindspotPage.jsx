@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { apiFetchJson } from "../lib/api";
 import ProvisionalNotice from "../components/ProvisionalNotice";
 
@@ -26,8 +26,17 @@ function Stat({ label, value, unit }) {
 }
 
 export default function BlindspotPage() {
+  // 지도의 "사각지대에서 이 동 보기"가 ?dong= 를 붙여 보낸다. URL을 안 읽으면 링크 라벨이
+  // 거짓말이 되고, 담당자는 필터가 걸린 줄 알고 전체 목록을 읽는다.
+  const [params, setParams] = useSearchParams();
   const [data, setData] = useState(null);
-  const [dong, setDong] = useState("");
+  const dong = params.get("dong") ?? "";
+  const setDong = (value) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set("dong", value);
+    else next.delete("dong");
+    setParams(next, { replace: true });
+  };
   const [dongs, setDongs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -86,7 +95,7 @@ export default function BlindspotPage() {
       )}
 
       <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14 }}>
-        <span className="t-caption" style={{ color: "var(--ink-muted)" }}>행정동</span>
+        <span className="t-caption" style={{ color: "var(--ink-muted)" }}>읍면동</span>
         <select value={dong} onChange={(e) => setDong(e.target.value)} style={{ minWidth: 160 }}>
           <option value="">전체</option>
           {dongs.map((d) => (
@@ -109,7 +118,7 @@ export default function BlindspotPage() {
           <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 560 }}>
             <thead>
               <tr style={{ borderBottom: "1px solid var(--hairline)" }}>
-                {["행정동", "업종", "폐업", "점포", "폐업률(참고)"].map((h, i) => (
+                {["읍면동", "업종", "폐업", "점포", "폐업률(참고)"].map((h, i) => (
                   <th
                     key={h}
                     className="t-eyebrow"

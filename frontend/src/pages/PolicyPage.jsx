@@ -1,7 +1,8 @@
-import { useState } from "react";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { apiFetchJson } from "../lib/api";
 import ProvisionalNotice from "../components/ProvisionalNotice";
+import { downloadCsv, csvNum } from "../lib/csv";
 
 const EMPTY_DATA = { Q1: [], Q2: [], Q3: [], Q4: [] };
 
@@ -102,9 +103,12 @@ function QuadrantPanel({ meta, items, highlight }) {
         {items.length === 0 ? (
           <div className="t-caption" style={{ color: "var(--ink-faint)", padding: "6px 0" }}>해당 없음</div>
         ) : (
+          /* 항목은 반드시 셀 상세로 이어져야 한다. "가장 먼저 확인하세요"라고 써 둔 목록이
+             막다른 길이면 담당자의 다음 행동이 그 자리에서 끊긴다. */
           items.map((item, i) => (
-            <div
-              key={i}
+            <Link
+              key={`${item.area_id}-${item.industry_id}-${i}`}
+              to={`/cells/${item.area_id}/${item.industry_id}`}
               style={{
                 background: "var(--surface-container-lowest)",
                 border: "1px solid var(--hairline)",
@@ -114,6 +118,8 @@ function QuadrantPanel({ meta, items, highlight }) {
                 justifyContent: "space-between",
                 alignItems: "center",
                 gap: 10,
+                textDecoration: "none",
+                color: "inherit",
               }}
             >
               <div style={{ minWidth: 0 }}>
@@ -133,7 +139,7 @@ function QuadrantPanel({ meta, items, highlight }) {
                 <div className="t-metric" style={{ fontSize: 15 }}>{item.store_count}</div>
                 <div className="t-eyebrow" style={{ color: "var(--ink-faint)" }}>점포</div>
               </div>
-            </div>
+            </Link>
           ))
         )}
       </div>
@@ -151,24 +157,26 @@ function EmptyState({ icon, title, desc, tone }) {
   );
 }
 
-function downloadCsv(data) {
-  const rows = Object.entries(data).flatMap(([q, items]) => items.map((item) => ({ ...item, quadrant: q })));
-  if (!rows.length) return;
-  const headers = ["우선순위", "읍면동", "업종", "등급", "최근1년_폐업률(%)", "최근1년_폐업건수", "영향 점포 수", "상권유형"];
-  const lines = rows.map((r) =>
-    [r.quadrant, r.dong, r.category, r.risk_grade, r.actual_closure_rate_pct, r.cumulative_closure_count, r.store_count, r.cell_type ?? ""]
-      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-      .join(",")
+const CSV_HEADERS = [
+  "우선순위", "읍면동", "업종", "등급", "상권유형",
+  "최근1년누적_폐업률(%)", "최근1년_폐업건수", "영향 점포 수",
+];
+
+// 우선순위 값은 화면과 같은 말로 쓴다. 예전에는 화면이 "1순위"인데 파일에는 "Q1"이 찍혀
+// 두 문서의 어휘가 달랐다. 열 순서도 조기경보 CSV와 맞췄다(등급 다음에 상권유형).
+const csvRows = (data) =>
+  Object.entries(data).flatMap(([q, items]) =>
+    items.map((item) => [
+      QUADRANT_META[q]?.order ?? q,
+      item.dong,
+      item.category,
+      item.risk_grade,
+      item.cell_type ?? "",
+      csvNum(item.actual_closure_rate_pct),
+      item.cumulative_closure_count ?? "",
+      item.store_count,
+    ])
   );
-  const csv = [headers.join(","), ...lines].join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `화성시_현장점검_우선순위_${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
 
 export default function PolicyPage() {
   const [data, setData] = useState(EMPTY_DATA);
@@ -177,6 +185,14 @@ export default function PolicyPage() {
   const [categories, setCategories] = useState([]);
   const [error, setError] = useState("");
   const [categoryError, setCategoryError] = useState(false);
+  // CSV 머리말에 붙일 기준선·고지 문구. 화면의 ProvisionalNotice와 같은 출처를 쓴다.
+  const [gradeMeta, setGradeMeta] = useState(null);
+
+  useEffect(() => {
+    apiFetchJson("/api/alerts/grade-notice")
+      .then(setGradeMeta)
+      .catch(() => setGradeMeta(null));
+  }, []);
 
   useEffect(() => {
     apiFetchJson(`/api/analysis/categories?purpose=policy`)
@@ -216,8 +232,27 @@ export default function PolicyPage() {
     <div>
       <PageHeader
         title="현장점검 우선순위"
-        desc="최근 4분기 누적 관측 폐업률 × 영향 점포 수 기준 확인 순서입니다. 지원 대상 결정이 아닙니다."
+        desc="최근 1년 누적 폐업률(4분기 합산 관측치) × 영향 점포 수 기준 확인 순서입니다. 지원 대상 결정이 아닙니다."
       />
+
+      {/* 대시보드에 "현장점검 우선순위 보기" 버튼이 있어 시연 동선상 두 화면을 연달아 보게 된다.
+          두 화면의 1순위가 다른 것은 정상인데(예측 vs 관측) 그 설명이 도착지에 없었다. */}
+      <div
+        className="t-caption"
+        style={{
+          color: "var(--ink-secondary)",
+          background: "var(--surface-container-low)",
+          padding: "10px 14px",
+          borderRadius: "var(--radius-md)",
+          marginBottom: 12,
+          lineHeight: 1.7,
+          maxWidth: 680,
+        }}
+      >
+        이 화면은 <b>이미 관측된</b> 폐업률로 줄을 세웁니다. 조기경보 대시보드는 모델이 예측한
+        <b> 2분기 뒤</b> 위험으로 줄을 세웁니다. <b>두 화면의 1순위는 다를 수 있으며, 다른 것이 정상입니다</b> —
+        지금 나빠진 곳과 앞으로 나빠질 곳은 같지 않습니다.
+      </div>
 
       <div style={{ marginBottom: 20 }}>
         <ProvisionalNotice />
@@ -227,7 +262,7 @@ export default function PolicyPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>
           <StatCard label="분석 대상 읍면동" value={dongCount} unit="개" />
           <StatCard label="영향 점포 수" value={affectedStores.toLocaleString()} unit="개소" tone="var(--error)" />
-          <StatCard label="1순위 구역" value={data.Q1.length} unit="개" tone="var(--primary)" />
+          <StatCard label="1순위 상권" value={data.Q1.length} unit="개" tone="var(--primary)" />
           <StatCard label="전체 분석 건수" value={total} unit="건" />
         </div>
       )}
@@ -258,7 +293,15 @@ export default function PolicyPage() {
           </div>
         </div>
 
-        <button className="btn-utility" onClick={() => downloadCsv(data)} disabled={!total}
+        <button className="btn-utility" onClick={() =>
+            downloadCsv({
+              filename: "화성시_현장확인_우선순위",
+              subtitle: "현장 확인 우선순위 — 관측 폐업률 x 영향 점포 수",
+              headers: CSV_HEADERS,
+              rows: csvRows(data),
+              meta: gradeMeta,
+            })
+          } disabled={!total}
           style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>download</span>
           CSV 다운로드
@@ -305,7 +348,7 @@ export default function PolicyPage() {
               </div>
               <div className="t-caption" style={{ display: "flex", justifyContent: "space-between", color: "var(--ink-faint)", marginTop: 10 }}>
                 <span>낮음</span>
-                <span style={{ color: "var(--ink-muted)" }}>최근 1년 폐업률 →</span>
+                <span style={{ color: "var(--ink-muted)" }}>최근 1년 누적 폐업률 →</span>
                 <span>높음</span>
               </div>
             </div>
@@ -322,9 +365,9 @@ export default function PolicyPage() {
             lightbulb
           </span>
           <p className="t-body-sm" style={{ margin: 0, color: "var(--ink-secondary)", lineHeight: 1.65 }}>
-            1순위 구역 중 <b style={{ color: "var(--on-surface)" }}>{topQ1.dong} · {topQ1.category}</b>의 실제 폐업률이{" "}
+            1순위 상권 중 <b style={{ color: "var(--on-surface)" }}>{topQ1.dong} · {topQ1.category}</b>의 최근 1년 누적 폐업률이{" "}
             <b style={{ color: "var(--error)", fontVariantNumeric: "tabular-nums" }}>{topQ1.actual_closure_rate_pct}%</b>로 가장 높습니다.
-            해당 구역부터 현장 확인을 우선 검토하세요.{" "}
+            해당 상권부터 현장 확인을 우선 검토하세요.{" "}
             <span style={{ color: "var(--ink-muted)" }}>지원 여부는 현장 확인 결과에 따라 담당자가 판단합니다.</span>
           </p>
         </div>

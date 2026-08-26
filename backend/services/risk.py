@@ -43,6 +43,9 @@ DONG_RATIO_DANGER_PCT = _THRESHOLDS["dong_ratio_danger_pct"]
 CAUTION_THRESHOLD_PCT = _THRESHOLDS.get("caution_threshold_pct", AVG_CLOSURE_RATE_PCT)
 SAMPLE_MIN = _THRESHOLDS["sample_min"]
 WINDOW_QUARTERS = _THRESHOLDS.get("window_quarters", 4)
+# 기준선을 산출한 표본충분 셀 수. 화면이 "상위 10개"를 전체 분석 대상으로 오해시키지 않도록
+# 실제 모수를 함께 내려준다.
+ELIGIBLE_CELLS = _THRESHOLDS.get("eligible_cells")
 GRADE_NOTICE = (
     f"등급은 최근 {WINDOW_QUARTERS}분기 누적 폐업률 기준이며, "
     "화성시 내 상대 순위입니다(위험 = 상위 10%, 주의 = 상위 30%). 절대 기준이 아닙니다."

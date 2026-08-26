@@ -6,6 +6,10 @@ from typing import Literal, Optional
 from pydantic import Field
 
 
+# 비율 필드가 전부 Optional인 이유 —
+# 누적 지표는 4분기가 쌓여야 나오므로 그 전 구간은 값이 없다(전체 35,505행 중 21%).
+# 없는 값을 0.0으로 채우면 "판단 불가"가 "가장 안전"으로 읽힌다. None으로 내려보내고
+# 화면이 "—"로 그리게 한다. 변환은 backend/services/risk.py의 pct() 하나만 쓴다.
 class ClosureRiskItem(BaseModel):
     """조기경보(예측) — 예측 절대값은 절대 노출하지 않는다. 순위만 표시하고,
     판단 근거는 실제 관측 지표(폐업률·개업률·추세)로만 뒷받침한다."""
@@ -20,18 +24,18 @@ class ClosureRiskItem(BaseModel):
     category: str
     # 화면에 띄우는 근거는 4분기 누적이다. 단일 분기는 점포 60곳짜리 셀에서 폐업 1~2건 차이로
     # 1.5%와 9.0%를 오가서 담당자가 신뢰할 수 없다(분기 간 순위 상관 +0.296).
-    cumulative_closure_rate_pct: float   # 최근 4분기 누적 폐업률
+    cumulative_closure_rate_pct: float | None = None   # 최근 1년 누적 폐업률. 미산출이면 None
     cumulative_closure_count: int        # 같은 창의 폐업 건수 — "23곳 닫힘" 형태로 병기
     store_count: int
-    confidence_lower_pct: float          # Wilson 신뢰하한. 소표본 여부를 담당자가 가늠하는 근거
+    confidence_lower_pct: float | None = None   # Wilson 신뢰하한. 소표본 여부를 가늠하는 근거
     risk_grade: str
     # 유형은 등급과 별개 축이다. 등급은 "얼마나 위험한가", 유형은 "그래서 무엇을 할 것인가".
     cell_type: str | None = None
     cell_type_summary: str | None = None
     cell_type_advice: str | None = None
     cell_type_avoid: str | None = None
-    quarter_closure_rate_pct: float      # 단일 분기(참고용, 정렬·판정에 쓰지 않음)
-    open_rate_pct: float
+    quarter_closure_rate_pct: float | None = None   # 단일 분기(참고용, 정렬·판정에 쓰지 않음)
+    open_rate_pct: float | None = None
     trend_slope: float
     saturation: float
     anomaly: bool
@@ -49,11 +53,15 @@ class ClosureRateRankingItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     rank: int
+    # 셀 상세로 이동하기 위한 식별자. 없으면 목록이 막다른 길이 된다 —
+    # "폐업률 최악 10곳"을 보여주고 클릭할 수 없으면 다음 행동이 끊긴다.
+    area_id: int
+    industry_id: int
     dong: str
     category: str
-    closure_rate_pct: float              # 4분기 누적 폐업률 (정렬 기준과 동일)
+    closure_rate_pct: float | None = None   # 최근 1년 누적 폐업률 (정렬 기준과 동일)
     cumulative_closure_count: int
-    confidence_lower_pct: float
+    confidence_lower_pct: float | None = None
     store_count: int
     risk_grade: str
     industry_rank: int | None = None      # 같은 업종 안에서의 순위
@@ -79,7 +87,7 @@ class BlindspotItem(BaseModel):
     category: str
     store_count: int
     cumulative_closure_count: int
-    cumulative_closure_rate_pct: float
+    cumulative_closure_rate_pct: float | None = None
 
 
 class BlindspotResponse(BaseModel):
@@ -138,6 +146,10 @@ class PolicyPriorityItem(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+    # 셀 상세로 이동하기 위한 식별자. "가장 먼저 확인하세요"라고 써 둔 목록을 눌렀는데
+    # 아무 일도 일어나지 않으면 도구의 논리가 그 자리에서 끊긴다.
+    area_id: int
+    industry_id: int
     dong: str
     category: str
     # 2026-08-20부터 4분기 누적 기준이다(이름은 유지 — 프론트·CSV가 참조 중).
@@ -333,7 +345,7 @@ class CompareCellItem(BaseModel):
     industry_name: str
     quarter_code: int
     store_count: int
-    cumulative_closure_rate_pct: float
+    cumulative_closure_rate_pct: float | None = None
     cumulative_closure_count: int | None = None
     confidence_lower_pct: float | None = None      # 저장된 Wilson 하한(정렬용)
     interval: CompareInterval | None = None        # 비교 판정에 쓰는 구간

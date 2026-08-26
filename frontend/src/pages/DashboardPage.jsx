@@ -2,31 +2,19 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { apiFetchJson } from "../lib/api";
 import ProvisionalNotice from "../components/ProvisionalNotice";
+import { downloadCsv, csvNum } from "../lib/csv";
 
-function downloadCsv(rows) {
-  if (!rows.length) return;
-  const headers = [
-    "예측순위", "읍면동", "업종", "등급", "상권유형",
-    "최근1년_폐업률(%)", "최근1년_폐업건수", "점포수", "개업률(%)", "트렌드이상", "후속조치_검토안",
-  ];
-  const lines = rows.map((r) =>
-    [
-      r.predicted_rank, r.dong, r.category, r.risk_grade, r.cell_type ?? "",
-      r.cumulative_closure_rate_pct, r.cumulative_closure_count, r.store_count,
-      r.open_rate_pct, r.anomaly ? "Y" : "N", r.action,
-    ]
-      .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-      .join(",")
-  );
-  const csv = [headers.join(","), ...lines].join("\n");
-  const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8;" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = `화성시_조기경보_예측순위_${new Date().toISOString().slice(0, 10)}.csv`;
-  a.click();
-  URL.revokeObjectURL(url);
-}
+const CSV_HEADERS = [
+  "예측순위", "읍면동", "업종", "등급", "상권유형",
+  "최근1년누적_폐업률(%)", "최근1년_폐업건수", "점포수", "개업률_원본(%)", "트렌드이상", "후속조치_검토안",
+];
+
+const csvRows = (rows) =>
+  rows.map((r) => [
+    r.predicted_rank, r.dong, r.category, r.risk_grade, r.cell_type ?? "",
+    csvNum(r.cumulative_closure_rate_pct), r.cumulative_closure_count ?? "", r.store_count,
+    csvNum(r.open_rate_pct), r.anomaly ? "Y" : "N", r.action,
+  ]);
 
 // 화성시 평균은 서버에서 받는다(GET /api/alerts/grade-notice).
 // 예전에는 3.22를 상수로 박아뒀는데, 파이프라인을 다시 돌리면 값이 어긋나 화면이 거짓말을 했다.
@@ -120,7 +108,7 @@ function RiskCard({ item }) {
       </Link>
 
       <div style={{ marginTop: "auto" }}>
-        <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 2 }}>최근 1년 폐업률</div>
+        <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 2 }}>최근 1년 누적 폐업률</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
           <span className="t-metric" style={{ fontSize: 30 }}>{fmtPct(item.cumulative_closure_rate_pct)}</span>
           <span style={{ fontSize: 14, color: "var(--ink-faint)", fontWeight: 500 }}>%</span>
@@ -155,7 +143,7 @@ function RiskCard({ item }) {
         }}
       >
         <span>
-          개업률 <b style={{ color: "var(--on-surface)", fontVariantNumeric: "tabular-nums" }}>{item.open_rate_pct?.toFixed(1)}%</b>
+          개업률(원본) <b style={{ color: "var(--on-surface)" }}>{fmtPct(item.open_rate_pct)}%</b>
         </span>
         <span>
           추세{" "}
@@ -259,7 +247,7 @@ export default function DashboardPage() {
     <div>
       <PageHeader
         title="폐업 위험 조기경보"
-        desc="AI가 2분기 뒤 폐업 위험이 높을 것으로 예측한 구역입니다. 절대 확률이 아닌 상대 순위입니다."
+        desc="AI가 2분기 뒤 폐업 위험이 높을 것으로 예측한 상권입니다. 절대 확률이 아닌 상대 순위입니다."
       />
 
       <div style={{ marginBottom: 20 }}>
@@ -269,7 +257,7 @@ export default function DashboardPage() {
       {!loading && data.length > 0 && (
         <>
           {/* 요약 배너 — 개별 셀이 아니라 상위권 집단과 시 전체를 대비시킨다.
-              예측은 2분기 뒤를 보므로 개별 구역의 현재 폐업률이 0%일 수 있고,
+              예측은 2분기 뒤를 보므로 개별 상권의 현재 폐업률이 0%일 수 있고,
               그 한 건이 대표로 뜨면 모델 전체가 틀린 것처럼 읽힌다. */}
           <div
             className="card"
@@ -286,14 +274,14 @@ export default function DashboardPage() {
           >
             <div style={{ maxWidth: 620 }}>
               <span className="badge" style={{ background: "var(--primary-fixed)", color: "var(--primary)" }}>
-                예측 상위 {data.length}개 구역
+                예측 상위 {data.length}개 상권
               </span>
               <div className="t-h2" style={{ marginTop: 12, lineHeight: 1.35 }}>
                 {avgActual === null ? (
-                  <>최근 1년 폐업률을 계산할 수 없습니다</>
+                  <>최근 1년 누적 폐업률을 계산할 수 없습니다</>
                 ) : (
                   <>
-                    최근 1년 폐업률이 평균{" "}
+                    최근 1년 누적 폐업률이 평균{" "}
                     <span style={{ color: "var(--primary)" }}>{avgActual}%</span>로
                     <br />
                     화성시 전체({cityAvg}%)의{" "}
@@ -302,7 +290,7 @@ export default function DashboardPage() {
                 )}
               </div>
               <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "12px 0 0", lineHeight: 1.6 }}>
-                예측은 관측 시점 기준 2분기 뒤를 봅니다. 개별 구역의 폐업률이 낮아도 상위 순위에 오를 수 있습니다.
+                예측은 관측 시점 기준 2분기 뒤를 봅니다. 개별 상권의 폐업률이 낮아도 상위 순위에 오를 수 있습니다.
                 {meta?.notice ? ` ${meta.notice}` : ""}
               </p>
             </div>
@@ -333,16 +321,24 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
-            <StatCard label="분석 대상 구역" value={data.length} unit="개" />
+          {/* 세 타일 모두 "상위 N개" 안에서 센 값이다. 예전 라벨이 "분석 대상 구역"이라
+              화성시 전체에서 10개만 분석한 것처럼 읽혔다 — 실제 표본충분 상권은 231개이고
+              사각지대까지 더하면 1,802개다. 자기 강점을 깎아먹는 라벨이었다. */}
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 8 }}>
+            <StatCard label={`예측 상위 ${data.length}개 상권`} value={data.length} unit="개" />
             <StatCard
-              label="트렌드 이상"
+              label="그중 트렌드 이상"
               value={anomalyCount}
               unit="개"
               tone={anomalyCount > 0 ? "var(--error)" : "var(--on-surface)"}
             />
-            <StatCard label="상위권 평균 폐업률" value={fmtPct(avgActual)} unit="%" tone="var(--primary)" />
+            <StatCard label="그중 평균 폐업률" value={fmtPct(avgActual)} unit="%" tone="var(--primary)" />
           </div>
+          <p className="t-caption" style={{ color: "var(--ink-faint)", margin: "0 0 24px", lineHeight: 1.6 }}>
+            위 세 값은 이 화면이 보여주는 상위 {data.length}개 안에서 센 것입니다.
+            화성시 전체 분석 대상은 {meta?.eligible_cells ? `표본충분 ${meta.eligible_cells.toLocaleString()}개 상권` : "표본충분 상권"}이며,
+            표본이 부족해 판단을 보류한 상권은 <Link to="/blindspots" style={{ color: "var(--primary)" }}>사각지대</Link>에서 따로 관리합니다.
+          </p>
         </>
       )}
 
@@ -385,7 +381,15 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        <button className="btn-utility" onClick={() => downloadCsv(data)} disabled={!data.length}
+        <button className="btn-utility" onClick={() =>
+            downloadCsv({
+              filename: "화성시_조기경보_예측순위",
+              subtitle: "조기경보 대시보드 — AI 예측 상위 상권",
+              headers: CSV_HEADERS,
+              rows: csvRows(data),
+              meta,
+            })
+          } disabled={!data.length}
           style={{ display: "flex", alignItems: "center", gap: 6 }}>
           <span className="material-symbols-outlined" style={{ fontSize: 18 }}>download</span>
           CSV 다운로드

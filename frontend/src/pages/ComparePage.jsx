@@ -110,7 +110,7 @@ export default function ComparePage() {
         setOptions(d);
         // 기본값은 "같은 업종, 다른 동" — 비교의 가장 흔한 형태다.
         // 양쪽 다 표본충분인 조합을 고른다. 표본부족 셀이 기본으로 걸리면 페이지가 열리자마자
-        // "판단 보류"만 보여주게 되고, 이 화면이 무엇을 하는 곳인지 전달되지 않는다.
+        // "판단보류"만 보여주게 되고, 이 화면이 무엇을 하는 곳인지 전달되지 않는다.
         const areas = d.areas ?? [];
         const ok = (a, industryId) =>
           a.industries.some((x) => x.id === industryId && !x.sample_insufficient);

@@ -77,6 +77,8 @@ def get_inspection_priority(
 
         result[f"Q{quadrant}"].append(
             PolicyPriorityItem(
+                area_id=commercial.area_id,
+                industry_id=commercial.industry_id,
                 dong=dong,
                 category=industry,
                 actual_closure_rate_pct=round(risk, 1),

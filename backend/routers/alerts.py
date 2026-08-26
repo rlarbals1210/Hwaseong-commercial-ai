@@ -33,6 +33,8 @@ from ..services.risk import (
     AREA_THIN_NOTICE,
     AVG_CLOSURE_RATE_PCT,
     CAUTION_THRESHOLD_PCT,
+    pct,
+    ELIGIBLE_CELLS,
     DANGER_THRESHOLD_PCT,
     GRADE_NOTICE,
     LATEST_QUARTER,
@@ -55,9 +57,9 @@ except Exception:  # pragma: no cover - 방어용
     CELL_TYPES = {}
 
 
-def _pct(value: float | None) -> float:
-    """0~1 비율을 퍼센트로. None은 0으로."""
-    return round((value or 0.0) * 100, 2)
+# services.risk.pct를 쓴다. 라우터마다 사본을 두면 한쪽만 고쳐졌을 때 같은 셀이
+# 화면에 따라 "—"와 "0.00%"로 다르게 뜬다 — 0.00%는 "가장 안전한 값"으로 읽힌다.
+_pct = pct
 
 router = APIRouter(prefix="/api/alerts", tags=["alerts"], dependencies=[Depends(get_current_official)])
 
@@ -176,6 +178,8 @@ def get_closure_rate_ranking(
         rank_in_industry, industry_total = industry_rank.get(commercial.id, (None, None))
         result.append(ClosureRateRankingItem(
             rank=i,
+            area_id=commercial.area_id,
+            industry_id=commercial.industry_id,
             dong=dong,
             category=industry,
             closure_rate_pct=_pct(commercial.closure_rate_cum4),
@@ -203,6 +207,7 @@ def get_grade_notice():
         "caution_threshold_pct": CAUTION_THRESHOLD_PCT,
         "danger_threshold_pct": DANGER_THRESHOLD_PCT,
         "sample_min": SAMPLE_MIN,
+        "eligible_cells": ELIGIBLE_CELLS,
         "latest_quarter": LATEST_QUARTER,
         "latest_quarter_label": quarter_label(LATEST_QUARTER),
         "provisional_notice": PROVISIONAL_NOTICE,

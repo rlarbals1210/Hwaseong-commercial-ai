@@ -11,6 +11,8 @@ import { apiFetchJson } from "../lib/api";
 //   - 위험등급·예측순위·성장확률·상권유형 이름을 쓰지 않는다
 //   - "여기 여세요/열지 마세요"라고 쓰지 않는다. 점포 단위 예측 성능이 방어되지 않는다
 //   - 표본부족 상권은 비율을 판단 재료로 쓰지 않고 점포 수만 말한다
+//   - 분모가 다른 두 수를 슬래시로 묶지 않는다. 폐업률의 분모는 4개 분기 직전점포수의
+//     합이고 점포 수는 현재 분기 값이라, 슬래시로 묶으면 눈으로 나눈 값이 4배쯤 어긋난다
 //   - 문구는 서버에서 받는다. 평균·기준선을 프론트에 박으면 파이프라인 갱신 후 화면이 거짓말한다
 
 const fmt = (v, d = 1) =>
@@ -23,10 +25,10 @@ function Compare({ label, value, mine }) {
     <div style={{ flex: "1 1 150px" }}>
       <div className="t-caption" style={{ color: "var(--ink-faint)" }}>{label}</div>
       <div style={{ marginTop: 4, fontVariantNumeric: "tabular-nums" }}>
-        <span className="t-body">{fmt(value, 2)}%</span>
+        <span className="t-body">{fmt(value)}%</span>
         {diff !== null && (
           <span className="t-caption" style={{ color: "var(--ink-muted)", marginLeft: 6 }}>
-            ({diff >= 0 ? "이 상권이 " : "이 상권이 "}{fmt(Math.abs(diff), 2)}%p {diff >= 0 ? "높음" : "낮음"})
+            (이 상권이 {fmt(Math.abs(diff))}%p {diff >= 0 ? "높음" : "낮음"})
           </span>
         )}
       </div>
@@ -135,7 +137,7 @@ export default function BrowsePage() {
                     <span className="t-metric" style={{ fontSize: 40 }}>{fmt(cell.closure_rate_pct, 1)}</span>
                     <span className="t-body" style={{ color: "var(--ink-muted)" }}>%</span>
                     <span className="t-body-sm" style={{ color: "var(--ink-muted)", marginLeft: 6 }}>
-                      최근 {cell.window_quarters}분기 폐업률 · {cell.closure_count}곳 폐업 / 점포 {cell.store_count}곳
+                      최근 1년 누적 폐업률 · 같은 기간 {cell.closure_count}곳 폐업 · 현재 점포 {cell.store_count}곳
                     </span>
                   </div>
 

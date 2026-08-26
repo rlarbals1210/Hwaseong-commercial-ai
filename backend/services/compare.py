@@ -123,7 +123,21 @@ def build_verdict(left: dict, right: dict, distinguishable: bool) -> str:
             "말하기 어렵습니다. 아래 신뢰구간의 폭을 함께 보시기 바랍니다."
         )
 
-    higher, lower = (left, right) if left["cumulative_closure_rate_pct"] >= right["cumulative_closure_rate_pct"] else (right, left)
+    # 누적 폐업률이 없는 셀은 크기 비교 자체가 불가능하다. 예전에는 라우터가 NULL을
+    # 0.0으로 바꿔 내려서 이 비교가 항상 "더 안전한 쪽"으로 기울었다. 지금은 NULL이
+    # 그대로 오므로 여기서 명시적으로 막는다(None >= float 는 TypeError다).
+    l_rate = left.get("cumulative_closure_rate_pct")
+    r_rate = right.get("cumulative_closure_rate_pct")
+    if l_rate is None or r_rate is None:
+        missing = l_name if l_rate is None else r_name
+        if l_rate is None and r_rate is None:
+            missing = f"{l_name}, {r_name}"
+        return (
+            f"{missing}은(는) 최근 4분기 누적 폐업률이 아직 산출되지 않아 비교할 수 없습니다. "
+            "분기가 4개 쌓이면 판정됩니다."
+        )
+
+    higher, lower = (left, right) if l_rate >= r_rate else (right, left)
     h_name = l_name if higher is left else r_name
     parts = [f"{h_name}의 현장 확인 우선순위가 높습니다"]
     if higher.get("risk_grade"):

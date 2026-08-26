@@ -78,7 +78,7 @@ function Comparison({ value, comparison }) {
   const rows = [
     { label: "이 상권", value, tone: "var(--primary)" },
     { label: "같은 업종 평균", value: comparison?.industry_avg_pct, tone: "var(--outline-variant)" },
-    { label: "같은 행정동 평균", value: comparison?.area_avg_pct, tone: "var(--outline-variant)" },
+    { label: "같은 읍면동 평균", value: comparison?.area_avg_pct, tone: "var(--outline-variant)" },
     { label: "화성시 전체 평균", value: comparison?.city_avg_pct, tone: "var(--outline-variant)" },
   ];
   const max = Math.max(...rows.map((r) => (Number.isFinite(r.value) ? r.value : 0)), 1);
@@ -251,6 +251,10 @@ export default function CellDetailPage() {
     );
   }
 
+  // 백엔드는 내려주고 있었는데 이 화면이 한 번도 쓰지 않았다(2026-08-25 감사).
+  // 사각지대에서 넘어온 셀이 여기서는 아무 경고 없이 표본충분 셀과 똑같이 보였다.
+  const sampleThin = Boolean(cell.sample_insufficient);
+
   return (
     <div style={{ maxWidth: 760 }}>
       <Link to="/dashboard" className="t-caption" style={{ color: "var(--primary)", textDecoration: "none" }}>
@@ -283,16 +287,64 @@ export default function CellDetailPage() {
         {cell.industry_rank ? ` · ${cell.category} 중 ${cell.industry_rank}위 / ${cell.industry_total}곳` : ""}
       </p>
 
+      {sampleThin && (
+        <div
+          className="t-body-sm"
+          style={{
+            display: "flex",
+            gap: 10,
+            alignItems: "flex-start",
+            marginTop: 16,
+            padding: "12px 14px",
+            borderRadius: "var(--radius-md)",
+            background: "var(--surface-container-low)",
+            border: "1px solid var(--hairline)",
+            color: "var(--ink-secondary)",
+            lineHeight: 1.7,
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--ink-faint)", flexShrink: 0, lineHeight: 1.5 }}>
+            visibility_off
+          </span>
+          <span>
+            <b style={{ color: "var(--on-surface)" }}>표본부족 상권입니다.</b> 점포 수가 기준에 못 미쳐
+            통계 판단을 보류했고 등급을 매기지 않습니다. 폐업률은 점포가 적을수록 크게 튀므로
+            판단의 주 근거로 쓰지 마시고 <b>건수</b>를 먼저 보십시오.{" "}
+            <Link to={`/blindspots?dong=${encodeURIComponent(cell.dong)}`} style={{ color: "var(--primary)" }}>
+              사각지대에서 이 읍면동 보기
+            </Link>
+          </span>
+        </div>
+      )}
+
       {/* ① 확인된 위험 신호 */}
       <Section
         title="확인된 위험 신호"
         note={`전부 관측된 사실입니다. 최근 ${cell.window_quarters}분기 누적 기준. ${cell.grade_notice ?? ""}`}
       >
         <div className="card" style={{ padding: 20 }}>
+          {/* 표본부족 셀에서는 대표 숫자를 폐업률이 아니라 건수로 바꾼다.
+              사각지대 화면이 "폐업률을 판단의 주 근거로 쓰지 마시고 건수를 먼저 보십시오"라고
+              안내해놓고, 링크 한 번 타면 점포 12곳짜리의 16.7%가 38px로 뜨고 있었다.
+              률은 점포가 적을수록 크게 튀므로 여기서는 참고값으로 내린다. */}
+          {sampleThin ? (
+            <>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                <span className="t-metric" style={{ fontSize: 38 }}>
+                  {Number.isFinite(cell.cumulative_closure_count) ? cell.cumulative_closure_count.toLocaleString() : "—"}
+                </span>
+                <span style={{ fontSize: 16, color: "var(--ink-faint)" }}>곳 닫힘</span>
+              </div>
+              <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 2 }}>
+                폐업률 {fmt(cell.cumulative_closure_rate_pct)}% (참고) · 점포가 적어 률은 크게 튑니다
+              </div>
+            </>
+          ) : (
           <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
             <span className="t-metric" style={{ fontSize: 38 }}>{fmt(cell.cumulative_closure_rate_pct)}</span>
             <span style={{ fontSize: 16, color: "var(--ink-faint)" }}>%</span>
           </div>
+          )}
           <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
             {/* 분모는 현재 점포수가 아니라 4개 분기 직전점포수의 합이다. 예전에는 여기에
                 현재 점포수를 병기해서, 눈으로 나눈 값이 큰 숫자와 4배쯤 어긋났다
@@ -313,14 +365,18 @@ export default function CellDetailPage() {
             {" · 현재 점포 "}{cell.store_count?.toLocaleString() ?? "—"}곳
             {" · "}신뢰하한 {fmt(cell.confidence_lower_pct)}%
           </div>
-          <div style={{ marginTop: 16 }}>
-            <Comparison value={cell.cumulative_closure_rate_pct} comparison={cell.comparison} />
-          </div>
+          {/* 비교 대상(업종·동·시 평균)은 전부 표본충분 셀만으로 낸 값이다.
+              점포 12곳짜리를 그 평균과 나란히 그리면 비교 가능한 것처럼 보인다. */}
+          {!sampleThin && (
+            <div style={{ marginTop: 16 }}>
+              <Comparison value={cell.cumulative_closure_rate_pct} comparison={cell.comparison} />
+            </div>
+          )}
           <div
             className="t-caption"
             style={{ display: "flex", gap: 16, flexWrap: "wrap", paddingTop: 12, marginTop: 4, borderTop: "1px solid var(--hairline)", color: "var(--ink-muted)" }}
           >
-            <span>개업률 <b style={{ color: "var(--on-surface)" }}>{fmt(cell.opening_rate_pct)}%</b></span>
+            <span title="원본 개업률입니다. 상권유형 판정에는 보정값을 씁니다.">개업률(원본) <b style={{ color: "var(--on-surface)" }}>{fmt(cell.opening_rate_pct)}%</b></span>
             <span>추세 <b style={{ color: cell.trend_slope > 0 ? "var(--accent-orange)" : "var(--on-surface)" }}>
               {cell.trend_slope > 0 ? "+" : ""}{cell.trend_slope}
             </b></span>
@@ -427,6 +483,7 @@ export default function CellDetailPage() {
             <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--hairline)" }}>
               <button
                 type="button"
+                className="btn-utility"
                 onClick={() => {
                   setNoticeLoading(true);
                   setCopied(false);
@@ -462,6 +519,7 @@ export default function CellDetailPage() {
                   <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 8 }}>
                     <button
                       type="button"
+                      className="btn-utility"
                       onClick={() => {
                         navigator.clipboard?.writeText(notice.text).then(
                           () => setCopied(true),
@@ -508,7 +566,7 @@ export default function CellDetailPage() {
                   </span>
                 )}
               </div>
-              <button type="button" onClick={() => setFormOpen((v) => !v)}>
+              <button type="button" className="btn-utility" onClick={() => setFormOpen((v) => !v)}>
                 {formOpen ? "취소" : "기록 추가"}
               </button>
             </div>
@@ -570,7 +628,7 @@ export default function CellDetailPage() {
                   <textarea name="note" rows={2} placeholder="현장에서 확인한 내용, 다음 조치 등" />
                 </label>
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <button type="submit" disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
+                  <button type="submit" className="btn-primary" disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
                   {saveError && (
                     <span className="t-caption" style={{ color: "var(--accent-orange)" }}>{saveError}</span>
                   )}
