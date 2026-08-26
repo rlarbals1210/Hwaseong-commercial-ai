@@ -22,7 +22,6 @@ import hashlib
 import json
 import sys
 from pathlib import Path
-import sys
 
 import numpy as np
 import pandas as pd
@@ -35,6 +34,9 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
+# 업종 계층(대분류 10 → 중분류 74). ai/build_industry_hierarchy.py가 만든다.
+# 저장소에 포함돼 있어 SSD 없이도 읽을 수 있다.
+INDUSTRY_HIERARCHY_CSV = PROJECT_ROOT / "data" / "processed" / "industry_hierarchy.csv"
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from backend.database import engine  # noqa: E402
@@ -48,6 +50,7 @@ from backend.models import (  # noqa: E402
     PolicyProgram,
     RiskPrediction,
     RiskThresholdSet,
+    StoreCluster,
 )
 from eda import paths as eda_paths  # noqa: E402
 
@@ -61,6 +64,7 @@ SCORES_REQUIRED = {
     "업종내_순위", "업종내_전체동수", "상위_퍼센트",
 }
 SAMPLE_MIN = 50  # 기본값. 실제로는 risk_thresholds.json의 sample_min을 우선 사용한다.
+STORE_CLUSTER_GRID_DEGREES = 0.002
 
 # 동 단위 등급의 최소 분모. backend/services/risk.py의 AREA_MIN_SUFFICIENT_CELLS와
 # 같은 값이어야 한다(적재값과 화면 판정이 어긋나지 않도록).
@@ -194,6 +198,83 @@ def _build_latest_signals(
         .astype(int)
     )
     return result
+
+
+def _tenure_lookup(cell_table_path: Path) -> dict[tuple[str, str, int], float]:
+    """(행정동, 업종, 분기코드) -> 평균 업력(분기 수).
+
+    cell_train_table.csv는 분기를 "2025Q4" 문자열로, final_dataset.csv는 20254 정수로
+    쓴다. 여기서 한 번만 정수로 맞춘다 — 두 표기가 코드 여기저기 흩어지면 조인이
+    조용히 비어버린다(값이 NULL로 들어가도 예외가 안 난다).
+    """
+    if not cell_table_path.exists():
+        print(f"  ! {cell_table_path.name} 없음 — 평균 업력을 적재하지 않습니다")
+        return {}
+    cell = _read_csv(cell_table_path)
+    _require_columns(
+        cell, {"행정동명", "상권업종중분류명", "기준분기", "평균업력_분기수"}, cell_table_path.name
+    )
+
+    def _quarter_int(label: str) -> int | None:
+        try:
+            year, quarter = str(label).split("Q")
+            return int(year) * 10 + int(quarter)
+        except (ValueError, AttributeError):
+            return None
+
+    lookup: dict[tuple[str, str, int], float] = {}
+    for row in cell.itertuples(index=False):
+        quarter = _quarter_int(row.기준분기)
+        tenure = getattr(row, "평균업력_분기수", None)
+        if quarter is None or pd.isna(tenure):
+            continue
+        lookup[(row.행정동명, row.상권업종중분류명, quarter)] = float(tenure)
+    return lookup
+
+
+def _store_cluster_rows(
+    store_table_path: Path | None,
+    latest_quarter: int,
+    industries: dict[str, int],
+    batch_id: int,
+) -> list[dict]:
+    """최신 점포 좌표를 0.002도 격자로 합쳐 개별 좌표를 버린다."""
+    if store_table_path is None or not store_table_path.exists():
+        if store_table_path is not None:
+            print(f"  ! {store_table_path.name} 없음 — 점포 클러스터를 적재하지 않습니다")
+        return []
+    usecols = ["상가업소번호", "기준분기", "상권업종중분류명", "경도", "위도"]
+    stores = _read_csv(store_table_path, usecols=usecols)
+    _require_columns(stores, set(usecols), store_table_path.name)
+    latest_label = f"{latest_quarter // 10}Q{latest_quarter % 10}"
+    stores = stores[
+        (stores["기준분기"].astype(str) == latest_label)
+        & stores["상권업종중분류명"].isin(industries)
+    ].dropna(subset=["경도", "위도"])
+    if stores.empty:
+        return []
+
+    grid = STORE_CLUSTER_GRID_DEGREES
+    stores = stores.copy()
+    stores["grid_x"] = np.floor(stores["경도"].astype(float) / grid).astype(int)
+    stores["grid_y"] = np.floor(stores["위도"].astype(float) / grid).astype(int)
+    grouped = (
+        stores.groupby(["상권업종중분류명", "grid_x", "grid_y"], as_index=False)
+        .agg(store_count=("상가업소번호", "nunique"))
+    )
+    return [
+        {
+            "industry_id": industries[row.상권업종중분류명],
+            "quarter_code": latest_quarter,
+            "grid_x": int(row.grid_x),
+            "grid_y": int(row.grid_y),
+            "center_lng": round((int(row.grid_x) + 0.5) * grid, 6),
+            "center_lat": round((int(row.grid_y) + 0.5) * grid, 6),
+            "store_count": int(row.store_count),
+            "batch_id": batch_id,
+        }
+        for row in grouped.itertuples(index=False)
+    ]
 
 
 def _supplement_score_only_cells(
@@ -341,10 +422,57 @@ def _area_rows(area_names: list[str]) -> list[dict]:
     return rows
 
 
-def _industry_rows(industry_names: list[str]) -> list[dict]:
+def _load_hierarchy() -> dict[str, str]:
+    """중분류명 -> 대분류명. 없으면 빈 dict를 돌려주고 계층 없이 진행한다.
+
+    계층은 화면의 2단 선택(대분류 -> 중분류)에만 쓰인다. 파일이 없다고 적재 전체를
+    멈추면 팀원이 pull 순서를 한 번 어겼을 때 DB가 통째로 비게 되므로, 없으면
+    경고만 남기고 중분류만 적재한다. 화면은 계층이 없으면 전체 목록으로 폴백한다.
+    """
+    if not INDUSTRY_HIERARCHY_CSV.exists():
+        print(f"  ! {INDUSTRY_HIERARCHY_CSV.name} 없음 — 업종 계층 없이 적재합니다")
+        return {}
+    df = _read_csv(INDUSTRY_HIERARCHY_CSV, dtype=str)
+    _require_columns(df, {"대분류명", "중분류명"}, INDUSTRY_HIERARCHY_CSV.name)
+    return dict(zip(df["중분류명"], df["대분류명"]))
+
+
+def _industry_major_rows(major_names: list[str]) -> list[dict]:
+    """대분류 행. 업종코드표에 대분류코드가 있으면 쓰고, 없으면 안정 해시 코드를 쓴다.
+
+    코드표는 SSD에 있어서 팀원 환경에 없을 수 있다. 그때도 같은 이름이면 같은 코드가
+    나와야 upsert 키가 흔들리지 않으므로 해시 폴백을 쓴다(중분류와 같은 방식).
+    """
+    lookup: dict[str, str] = {}
+    try:
+        codes = _read_csv(eda_paths.SBIZ_CATEGORY_CODE_CSV, dtype=str)
+        if {"대분류코드", "대분류명"} <= set(codes.columns):
+            codes = codes[["대분류코드", "대분류명"]].drop_duplicates("대분류명")
+            lookup = codes.set_index("대분류명")["대분류코드"].to_dict()
+    except FileNotFoundError:
+        pass
+    return [
+        {
+            "source_system": "sbiz",
+            "industry_code": lookup.get(name, _stable_fallback_code("L", name, 20)),
+            "industry_name": name,
+            "level": "large",
+            "is_active": True,
+        }
+        for name in sorted(major_names)
+    ]
+
+
+def _industry_rows(
+    industry_names: list[str],
+    hierarchy: dict[str, str] | None = None,
+    major_ids: dict[str, int] | None = None,
+) -> list[dict]:
     codes = _read_csv(eda_paths.SBIZ_CATEGORY_CODE_CSV, dtype=str)
     codes = codes[["중분류코드", "중분류명"]].drop_duplicates("중분류명")
     lookup = codes.set_index("중분류명")["중분류코드"].to_dict()
+    hierarchy = hierarchy or {}
+    major_ids = major_ids or {}
     return [
         {
             "source_system": "sbiz",
@@ -352,6 +480,7 @@ def _industry_rows(industry_names: list[str]) -> list[dict]:
             "industry_name": name,
             "level": "medium",
             "is_active": True,
+            "parent_id": major_ids.get(hierarchy.get(name, "")),
         }
         for name in sorted(industry_names)
     ]
@@ -376,6 +505,7 @@ def import_normalized(
     model_artifact_path: Path,
     thresholds_path: Path,
     model_version: str = "phase6-cell-lgbm",
+    store_table_path: Path | None = None,
 ) -> dict:
     required_tables = {
         "admin_areas",
@@ -384,6 +514,7 @@ def import_normalized(
         "model_runs",
         "risk_threshold_sets",
         "area_quarter_summaries",
+        "store_clusters",
     }
     missing_tables = required_tables - set(inspect(session.get_bind()).get_table_names())
     if missing_tables:
@@ -406,6 +537,7 @@ def import_normalized(
     if set(scores["기준_년분기_코드"].astype(int).unique()) != {latest}:
         raise ValueError("scores.csv는 final_dataset.csv의 최신 분기 한 개만 포함해야 합니다")
     commercial = _supplement_score_only_cells(commercial, scores, cell_table_path)
+    tenure_lookup = _tenure_lookup(cell_table_path)
     commercial = cum.add_cumulative(commercial, int(thresholds.get("window_quarters", cum.WINDOW)))
     # 유형은 최신 분기에만 매긴다. 과거 분기는 기준 중위값이 달라 비교 의미가 없다.
     latest_quarter = int(commercial["기준_년분기_코드"].max())
@@ -422,15 +554,38 @@ def import_normalized(
         session, AdminArea, _area_rows(commercial["행정동명"].unique().tolist()),
         ["area_code"], ["area_name", "area_type", "valid_from", "valid_to", "is_current"],
     )
+    # 업종은 2단이다. 대분류를 먼저 넣고 flush해서 id를 얻은 뒤 중분류에 parent_id를 건다.
+    # 한 번에 못 하는 이유는 parent_id가 자기 테이블의 id를 참조하기 때문이다.
+    hierarchy = _load_hierarchy()
+    medium_names = commercial["통합카테고리"].unique().tolist()
+    major_names = sorted({hierarchy[name] for name in medium_names if name in hierarchy})
+    if major_names:
+        _upsert(
+            session, IndustryCategory, _industry_major_rows(major_names),
+            ["source_system", "industry_code"], ["industry_name", "level", "is_active"],
+        )
+        session.flush()
+    major_ids = {
+        row.industry_name: row.id
+        for row in session.query(IndustryCategory).filter(
+            IndustryCategory.source_system == "sbiz",
+            IndustryCategory.level == "large",
+        )
+    }
     _upsert(
-        session, IndustryCategory, _industry_rows(commercial["통합카테고리"].unique().tolist()),
-        ["source_system", "industry_code"], ["industry_name", "level", "is_active"],
+        session, IndustryCategory,
+        _industry_rows(medium_names, hierarchy, major_ids),
+        ["source_system", "industry_code"],
+        ["industry_name", "level", "is_active", "parent_id"],
     )
     session.flush()
     areas = {row.area_name: row.id for row in session.query(AdminArea).filter(AdminArea.is_current.is_(True))}
     industries = {
         row.industry_name: row.id
-        for row in session.query(IndustryCategory).filter(IndustryCategory.source_system == "sbiz")
+        for row in session.query(IndustryCategory).filter(
+            IndustryCategory.source_system == "sbiz",
+            IndustryCategory.level == "medium",
+        )
     }
 
     batch_key = f"sbiz-gapfill-t11-{latest}"
@@ -449,6 +604,32 @@ def import_normalized(
     )
     session.flush()
     batch_id = session.query(DataBatch.id).filter(DataBatch.batch_key == batch_key).scalar()
+
+    cluster_rows = _store_cluster_rows(
+        store_table_path, latest, industries, batch_id
+    )
+    if cluster_rows:
+        # 같은 분기를 재적재했을 때 이번 스냅샷에서 사라진 격자가 DB에
+        # 남으면 지도가 이전 점포를 계속 보여준다. 과거 분기는 보존하고, 현재
+        # 분기에서만 새 스냅샷에 없는 파생 격자를 정리한다.
+        current_keys = {
+            (row["industry_id"], row["grid_x"], row["grid_y"])
+            for row in cluster_rows
+        }
+        for stored in session.query(StoreCluster).filter(
+            StoreCluster.quarter_code == latest
+        ):
+            if (stored.industry_id, stored.grid_x, stored.grid_y) not in current_keys:
+                session.delete(stored)
+        session.flush()
+        _upsert(
+            session,
+            StoreCluster,
+            cluster_rows,
+            ["industry_id", "quarter_code", "grid_x", "grid_y"],
+            ["center_lng", "center_lat", "store_count", "batch_id"],
+        )
+        session.flush()
 
     threshold_rows = [{
         "batch_id": batch_id,
@@ -515,6 +696,9 @@ def import_normalized(
             "closure_count_cum4": (
                 int(row.누적폐업건수) if pd.notna(row.누적폐업건수) else None
             ),
+            "avg_tenure_quarters": tenure_lookup.get(
+                (row.행정동명, row.통합카테고리, int(row.기준_년분기_코드))
+            ),
             "saturation_rate": _nullable_float(row.업종_포화도),
             "competition_index": _nullable_float(row.경쟁강도),
             "trend_slope": float(signal.get("trend_slope", 0.0)) if signal else None,
@@ -541,6 +725,7 @@ def import_normalized(
             "closure_rate_cum4",
             "closure_rate_lower4",
             "closure_count_cum4",
+            "avg_tenure_quarters",
             "saturation_rate",
             "competition_index",
             "trend_slope",
@@ -677,6 +862,7 @@ def import_normalized(
         "threshold_sets": len(threshold_rows),
         "area_quarter_summaries": len(summary_rows),
         "predictions": len(prediction_rows),
+        "store_clusters": len(cluster_rows),
         "ranked_predictions": sum(row["predicted_rank"] is not None for row in prediction_rows),
         "latest_quarter": latest,
         "model_run": run_key,
@@ -688,6 +874,7 @@ def main() -> None:
     parser.add_argument("--commercial", type=Path, default=PROJECT_ROOT / "data/processed/final_dataset.csv")
     parser.add_argument("--scores", type=Path, default=PROJECT_ROOT / "data/processed/scores.csv")
     parser.add_argument("--cell-table", type=Path, default=PROJECT_ROOT / "data/processed/cell_train_table.csv")
+    parser.add_argument("--store-table", type=Path, default=PROJECT_ROOT / "data/processed/store_train_table.csv")
     parser.add_argument("--metrics", type=Path, default=PROJECT_ROOT / "data/processed/model_cell_results.json")
     parser.add_argument("--model", type=Path, default=PROJECT_ROOT / "data/processed/lgbm_model_cell.pkl")
     parser.add_argument(
@@ -708,6 +895,7 @@ def main() -> None:
             args.model,
             args.thresholds,
             args.model_version,
+            args.store_table,
         )
     print(json.dumps(result, ensure_ascii=False, indent=2))
 

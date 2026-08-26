@@ -214,13 +214,31 @@ export default function OfficialLoginPage() {
           계정 문의는 소관 부서에 요청하세요.
         </p>
 
-        {/* 예비 창업자용 공개 화면 입구. 로그인 없이 들어간다. */}
+        {/* 예비 창업자용 공개 화면 입구. 로그인 CTA와 경쟁하지 않는 보조 버튼으로 둔다. */}
         <div style={{ borderTop: "1px solid var(--hairline)", marginTop: 20, paddingTop: 20, textAlign: "center" }}>
-          <Link to="/browse" className="t-body-sm" style={{ color: "var(--primary)", textDecoration: "none" }}>
-            상권 둘러보기
+          <Link
+            to="/browse"
+            className="btn-utility"
+            style={{
+              width: "100%",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: 8,
+              color: "var(--primary)",
+              background: "var(--primary-fixed)",
+              borderColor: "var(--primary-fixed-dim)",
+              textDecoration: "none",
+              fontWeight: 600,
+              padding: "10px 14px",
+            }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 19 }}>map_search</span>
+            로그인 없이 상권 둘러보기
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
           </Link>
-          <p className="t-caption" style={{ color: "var(--ink-faint)", margin: "6px 0 0", lineHeight: 1.6 }}>
-            읍면동·업종별 상권 현황은 로그인 없이 볼 수 있습니다.
+          <p className="t-caption" style={{ color: "var(--ink-faint)", margin: "8px 0 0", lineHeight: 1.6 }}>
+            읍면동·업종별 상권 현황을 공개 데이터로 확인합니다.
           </p>
         </div>
       </div>

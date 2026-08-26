@@ -15,7 +15,13 @@
 
   위험등급(안정/주의/위험)   시가 가공한 라벨을 공표하면 그 상권 상인에게 낙인이 되고
                             임대차·권리금 협상에 실질적 영향을 준다. 관측 수치만 낸다.
-  예측 순위 / 성장확률       예측값 계열. 공개 화면에서는 어떤 형태로도 내지 않는다.
+  예측 순위 / 성장확률       **이 파일에서는 여전히 내지 않는다.** 다만 2026-08-26 결정으로
+                            예비 창업자용 추천은 공개하기로 했고, 그 경로는 별도 라우터
+                            `routers/recommend.py`다. 이 파일은 관측치만 다루는 자리로
+                            남긴다 — 한 파일이 관측과 예측을 섞으면 "이 화면의 이 숫자가
+                            예측인가"를 코드에서 답할 수 없게 된다.
+                            공개 조건 넷(셀 단위 등급만 / 지도는 관측치로 / 표본부족 등급
+                            미부여 / 면책 문구)은 recommend.py 맨 위에 있다.
   상권유형 이름("쇠퇴" 등)   이름은 낙인이 되고 설명 문장은 서술이다. 문장만 낸다.
   지원사업 매칭 결과         등록된 4개 사업의 자격 요건(공고기간·한도·법적근거)이 전부
                             비어 있다(requires_verification=True). 공무원은 "확인해봐야
@@ -29,7 +35,7 @@ import sys
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session
 
 from ..database import get_db
@@ -361,4 +367,95 @@ def industry_map(industry_id: int = Query(...), db: Session = Depends(get_db)):
         "areas": areas,
         "scope_notice": SCOPE_NOTICE,
         "provisional_notice": f"{quarter_label(quarter)} 기준. {PROVISIONAL_PUBLIC}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# 업종 계층 (대분류 10 → 중분류 74)
+#
+# 노다지(서울)의 화면은 "구를 고르고 그 안의 행정동을 본다"는 2단 구조 위에 서 있었다.
+# 화성시는 구가 없는 단일 시라 그 자리가 비는데, 대신 업종에 2단 구조가 있다.
+# 사이드바의 2단 선택과 트렌드 화면의 토글이 이 엔드포인트를 쓴다.
+#
+# 셀 수가 아니라 **판단 가능한 읍면동 수**를 함께 내린다. 74개 중분류 중 41개는
+# 화성시 어느 읍면동에서도 점포가 50곳을 넘지 않아 비율로 판단할 수 없다.
+# 고르기 전에 그 사실을 알려주지 않으면 지도가 통째로 회색이 된 뒤에야 알게 된다.
+@router.get("/industry-tree")
+def industry_tree(db: Session = Depends(get_db)):
+    quarter = _latest(db)
+    rows = (
+        db.query(
+            IndustryCategory.id,
+            IndustryCategory.industry_name,
+            IndustryCategory.parent_id,
+            func.count(CommercialQuarter.id).label("area_count"),
+            func.sum(
+                case((CommercialQuarter.sample_insufficient.is_(False), 1), else_=0)
+            ).label("measured_areas"),
+            func.sum(CommercialQuarter.store_count).label("store_count"),
+        )
+        .join(CommercialQuarter, CommercialQuarter.industry_id == IndustryCategory.id)
+        .filter(
+            CommercialQuarter.quarter_code == quarter,
+            IndustryCategory.level == "medium",
+        )
+        .group_by(IndustryCategory.id, IndustryCategory.industry_name, IndustryCategory.parent_id)
+        .order_by(IndustryCategory.industry_name)
+        .all()
+    )
+    parents = {
+        row.id: row.industry_name
+        for row in db.query(IndustryCategory).filter(IndustryCategory.level == "large")
+    }
+
+    grouped: dict[int | None, list[dict]] = {}
+    for row in rows:
+        grouped.setdefault(row.parent_id, []).append({
+            "id": row.id,
+            "name": row.industry_name,
+            "area_count": int(row.area_count or 0),
+            "measured_areas": int(row.measured_areas or 0),
+            "store_count": int(row.store_count or 0),
+        })
+
+    # 계층 적재 전이면 parent_id가 전부 None이다. 그 경우 화면이 빈 목록을 받지 않도록
+    # "전체" 한 덩어리로 폴백한다 — 2단 선택만 못 하고 나머지는 그대로 동작한다.
+    if set(grouped) == {None}:
+        children = grouped.get(None, [])
+        return {
+            "quarter_code": quarter,
+            "quarter_label": quarter_label(quarter),
+            "hierarchy_loaded": False,
+            "groups": [{
+                "id": None, "name": "전체 업종",
+                "industry_count": len(children),
+                "measured_industry_count": sum(1 for c in children if c["measured_areas"] > 0),
+                "store_count": sum(c["store_count"] for c in children),
+                "children": children,
+            }],
+        }
+
+    groups = []
+    for parent_id, children in grouped.items():
+        if parent_id is None:
+            # 계층에서 누락된 중분류. 감추면 그 업종이 화면에서 통째로 사라지므로
+            # '미분류'로 묶어 그대로 노출한다.
+            name = "미분류"
+        else:
+            name = parents.get(parent_id, "미분류")
+        groups.append({
+            "id": parent_id,
+            "name": name,
+            "industry_count": len(children),
+            "measured_industry_count": sum(1 for c in children if c["measured_areas"] > 0),
+            "store_count": sum(c["store_count"] for c in children),
+            "children": children,
+        })
+    groups.sort(key=lambda g: (g["id"] is None, -g["store_count"]))
+
+    return {
+        "quarter_code": quarter,
+        "quarter_label": quarter_label(quarter),
+        "hierarchy_loaded": True,
+        "groups": groups,
     }

@@ -194,6 +194,217 @@ class ScoreResponse(BaseModel):
     sample_insufficient: bool
 
 
+# 예비 창업자용 공개 응답. 예측 절대값은 아예 필드로 정의하지 않아
+# 라우터가 실수로 넣어도 FastAPI 응답 직렬화 단계에서 공개되지 않게 한다.
+class RecommendationObserved(BaseModel):
+    closure_rate_cum4_pct: float | None = None
+    closure_count_cum4: int | None = None
+    store_count: int
+    opening_rate_pct: float | None = None
+    tenure_quarters: float | None = None
+    cell_type: str | None = None
+
+
+class RecommendationBreakdown(BaseModel):
+    key: str
+    label: str
+    score: float
+    max: int
+    weight_pct: int
+    desc: str
+
+
+class RecommendationAreaResult(BaseModel):
+    rank: int
+    area_id: int
+    area_name: str
+    score: float
+    grade: str
+    percentile: float
+    breakdown: list[RecommendationBreakdown]
+    tags: list[str]
+    reason: str
+    observed: RecommendationObserved
+
+
+class RecommendationAreaListResponse(BaseModel):
+    quarter_code: int
+    quarter_label: str
+    window_quarters: int
+    industry_id: int
+    industry_name: str
+    measured_count: int
+    excluded_count: int
+    preset: str
+    weights: dict[str, float]
+    growth_spread: float
+    growth_spread_narrow: bool
+    results: list[RecommendationAreaResult]
+    relative_notice: str
+    disclaimer: str
+
+
+class RecommendationIndustryResult(BaseModel):
+    rank: int
+    industry_id: int
+    industry_name: str
+    score: float
+    breakdown: list[RecommendationBreakdown]
+    tags: list[str]
+    reason: str
+    observed: RecommendationObserved
+    growth_spread: float
+    growth_spread_narrow: bool
+
+
+class RecommendationIndustryListResponse(BaseModel):
+    quarter_code: int
+    quarter_label: str
+    area_id: int
+    area_name: str
+    measured_count: int
+    excluded_count: int
+    preset: str
+    weights: dict[str, float]
+    results: list[RecommendationIndustryResult]
+    grade_notice: str
+    relative_notice: str
+    disclaimer: str
+
+
+class RecommendationScoreResponse(BaseModel):
+    quarter_code: int
+    quarter_label: str
+    window_quarters: int | None = None
+    area_id: int
+    area_name: str
+    industry_id: int
+    industry_name: str
+    is_fallback: bool
+    score: float | None = None
+    grade: str | None = None
+    percentile: float | None = None
+    rank: int | None = None
+    total: int
+    excluded_count: int | None = None
+    summary: str
+    breakdown: list[RecommendationBreakdown]
+    pros: list[str]
+    cons: list[str]
+    observed: RecommendationObserved
+    preset: str
+    weights: dict[str, float]
+    growth_spread: float
+    growth_spread_narrow: bool
+    relative_notice: str
+    disclaimer: str
+
+
+class RecommendationPreset(BaseModel):
+    key: str
+    label: str
+    description: str
+    weights: dict[str, float]
+
+
+class RecommendationAxis(BaseModel):
+    key: str
+    label: str
+    desc: str
+
+
+class RecommendationPresetsResponse(BaseModel):
+    default: str
+    presets: list[RecommendationPreset]
+    axes: list[RecommendationAxis]
+    notice: str
+
+
+class StoreClusterItem(BaseModel):
+    lat: float
+    lng: float
+    store_count: int
+
+
+class StoreClusterResponse(BaseModel):
+    quarter_code: int
+    industry_id: int
+    grid_degrees: float
+    min_cluster_size: int
+    clusters: list[StoreClusterItem]
+    visible_store_count: int
+    suppressed_store_count: int
+    omitted_cluster_count: int
+    privacy_notice: str
+
+
+class TrendPoint(BaseModel):
+    quarter_code: int
+    quarter_label: str
+    closure_rate_pct: float | None = None
+    opening_rate_pct: float | None = None
+    store_count: int
+    cell_count: int
+
+
+class TrendGroup(BaseModel):
+    key: str
+    label: str
+    series: list[TrendPoint]
+    closure_change_pct: float | None = None
+
+
+class TrendOverviewResponse(BaseModel):
+    latest_quarter: int
+    series: list[TrendPoint]
+    method_notice: str
+
+
+class TrendAreaRankResponse(BaseModel):
+    industry_id: int
+    industry_name: str
+    results: list[TrendGroup]
+
+
+class TrendIndustryRankResponse(BaseModel):
+    area_id: int
+    area_name: str
+    results: list[TrendGroup]
+
+
+class TrendCellResponse(BaseModel):
+    area_id: int
+    area_name: str
+    industry_id: int
+    industry_name: str
+    series: list[TrendPoint]
+
+
+class TrendComparisonResponse(BaseModel):
+    title: str
+    description: str
+    groups: list[TrendGroup]
+
+
+class RuleReportSection(BaseModel):
+    key: str
+    title: str
+    body: list[str]
+
+
+class RuleReportResponse(BaseModel):
+    title: str
+    quarter_code: int
+    quarter_label: str
+    preset: str
+    cache_key: str
+    generated_by: str
+    sections: list[RuleReportSection]
+    relative_notice: str
+    disclaimer: str
+    ai_disclosure: str
+
+
 class OfficialLoginRequest(BaseModel):
     username: str
     password: str

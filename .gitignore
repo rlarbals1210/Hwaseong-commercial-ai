@@ -34,6 +34,8 @@ data/processed/*
 !data/processed/lgbm_model_cell.pkl
 !data/processed/model_cell_results.json
 !data/processed/risk_thresholds.json
+# 업종 계층(대분류 10 x 중분류 74). 점포 패널에서 뽑은 이름 쌍뿐이라 점포 식별과 무관하다.
+!data/processed/industry_hierarchy.csv
 
 # 개별 점포 단위 파일은 위 예외에 넣지 말 것.
 #   store_train_table.csv(193M) / store_panel.csv(145M) / store_labels.csv(135M)

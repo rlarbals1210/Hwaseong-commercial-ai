@@ -8,6 +8,8 @@ import CellDetailPage from "./pages/CellDetailPage";
 import BlindspotPage from "./pages/BlindspotPage";
 import ComparePage from "./pages/ComparePage";
 import BrowsePage from "./pages/BrowsePage";
+import TrendPage from "./pages/TrendPage";
+import ReportPage from "./pages/ReportPage";
 import RequireRole from "./components/RequireRole";
 import { useAuth } from "./context/auth-context";
 import { apiFetchJson } from "./lib/api";
@@ -242,7 +244,7 @@ function TopBar({ title }) {
 }
 
 // 로그인 없이 열리는 경로. 공무원 셸(사이드바)을 씌우지 않고 전체화면으로 렌더한다.
-const PUBLIC_PATHS = ["/browse"];
+const PUBLIC_PATHS = ["/browse", "/trends", "/report"];
 
 export default function App() {
   const { pathname } = useLocation();
@@ -266,6 +268,8 @@ export default function App() {
           2026-08-18에 제외한 것은 기존 소상공인의 자가진단이고 이건 별개 트랙이다
           (사유는 backend/routers/public.py 상단 주석). */}
       <Route path="/browse" element={<BrowsePage />} />
+      <Route path="/trends" element={<TrendPage />} />
+      <Route path="/report" element={<ReportPage />} />
       {NAV.map(({ path, Component }) => (
         <Route
           key={path}

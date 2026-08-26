@@ -5,7 +5,7 @@
 backend/services/compare.py 상단 주석 참조.
 
 용어 규칙(CLAUDE.md)을 따른다. 어느 쪽이 "지원 우선"이라고 말하지 않고 "현장 확인 우선순위"로만
-말한다. 예측값(predicted_closure_rate_internal)은 응답에 넣지 않는다.
+말한다. 모델 내부의 예측 절대값은 응답에 넣지 않는다.
 """
 import sys
 from pathlib import Path
