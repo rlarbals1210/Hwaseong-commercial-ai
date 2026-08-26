@@ -191,9 +191,6 @@ function DataFreshness() {
   if (!quarter) return null;
   const year = Math.floor(quarter / 10);
   const q = quarter % 10;
-  const nextYear = q === 4 ? year + 1 : year;
-  const nextQ = q === 4 ? 1 : q + 1;
-
   return (
     <div style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, color: "var(--ink-muted)" }}>
       <span
@@ -206,7 +203,7 @@ function DataFreshness() {
         <b style={{ color: "var(--on-surface)", fontWeight: 600 }}>
           {year}년 {q}분기
         </b>{" "}
-        기준 · 다음 갱신 {nextYear}년 {nextQ}분기
+        기준
       </span>
     </div>
   );
