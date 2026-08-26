@@ -51,13 +51,16 @@ function StatCard({ label, value, unit, tone }) {
 }
 
 // AI 예측값(부풀려진 절대 수치)은 화면에 표시하지 않는다 — 순위만 신뢰할 수 있는 정보라
-// "예측 위험 #N"으로만 보여주고, 근거는 실제 관측 지표(폐업률·개업률·추세)로 뒷받침한다.
+// "예측 위험 #N"으로만 보여주고, 근거는 실제 관측 폐업률로 뒷받침한다.
+//
+// 카드는 "어디부터 볼까"만 답한다. 후속 조치·유형 처방·개업률·추세는 셀 상세로 넘겼다 —
+// 열 개를 훑는 자리에서 카드마다 네 줄씩 읽게 하면 정작 순위가 눈에 안 들어온다.
+// 잘라낸 값은 전부 CSV 내려받기와 셀 상세에 그대로 남아 있다.
 function RiskCard({ item }) {
-  const trend = item.trend_slope ?? 0;
   return (
     <div
       className="card"
-      style={{ padding: 18, display: "flex", flexDirection: "column", gap: 14, transition: "box-shadow .15s ease" }}
+      style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10, transition: "box-shadow .15s ease" }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
         <span className="badge" style={{ background: "var(--primary-fixed)", color: "var(--primary)" }}>
@@ -94,8 +97,8 @@ function RiskCard({ item }) {
         <p
           className="t-caption"
           style={{
-            margin: "10px 0 0",
-            padding: "8px 10px",
+            margin: 0,
+            padding: "6px 8px",
             background: "var(--surface-container-low)",
             borderRadius: "var(--radius-md)",
             color: "var(--ink-secondary)",
@@ -109,7 +112,7 @@ function RiskCard({ item }) {
       <div style={{ marginTop: "auto" }}>
         <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 2 }}>최근 1년 누적 폐업률</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-          <span className="t-metric" style={{ fontSize: 30 }}>{fmtPct(item.cumulative_closure_rate_pct)}</span>
+          <span className="t-metric" style={{ fontSize: 26 }}>{fmtPct(item.cumulative_closure_rate_pct)}</span>
           <span style={{ fontSize: 14, color: "var(--ink-faint)", fontWeight: 500 }}>%</span>
         </div>
         {/* 비율만 두면 점포 60곳에서 6곳 닫힌 것과 600곳에서 60곳 닫힌 것이 같아 보인다.
@@ -129,46 +132,6 @@ function RiskCard({ item }) {
         )}
       </div>
 
-      {/* 보조 지표는 hairline 위에 얹어 주 지표와 위계를 분리 */}
-      <div
-        style={{
-          display: "flex",
-          gap: 14,
-          flexWrap: "wrap",
-          paddingTop: 10,
-          borderTop: "1px solid var(--hairline)",
-          fontSize: 13,
-          color: "var(--ink-muted)",
-        }}
-      >
-        <span>
-          개업률 <b style={{ color: "var(--on-surface)" }}>{fmtPct(item.open_rate_pct)}%</b>
-        </span>
-        <span>
-          추세{" "}
-          <b style={{ color: trend > 0 ? "var(--accent-orange)" : "var(--on-surface)", fontVariantNumeric: "tabular-nums" }}>
-            {trend > 0 ? "+" : ""}{trend}
-          </b>
-        </span>
-      </div>
-
-      <div
-        className="t-caption"
-        style={{ color: "var(--ink-secondary)", background: "var(--surface-container-low)", padding: "8px 10px", borderRadius: "var(--radius-md)" }}
-      >
-        {item.action}
-        {item.cell_type_advice && (
-          <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px solid var(--hairline)" }}>
-            <div style={{ color: "var(--on-surface)" }}>{item.cell_type_summary}</div>
-            <div style={{ marginTop: 2 }}>{item.cell_type_advice}</div>
-            {item.cell_type_avoid && (
-              <div style={{ marginTop: 2, color: "var(--ink-faint)" }}>
-                우선순위 낮음 — {item.cell_type_avoid}
-              </div>
-            )}
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -397,7 +360,7 @@ export default function DashboardPage() {
           />
         )
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(236px, 1fr))", gap: 16, marginBottom: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 12, marginBottom: 24 }}>
           {data.map((item) => (
             <RiskCard key={`${item.dong}-${item.category}`} item={item} />
           ))}
