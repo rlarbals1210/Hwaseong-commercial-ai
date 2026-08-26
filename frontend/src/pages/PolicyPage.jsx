@@ -4,6 +4,7 @@ import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge, TypeBadge } from "../components/Badge";
 import ProvisionalNotice from "../components/ProvisionalNotice";
 import { downloadCsv, csvNum } from "../lib/csv";
+import useCategories from "../hooks/useCategories";
 
 const EMPTY_DATA = { Q1: [], Q2: [], Q3: [], Q4: [] };
 
@@ -186,9 +187,8 @@ export default function PolicyPage() {
   const [data, setData] = useState(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("");
-  const [categories, setCategories] = useState([]);
   const [error, setError] = useState("");
-  const [categoryError, setCategoryError] = useState(false);
+  const { categories, error: categoryError } = useCategories("policy");
   // CSV 머리말에 붙일 기준선·고지 문구. 화면의 ProvisionalNotice와 같은 출처를 쓴다.
   const [gradeMeta, setGradeMeta] = useState(null);
 
@@ -196,18 +196,6 @@ export default function PolicyPage() {
     apiFetchJson("/api/alerts/grade-notice")
       .then(setGradeMeta)
       .catch(() => setGradeMeta(null));
-  }, []);
-
-  useEffect(() => {
-    apiFetchJson(`/api/analysis/categories?purpose=policy`)
-      .then((d) => {
-        setCategories(Array.isArray(d.categories) ? d.categories : []);
-        setCategoryError(false);
-      })
-      .catch(() => {
-        setCategories([]);
-        setCategoryError(true);
-      });
   }, []);
 
   useEffect(() => {

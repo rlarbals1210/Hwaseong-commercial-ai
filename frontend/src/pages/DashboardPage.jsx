@@ -4,6 +4,7 @@ import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge, TypeBadge } from "../components/Badge";
 import ProvisionalNotice from "../components/ProvisionalNotice";
 import { downloadCsv, csvNum } from "../lib/csv";
+import useCategories from "../hooks/useCategories";
 
 const CSV_HEADERS = [
   "예측순위", "읍면동", "업종", "등급", "상권유형",
@@ -194,9 +195,8 @@ export default function DashboardPage() {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("");
-  const [categories, setCategories] = useState([]);
   const [error, setError] = useState("");
-  const [categoryError, setCategoryError] = useState(false);
+  const { categories, error: categoryError } = useCategories("alert");
   // 기준선·고지 문구는 서버에서 받는다. 실패해도 화면은 폴백 값으로 그대로 뜬다.
   const [meta, setMeta] = useState(null);
 
@@ -204,18 +204,6 @@ export default function DashboardPage() {
     apiFetchJson(`/api/alerts/grade-notice`)
       .then(setMeta)
       .catch(() => setMeta(null));
-  }, []);
-
-  useEffect(() => {
-    apiFetchJson(`/api/analysis/categories?purpose=alert`)
-      .then((d) => {
-        setCategories(Array.isArray(d.categories) ? d.categories : []);
-        setCategoryError(false);
-      })
-      .catch(() => {
-        setCategories([]);
-        setCategoryError(true);
-      });
   }, []);
 
   useEffect(() => {
