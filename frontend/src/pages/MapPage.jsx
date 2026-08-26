@@ -3,13 +3,12 @@ import { Link } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge } from "../components/Badge";
 import ProvisionalNotice from "../components/ProvisionalNotice";
+import { NAVER_CLIENT_ID, loadNaverMap } from "../lib/naverMap";
 
 // 다른 화면과 같은 정의. 이 파일에만 사본이 없어 백엔드 raw 값(2자리)이 그대로 찍혔다 —
 // 같은 상권이 대시보드에서 7.1%, 여기서 7.14%로 보였다.
 const fmt = (v, d = 1) =>
   typeof v === "number" && Number.isFinite(v) ? v.toFixed(d) : "—";
-
-const NAVER_CLIENT_ID = import.meta.env.VITE_NAVER_MAP_CLIENT_ID || "";
 
 // 범례 색은 백엔드가 폴리곤에 쓰는 색과 반드시 같아야 한다.
 // 예전에는 여기가 CSS 변수(--error #ba1a1a)이고 백엔드가 #D51B4C를 보내서, 같은 화면에서
@@ -23,35 +22,6 @@ const LEGEND = [
 
 // 색은 등급, 진하기는 근거의 두께다. 범례 아래 한 줄로 그 규칙을 밝힌다.
 const OPACITY_NOTE = "흐리게 칠해진 읍면동은 표본이 충분한 업종이 10개 미만이라 등급의 근거가 얕습니다.";
-
-let naverMapLoadPromise = null;
-
-// onerror가 없으면 스크립트가 실패했을 때 promise가 영원히 pending으로 남고,
-// 화면에는 흰 사각형만 남는다. 시연 중 네트워크가 흔들리거나 도메인 등록이 안 됐을 때
-// 정확히 그 모양이 된다 — 원인을 화면에 말하게 한다.
-function loadNaverMap() {
-  if (window.naver?.maps) return Promise.resolve();
-  if (!naverMapLoadPromise) {
-    naverMapLoadPromise = new Promise((resolve, reject) => {
-      if (!NAVER_CLIENT_ID) {
-        reject(new Error("지도 키(VITE_NAVER_MAP_CLIENT_ID)가 설정되지 않았습니다."));
-        return;
-      }
-      const script = document.createElement("script");
-      script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_CLIENT_ID}`;
-      script.onload = () => {
-        if (window.naver?.maps) resolve();
-        else reject(new Error("지도 스크립트를 불러왔지만 초기화되지 않았습니다. 도메인 등록을 확인해주세요."));
-      };
-      script.onerror = () => {
-        naverMapLoadPromise = null;   // 다음 시도에서 다시 붙일 수 있게
-        reject(new Error("지도 스크립트를 불러오지 못했습니다. 네트워크와 지도 키를 확인해주세요."));
-      };
-      document.head.appendChild(script);
-    });
-  }
-  return naverMapLoadPromise;
-}
 
 // 이 화면에만 있던 loadErrorMessage를 lib/api.js의 describeApiError로 옮겼다.
 // 다른 6개 화면이 같은 처리를 못 갖고 있어서, 토큰이 만료되면 그 화면들은

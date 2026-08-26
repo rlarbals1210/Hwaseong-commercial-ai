@@ -176,6 +176,30 @@ def get_public_cell(
         if peers:
             observed_rank = peers.index(cell.closure_rate_cum4) + 1
 
+    # 최근 분기들의 누적 폐업률 추이. 노다지 메인의 '상권 트렌드'가 있던 자리인데,
+    # 노다지는 매출 추세를 그렸고 이 화면은 그릴 수 없다 — 절대 매출은 공개 대상이 아니고
+    # 원본 자체가 신/구 업종코드 혼재로 불연속이다. 대신 같은 셀의 누적 폐업률이 어느 쪽으로
+    # 움직였는지만 낸다. 표본부족 셀은 아예 내리지 않는다. 점포 몇 곳짜리 비율에 선을 그으면
+    # 없는 추세가 보이고, 그 선은 화면에서 가장 강한 주장이 된다.
+    trend = []
+    if not cell.sample_insufficient:
+        history = (
+            db.query(CommercialQuarter.quarter_code, CommercialQuarter.closure_rate_cum4)
+            .filter(
+                CommercialQuarter.area_id == area_id,
+                CommercialQuarter.industry_id == industry_id,
+                CommercialQuarter.quarter_code <= quarter,
+                CommercialQuarter.closure_rate_cum4.isnot(None),
+            )
+            .order_by(CommercialQuarter.quarter_code.desc())
+            .limit(8)
+            .all()
+        )
+        trend = [
+            {"quarter_code": q, "quarter_label": quarter_label(q), "closure_rate_pct": _pct(v)}
+            for q, v in reversed(history)
+        ]
+
     cell_type = cell.cell_type or ""
     return {
         "area_id": area_id,
@@ -202,6 +226,7 @@ def get_public_cell(
         },
         "observed_rank": observed_rank,
         "observed_total": observed_total,
+        "trend": trend,
 
         # 유형 '이름'은 내리지 않는다. 설명 문장과 창업자 관점 문구만 낸다.
         "pattern_summary": CELL_TYPES.get(cell_type, {}).get("summary"),
@@ -209,5 +234,131 @@ def get_public_cell(
 
         "scope_notice": SCOPE_NOTICE,
         "support_notice": SUPPORT_NOTICE,
+        "provisional_notice": f"{quarter_label(quarter)} 기준. {PROVISIONAL_PUBLIC}",
+    }
+
+
+# ---------------------------------------------------------------------------
+# 업종 하나 = 화성시 한 장 (지도 + 순위표)
+#
+# 노다지(서울)의 메인 화면은 "업종을 고르면 지역들이 한 화면에 줄을 선다"였다. 이 화면도
+# 같은 동작을 하되 정렬 축이 반대다 — 노다지는 AI 점수가 높은 순의 추천이었고, 여기는
+# 관측 폐업률이 잦은 순의 서술이다. 추천으로 뒤집지 않는 이유는 이 파일 맨 위 '공개하지
+# 않는 것'과 같다. 점포 단위 예측 성능(AUC 0.555)이 "여기 여세요"를 지탱하지 못한다.
+# 순위 방향도 /cell의 observed_rank(잦은 순)와 일부러 같게 뒀다. 두 화면이 같은 셀에
+# 다른 등수를 말하면 그 순간 둘 다 못 믿게 된다.
+#
+# 색: 등급색(초록-주황-빨강)을 쓰지 않는다. 공개 지도에서 빨강은 관측치가 아니라 판정으로
+# 읽히고 그 읍면동 상인에게 낙인이 된다. 단일 계열 4단계로 칠하고 범례에는 실제 % 구간을
+# 그대로 적는다. 색이 "얼마나"만 말하고 "좋다/나쁘다"는 말하지 않게 하는 장치다.
+# 구간은 고정 임계값이 아니라 그 업종의 실제 분포 4분위다 — 고정값을 쓰면 폐업이 드문
+# 업종은 전부 옅은 색, 잦은 업종은 전부 짙은 색이 되어 지도가 아무 말도 하지 않는다.
+MAP_RAMP = ["#d5e3ff", "#a8c8ff", "#62aef0", "#005db2"]  # --primary-fixed ~ --primary
+MAP_HOLD_COLOR = "#c1c6d5"  # --outline-variant. 공무원 지도의 판단보류와 같은 색이다.
+
+
+def _quantile(values: list[float], p: float) -> float:
+    """정렬된 값 목록의 분위수(선형보간). numpy를 쓰지 않는 이유는 backend가 의존하지 않기 때문."""
+    if not values:
+        return 0.0
+    if len(values) == 1:
+        return values[0]
+    pos = (len(values) - 1) * p
+    low = int(pos)
+    high = min(low + 1, len(values) - 1)
+    return values[low] + (values[high] - values[low]) * (pos - low)
+
+
+@router.get("/industry-map")
+def industry_map(industry_id: int = Query(...), db: Session = Depends(get_db)):
+    quarter = _latest(db)
+    rows = (
+        db.query(CommercialQuarter, AdminArea.area_name, IndustryCategory.industry_name)
+        .join(AdminArea, CommercialQuarter.area_id == AdminArea.id)
+        .join(IndustryCategory, CommercialQuarter.industry_id == IndustryCategory.id)
+        .filter(
+            CommercialQuarter.quarter_code == quarter,
+            CommercialQuarter.industry_id == industry_id,
+        )
+        .order_by(AdminArea.area_name)
+        .all()
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="해당 업종을 찾을 수 없습니다")
+    industry_name = rows[0][2]
+
+    # 표본충분 셀만으로 구간을 만든다. 표본부족 셀의 비율을 섞으면 점포 4곳짜리 0%가
+    # 1분위 경계를 끌어내려, 실제로는 평범한 읍면동이 가장 옅은 색을 받는다.
+    measured = sorted(
+        _pct(cell.closure_rate_cum4)
+        for cell, _, _ in rows
+        if not cell.sample_insufficient and cell.closure_rate_cum4 is not None
+    )
+    cuts = [_quantile(measured, p) for p in (0.25, 0.5, 0.75)] if measured else []
+
+    def _bin(value: float) -> int:
+        for i, cut in enumerate(cuts):
+            if value < cut:
+                return i
+        return len(cuts)
+
+    # 순위는 잦은 순(내림차순). 동률이면 같은 등수를 준다 — 소수점 두 자리가 같은데
+    # 등수가 갈리면 "왜 우리가 한 칸 아래냐"에 답할 근거가 없다.
+    ordered = sorted(measured, reverse=True)
+
+    areas = []
+    for cell, area_name, _ in rows:
+        value = None if cell.sample_insufficient else _pct(cell.closure_rate_cum4)
+        entry = {
+            "area_id": cell.area_id,
+            "area_name": area_name,
+            "store_count": cell.store_count,
+            "closure_count": cell.closure_count_cum4,
+            "sample_insufficient": cell.sample_insufficient,
+            "closure_rate_pct": value,
+            "color": MAP_HOLD_COLOR if value is None else MAP_RAMP[_bin(value)],
+            "rank": None if value is None else ordered.index(value) + 1,
+        }
+        areas.append(entry)
+
+    # 범례 문구도 서버에서 만든다. 프론트에서 조립하면 구간 정의가 두 곳에 생기고,
+    # 파이프라인이 갱신됐을 때 색과 설명이 어긋난다(이 파일 맨 위 원칙과 같다).
+    legend = []
+    if cuts:
+        bounds = [None, *cuts, None]
+        for i, color in enumerate(MAP_RAMP):
+            low, high = bounds[i], bounds[i + 1]
+            if low is None:
+                label = f"{high:.1f}% 미만"
+            elif high is None:
+                label = f"{low:.1f}% 이상"
+            else:
+                label = f"{low:.1f} ~ {high:.1f}%"
+            legend.append({"label": label, "color": color})
+    legend.append({"label": "판단보류 (점포 50곳 미만)", "color": MAP_HOLD_COLOR})
+
+    city_avg = (
+        db.query(func.avg(CommercialQuarter.closure_rate_cum4))
+        .filter(
+            CommercialQuarter.quarter_code == quarter,
+            CommercialQuarter.industry_id == industry_id,
+            CommercialQuarter.sample_insufficient.is_(False),
+            CommercialQuarter.closure_rate_cum4.isnot(None),
+        )
+        .scalar()
+    )
+
+    return {
+        "quarter_code": quarter,
+        "quarter_label": quarter_label(quarter),
+        "window_quarters": WINDOW_QUARTERS,
+        "industry_id": industry_id,
+        "industry_name": industry_name,
+        "industry_avg_pct": _pct(city_avg),
+        "measured_count": len(measured),
+        "total_count": len(areas),
+        "legend": legend,
+        "areas": areas,
+        "scope_notice": SCOPE_NOTICE,
         "provisional_notice": f"{quarter_label(quarter)} 기준. {PROVISIONAL_PUBLIC}",
     }
