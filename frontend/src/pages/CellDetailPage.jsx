@@ -692,7 +692,7 @@ export default function CellDetailPage() {
                 <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <button type="submit" className="btn-primary" disabled={saving}>{saving ? "저장 중…" : "저장"}</button>
                   {saveError && (
-                    <span className="t-caption" style={{ color: "var(--accent-orange)" }}>{saveError}</span>
+                    <span className="t-caption" style={{ color: "var(--error)" }}>{saveError}</span>
                   )}
                 </div>
                 <div className="t-caption" style={{ color: "var(--ink-faint)" }}>

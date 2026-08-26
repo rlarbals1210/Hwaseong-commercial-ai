@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge } from "../components/Badge";
 import ProvisionalNotice from "../components/ProvisionalNotice";
-import { NAVER_CLIENT_ID, loadNaverMap } from "../lib/naverMap";
+import { NAVER_CLIENT_ID, loadNaverMap, fitBoundsTight } from "../lib/naverMap";
 
 // 다른 화면과 같은 정의. 이 파일에만 사본이 없어 백엔드 raw 값(2자리)이 그대로 찍혔다 —
 // 같은 상권이 대시보드에서 7.1%, 여기서 7.14%로 보였다.
@@ -200,7 +200,8 @@ export default function MapPage() {
                 rings[0].forEach(([lng, lat]) => bounds.extend(new window.naver.maps.LatLng(lat, lng)));
               });
             });
-            mapInstanceRef.current.fitBounds(bounds);
+            // fitBounds는 정수 줌으로만 맞춰 한 단계 덜 당겨진다. lib/naverMap 참조.
+            fitBoundsTight(mapInstanceRef.current, bounds);
             boundsFitRef.current = true;
           }
         })
@@ -227,8 +228,12 @@ export default function MapPage() {
         </div>
       </div>
 
-      <div style={{ display: "flex", gap: 16 }}>
-        <div style={{ position: "relative", flex: 1 }}>
+      {/* 지도를 옆 패널과 나눠 쓰면 폭이 851px에 묶이는데, 화성시 경계가 그 폭에서
+          zoom 10으로만 맞는다(zoom 11은 920px가 필요). 정수 줌만 되는 지도라
+          한 단계 차이가 곧 2배 차이여서 화성시가 화면의 절반만 차지했다.
+          지도를 본문 전체 폭으로 빼면 zoom 11이 들어가고, 상세 패널은 아래로 내린다. */}
+      <div>
+        <div style={{ position: "relative" }}>
           {mapError && (
             <div
               role="alert"
@@ -254,7 +259,18 @@ export default function MapPage() {
           )}
           <div
             ref={mapRef}
-            style={{ height: 580, borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--hairline)" }}
+            /* 화성시 경계는 가로 약 56km x 세로 약 33km(1.7:1)인데 지도 칸이 거의 정사각형이라
+               fitBounds가 가로에 맞추느라 위아래로 남의 동네가 잔뜩 들어왔다. 칸 비율을
+               데이터 비율에 맞추면 같은 폭에서 화성시가 훨씬 크게 보인다.
+               좁은 화면에서 너무 납작해지지 않게 최소 높이를 둔다. */
+            style={{
+              aspectRatio: "1.7 / 1",
+              minHeight: 360,
+              maxHeight: 620,
+              borderRadius: "var(--radius-lg)",
+              overflow: "hidden",
+              border: "1px solid var(--hairline)",
+            }}
           >
             {!NAVER_CLIENT_ID && (
               <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--outline)", flexDirection: "column", gap: 8 }}>
@@ -264,40 +280,44 @@ export default function MapPage() {
             )}
           </div>
 
+          {/* 범례를 지도 위에 띄우면 좌하단 읍면동을 가린다. 안내 문구가 길어 세로로 커지는
+              구조라 더 그렇다. 지도 아래로 빼고 가로로 눕혔다 — 가리는 것도 없고
+              좁은 화면에서 접히기만 한다. */}
           <div
             style={{
-              position: "absolute",
-              bottom: 16,
-              left: 16,
-              maxWidth: 240,
-              background: "rgba(255,255,255,0.94)",
-              backdropFilter: "blur(6px)",
+              display: "flex",
+              alignItems: "baseline",
+              gap: 16,
+              flexWrap: "wrap",
+              marginTop: 10,
+              padding: "10px 14px",
+              background: "var(--surface-container-low)",
               border: "1px solid var(--hairline)",
-              borderRadius: "var(--radius-lg)",
-              padding: 14,
-              zIndex: 10,
-              boxShadow: "var(--elev-1)",
+              borderRadius: "var(--radius-md)",
             }}
           >
-            <p className="t-eyebrow" style={{ color: "var(--ink-muted)", margin: "0 0 10px", textTransform: "uppercase" }}>
+            <span className="t-eyebrow" style={{ color: "var(--ink-muted)", textTransform: "uppercase", flexShrink: 0 }}>
               위험 업종 비율
-            </p>
-            <div style={{ display: "flex", flexDirection: "column", gap: 7 }}>
+            </span>
+            <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
               {LEGEND.map(({ label, color }) => (
-                <div key={label} style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <span style={{ width: 10, height: 10, borderRadius: "var(--radius-full)", background: color, display: "inline-block", flexShrink: 0 }} />
                   <span className="t-caption" style={{ color: "var(--ink-secondary)" }}>{label}</span>
-                </div>
+                </span>
               ))}
             </div>
-            <p className="t-caption" style={{ color: "var(--ink-faint)", margin: "10px 0 0", lineHeight: 1.6 }}>
+            <span className="t-caption" style={{ color: "var(--ink-faint)", lineHeight: 1.6, flex: "1 1 260px", minWidth: 0 }}>
               {OPACITY_NOTE}
-            </p>
+            </span>
           </div>
         </div>
 
-        <div className="card" style={{ width: 288, flexShrink: 0, height: "fit-content" }}>
-          {selected ? (
+        {/* 아무것도 안 고른 상태에서는 카드를 아예 그리지 않는다. 지도 아래로 내려온 뒤로
+            "읍면동을 선택하세요" 안내가 순위표를 한 화면 밀어내고 있었다.
+            안내 문구는 화면 설명("읍면동을 클릭하면 상세 지표가 표시됩니다")에 이미 있다. */}
+        {selected && (
+          <div className="card" style={{ marginTop: 16, height: "fit-content", maxWidth: 520 }}>
             <>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
                 <h3 className="t-h3" style={{ margin: 0 }}>{selected.name}</h3>
@@ -404,18 +424,8 @@ export default function MapPage() {
                 </div>
               )}
             </>
-          ) : (
-            <div style={{ textAlign: "center", padding: "40px 0" }}>
-              <span className="material-symbols-outlined" style={{ fontSize: 36, color: "var(--ink-faint)", display: "block", marginBottom: 12 }}>
-                touch_app
-              </span>
-              <p className="t-title" style={{ color: "var(--on-surface)", margin: "0 0 8px" }}>읍면동을 선택하세요</p>
-              <p className="t-caption" style={{ color: "var(--ink-muted)", margin: 0, lineHeight: 1.6 }}>
-                지도에서 읍면동을 클릭하면 위험 지표가 표시됩니다.
-              </p>
-            </div>
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
       <RankingTable rows={ranking} loading={rankingLoading} error={rankingError} />

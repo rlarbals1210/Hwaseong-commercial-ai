@@ -47,3 +47,35 @@ export function featurePaths(feature) {
 export function featureName(feature) {
   return feature.properties.dong_name || feature.properties.EMD_KOR_NM || "";
 }
+
+
+// 경계에 딱 맞게 맞추기.
+//
+// naver.maps의 fitBounds는 정수 줌 단계로만 맞춘다. 화성시처럼 정확한 맞춤이 zoom 10.6쯤
+// 필요한 경우 10으로 내려앉고, 그러면 실제로 필요한 것보다 약 1.5배 넓은 화면이 된다 —
+// 화성시가 지도의 3분의 1만 차지하고 나머지는 인천·평택·안성이 채운다.
+//
+// 그래서 fitBounds 뒤에 한 단계 더 당겨보고, 그래도 경계가 다 들어오면 그 줌을 쓴다.
+// 안 들어오면 원래 줌으로 돌린다.
+export function fitBoundsTight(map, bounds, padding = 16) {
+  map.fitBounds(bounds, { top: padding, right: padding, bottom: padding, left: padding });
+  try {
+    let zoom = map.getZoom();
+    // setZoom의 두 번째 인자는 애니메이션 여부다. true로 주면 직후의 getBounds()가
+    // 아직 옛 화면을 돌려줘서 판정이 항상 실패한다 — 그래서 false로 즉시 반영시킨다.
+    // 한 단계씩 올려보며 경계가 다 들어오는 마지막 줌을 찾는다(보통 1~2단계).
+    for (let step = 0; step < 3; step += 1) {
+      const next = zoom + 1;
+      if (next > map.getMaxZoom()) break;
+      map.setZoom(next, false);
+      if (map.getBounds().hasBounds(bounds)) {
+        zoom = next;
+      } else {
+        map.setZoom(zoom, false);
+        break;
+      }
+    }
+  } catch {
+    /* getBounds/hasBounds가 없는 버전이면 fitBounds 결과를 그대로 쓴다 */
+  }
+}

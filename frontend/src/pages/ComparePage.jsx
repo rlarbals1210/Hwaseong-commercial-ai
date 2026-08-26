@@ -167,7 +167,8 @@ export default function ComparePage() {
       </div>
 
       {loading && <div className="t-body-sm" style={{ color: "var(--ink-muted)" }}>불러오는 중…</div>}
-      {error && <div className="t-body-sm" style={{ color: "var(--accent-orange)" }}>{error}</div>}
+      {/* 오류는 --error. --accent-orange는 "주의" 등급 색이라 의미가 겹친다. */}
+      {error && <div className="t-body-sm" style={{ color: "var(--error)" }}>{error}</div>}
 
       {!loading && data && (
         <>

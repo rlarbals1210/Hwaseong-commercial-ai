@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
-import { NAVER_CLIENT_ID, loadNaverMap, featureName, featurePaths } from "../lib/naverMap";
+import { NAVER_CLIENT_ID, loadNaverMap, featureName, featurePaths, fitBoundsTight } from "../lib/naverMap";
 
 // 상권 둘러보기 — 로그인 없이 열리는 공개 화면.
 //
@@ -272,7 +272,7 @@ export default function BrowsePage() {
             geojson.features.forEach((feat) =>
               featurePaths(feat).forEach((path) => path.forEach((ll) => bounds.extend(ll))),
             );
-            mapInstanceRef.current.fitBounds(bounds);
+            fitBoundsTight(mapInstanceRef.current, bounds);
             boundsFitRef.current = true;
           }
         })
@@ -327,7 +327,8 @@ export default function BrowsePage() {
           )}
         </div>
 
-        {error && <div className="t-body-sm" style={{ color: "var(--accent-orange)", marginBottom: 16 }}>{error}</div>}
+        {/* 오류는 --error. --accent-orange는 "주의" 등급 색이라 의미가 겹친다. */}
+        {error && <div className="t-body-sm" style={{ color: "var(--error)", marginBottom: 16 }}>{error}</div>}
 
         <div style={{ display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-start" }}>
           <div style={{ position: "relative", flex: "1 1 520px", minWidth: 320 }}>
@@ -336,7 +337,7 @@ export default function BrowsePage() {
                 role="alert"
                 style={{
                   position: "absolute", top: 16, left: 16, right: 16, zIndex: 20,
-                  background: "rgba(255,255,255,0.96)", border: "1px solid var(--accent-orange)",
+                  background: "rgba(255,255,255,0.96)", border: "1px solid var(--error)",
                   borderRadius: "var(--radius-lg)", padding: "12px 14px", boxShadow: "var(--elev-1)",
                 }}
               >
@@ -345,7 +346,17 @@ export default function BrowsePage() {
             )}
             <div
               ref={mapRef}
-              style={{ height: 560, borderRadius: "var(--radius-lg)", overflow: "hidden", border: "1px solid var(--hairline)", background: "var(--surface-container-low)" }}
+              /* 화성시 경계가 가로 56km x 세로 33km(1.7:1)라 거의 정사각형 칸에 맞추면
+               위아래로 남의 동네가 들어온다. 공무원 지도와 같은 비율을 쓴다. */
+            style={{
+              aspectRatio: "1.7 / 1",
+              minHeight: 360,
+              maxHeight: 620,
+              borderRadius: "var(--radius-lg)",
+              overflow: "hidden",
+              border: "1px solid var(--hairline)",
+              background: "var(--surface-container-low)",
+            }}
             >
               {!NAVER_CLIENT_ID && (
                 <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--ink-faint)", flexDirection: "column", gap: 8, textAlign: "center", padding: 24 }}>
