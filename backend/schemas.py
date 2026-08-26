@@ -653,6 +653,13 @@ class CompareCellItem(BaseModel):
     industry_rank: int | None = None
     industry_total_areas: int | None = None
     sample_insufficient: bool = False
+    # 배후 여건 — 상권의 성적이 아니라 그 상권이 놓인 조건이다. 같은 폐업률이라도
+    # 점포가 젊은 곳과 오래된 곳, 사람이 느는 곳과 주는 곳은 손댈 지점이 다르다.
+    avg_tenure_quarters: float | None = None      # 평균 업력(분기)
+    population: int | None = None                 # 배후 읍면동 등록인구(최신)
+    population_change_pct: float | None = None    # 3년 증감
+    population_from_label: str | None = None
+    population_to_label: str | None = None
 
 
 class CompareDiff(BaseModel):
@@ -667,12 +674,104 @@ class CompareDiff(BaseModel):
     comparable: bool = True             # False면 화면에서 차이를 숫자로 말하지 않는다
     reason: str | None = None           # comparable=False인 이유: "noise" | "sample" (화면 문구가 갈린다)
     note: str | None = None
+    # 차이를 같은 업종 분포의 표준편차로 나눈 값. 단위가 제각각인 지표들을 한 자로 재서
+    # "가장 크게 다른 점"을 정렬할 수 있게 한다. 업종이 서로 다르면 기준이 없어 None이다.
+    sigma: float | None = None
+    # 이 업종 안에서 그 지표와 폐업률이 함께 움직인 정도(스피어만 순위상관).
+    # 차이가 크다는 것과 그 차이가 이 업종에서 의미 있다는 것은 다르다. 상관이 0에
+    # 가까우면 아무리 크게 벌어져도 폐업률을 설명할 후보가 아니다.
+    # 인과가 아니다. 표본이 업종당 9~27곳이라 값 자체도 흔들린다.
+    industry_correlation: float | None = None
+    explains: bool = False              # 상관·차이가 모두 충분해 설명 후보로 볼 만한가
+
+
+class CompareTrendPoint(BaseModel):
+    """두 상권의 분기별 누적 폐업률. 스냅샷만으로는 「원래 나쁜 곳」과 「최근 나빠진 곳」이
+    구분되지 않는다. 후자면 개입 시점이 지금이라 판단이 갈린다.
+    누적 4분기가 채워지기 전 분기는 None이다 — 0.0으로 채우면 폐업이 없었다고 읽힌다."""
+
+    quarter_code: int
+    label: str
+    left_pct: float | None = None
+    right_pct: float | None = None
 
 
 class CompareResponse(BaseModel):
     left: CompareCellItem
     right: CompareCellItem
     diffs: list[CompareDiff]
+    trend: list[CompareTrendPoint] = []
+    industry_cells: int = 0              # 상관 계산에 쓴 표본 수. 화면이 신뢰도를 함께 말한다
     verdict: str
     notice: str
     basis: dict
+
+
+class ComparePeerItem(BaseModel):
+    """비교 후보 한 곳. 같은 업종·비슷한 규모의 다른 읍면동."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    area_id: int
+    industry_id: int
+    area_name: str
+    store_count: int
+    cumulative_closure_rate_pct: float | None = None
+    cumulative_closure_count: int | None = None
+    delta_pp: float | None = None        # 선택 상권 대비 (후보 - 선택)
+    z: float | None = None               # 두 비율 차이 z. 음수면 후보가 더 낮다
+    significant: bool = False            # |z| >= 1.96
+
+
+class CompareDistributionItem(BaseModel):
+    """업종 지형도의 점 하나.
+
+    폐업률 한 축만 그리면 "누가 더 나쁜가"밖에 못 말한다. 개업률을 두 번째 축으로 두면
+    같은 폐업률이라도 드나듦이 잦은 곳과 멈춘 곳이 갈리고, 그 네 칸이 곧 상권 유형이다
+    (고회전/쇠퇴/성장/정체). 처방이 갈리는 지점을 그림 하나로 보인다.
+    """
+
+    area_id: int
+    area_name: str
+    store_count: int
+    cumulative_closure_rate_pct: float
+    opening_rate_pct: float | None = None
+    cell_type: str | None = None
+    rank: int | None = None        # 업종 내 폐업률 순위
+    is_self: bool = False
+    is_target: bool = False        # 현재 비교 중인 상대편
+
+
+class CompareContextResponse(BaseModel):
+    """비교 대상을 담당자가 이미 알고 있어야 쓸 수 있는 도구는 도구가 아니다.
+    상권 하나를 받아 ① 같은 업종 안에서의 위치와 ② 비교할 만한 후보를 돌려준다."""
+
+    quarter_code: int
+    quarter_label: str
+    area_id: int
+    industry_id: int
+    area_name: str
+    industry_name: str
+    store_count: int
+    cumulative_closure_rate_pct: float | None = None
+    sample_insufficient: bool = False
+
+    # 업종 내 위치
+    industry_eligible_cells: int = 0     # 표본 기준을 넘은 같은 업종 상권 수
+    industry_rank: int | None = None     # 폐업률 높은 순
+    industry_median_pct: float | None = None
+    distribution: list[CompareDistributionItem] = []
+    # 상권 유형 4분류의 가로·세로 절단선(표본충분 셀의 중위값). 지형도의 십자선이고,
+    # 하드코딩하면 파이프라인 재실행 때 사분면과 배지가 어긋난다.
+    type_open_cut_pct: float | None = None
+    type_close_cut_pct: float | None = None
+    cell_type: str | None = None
+
+    # 비교 후보
+    peer_store_min: int = 0
+    peer_store_max: int = 0
+    peer_ratio_pct: int = 50
+    peers: list[ComparePeerItem] = []
+    contrast: ComparePeerItem | None = None   # 가장 대조적인 곳(z 최소)
+    similar: ComparePeerItem | None = None    # 가장 비슷한 곳(|z| 최소)
+    notice: str = ""
