@@ -2,7 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge, TypeBadge } from "../components/Badge";
-import ProvisionalNotice from "../components/ProvisionalNotice";
 
 // 상권 비교 — 서울 프로젝트('노다지')의 지역 비교/업종 비교를 하나로 합친 화면.
 //
@@ -155,10 +154,6 @@ export default function ComparePage() {
         두 상권을 나란히 놓고 봅니다. 폐업률 차이가 <b>표본 크기로 설명될 수 있는 크기</b>면
         어느 쪽이 나쁘다고 말하지 않고 &ldquo;차이 없음&rdquo;으로 표시합니다.
       </p>
-
-      <div style={{ margin: "16px 0 0" }}>
-        <ProvisionalNotice />
-      </div>
 
       <div className="card" style={{ padding: 18, margin: "18px 0", display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
         <CellPicker label="왼쪽 상권" options={options} areaId={left?.areaId} industryId={left?.industryId} onChange={pick(setLeft, left)} />

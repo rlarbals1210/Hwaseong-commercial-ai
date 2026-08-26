@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge, TypeBadge } from "../components/Badge";
-import ProvisionalNotice from "../components/ProvisionalNotice";
 import { downloadCsv, csvNum } from "../lib/csv";
 import useCategories from "../hooks/useCategories";
 
@@ -244,10 +243,6 @@ export default function PolicyPage() {
         이 화면은 <b>이미 관측된</b> 폐업률로 줄을 세웁니다. 조기경보 대시보드는 모델이 예측한
         <b> 2분기 뒤</b> 위험으로 줄을 세웁니다. <b>두 화면의 1순위는 다를 수 있으며, 다른 것이 정상입니다</b> —
         지금 나빠진 곳과 앞으로 나빠질 곳은 같지 않습니다.
-      </div>
-
-      <div style={{ marginBottom: 20 }}>
-        <ProvisionalNotice />
       </div>
 
       {!loading && total > 0 && (

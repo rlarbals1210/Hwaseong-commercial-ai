@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge, TypeBadge } from "../components/Badge";
-import ProvisionalNotice from "../components/ProvisionalNotice";
 import { downloadCsv, csvNum } from "../lib/csv";
 import useCategories from "../hooks/useCategories";
 
@@ -236,10 +235,6 @@ export default function DashboardPage() {
         title="폐업 위험 조기경보"
         desc="AI가 2분기 뒤 폐업 위험이 높을 것으로 예측한 상권입니다. 절대 확률이 아닌 상대 순위입니다."
       />
-
-      <div style={{ marginBottom: 20 }}>
-        <ProvisionalNotice meta={meta} />
-      </div>
 
       {!loading && data.length > 0 && (
         <>

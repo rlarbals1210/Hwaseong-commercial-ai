@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge } from "../components/Badge";
-import ProvisionalNotice from "../components/ProvisionalNotice";
+import TabStrip from "../components/TabStrip";
 import { NAVER_CLIENT_ID, loadNaverMap, fitBoundsTight } from "../lib/naverMap";
 import useCategories from "../hooks/useCategories";
 
@@ -35,7 +35,7 @@ function RankingTable({ rows, loading, error, category, categories, categoryErro
   const industryTotal = filtered ? rows.find((r) => r.industry_total)?.industry_total : null;
 
   return (
-    <div className="card" style={{ marginTop: 16 }}>
+    <div className="card">
       <div style={{ display: "flex", gap: 16, alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap" }}>
         <h3 className="t-h3" style={{ margin: 0 }}>상권 순위표 — 최근 1년 누적 폐업률</h3>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
@@ -130,6 +130,7 @@ export default function MapPage() {
   const [ranking, setRanking] = useState([]);
   const [rankingLoading, setRankingLoading] = useState(true);
   const [category, setCategory] = useState("");
+  const [tab, setTab] = useState("map");
   // 순위표와 같은 집합(최신 분기·표본충분)을 좁히는 purpose를 쓴다.
   const { categories, error: categoryError } = useCategories("policy");
   const [mapError, setMapError] = useState("");
@@ -258,6 +259,13 @@ export default function MapPage() {
     }).catch((err) => setMapError(err.message));
   }, [riskData, drawPolygons]);
 
+  // 숨겨진 동안 컨테이너 크기가 0이라, 그 사이 창이 리사이즈되면 지도가 옛 크기를 들고 있다.
+  // 돌아올 때 한 번 알려준다. 중심·줌은 건드리지 않는다 — 담당자가 옮겨둔 화면을 되돌리면 안 된다.
+  useEffect(() => {
+    if (tab !== "map" || !mapInstanceRef.current || !window.naver?.maps) return;
+    window.naver.maps.Event.trigger(mapInstanceRef.current, "resize");
+  }, [tab]);
+
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
@@ -265,16 +273,31 @@ export default function MapPage() {
         <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>
           읍면동별 위험 업종 비율 — 최근 1년 누적 폐업률 기준(4분기 합산, 보정 없음). 읍면동을 클릭하면 상세 지표가 표시됩니다.
         </p>
-        <div style={{ marginTop: 12 }}>
-          <ProvisionalNotice />
-        </div>
+      </div>
+
+      {/* 순위표가 지도(620px) 아래라 첫 화면에서 잘렸다. 접기로는 시작 위치가 안 바뀌어
+          탭으로 나눈다 — 둘 다 같은 높이에서 시작한다. 라벨에 건수를 붙여 표가 숨은 게
+          아니라는 걸 보이게 한다(시연 중 순위표를 지나칠 수 있다). */}
+      <div style={{ maxWidth: 320, marginBottom: 16 }}>
+        <TabStrip
+          tabs={[
+            { key: "map", label: "지도" },
+            { key: "ranking", label: `순위표${ranking.length ? ` (${ranking.length})` : ""}` },
+          ]}
+          value={tab}
+          onChange={(next) => {
+            setTooltip(null);
+            setTab(next);
+          }}
+          ariaLabel="공실위험 보기 선택"
+        />
       </div>
 
       {/* 지도를 옆 패널과 나눠 쓰면 폭이 851px에 묶이는데, 화성시 경계가 그 폭에서
           zoom 10으로만 맞는다(zoom 11은 920px가 필요). 정수 줌만 되는 지도라
           한 단계 차이가 곧 2배 차이여서 화성시가 화면의 절반만 차지했다.
           지도를 본문 전체 폭으로 빼면 zoom 11이 들어가고, 상세 패널은 아래로 내린다. */}
-      <div>
+      <div style={{ display: tab === "map" ? "block" : "none" }}>
         <div style={{ position: "relative" }}>
           {mapError && (
             <div
@@ -470,19 +493,21 @@ export default function MapPage() {
         )}
       </div>
 
-      <RankingTable
-        rows={ranking}
-        loading={rankingLoading}
-        error={rankingError}
-        category={category}
-        categories={categories}
-        categoryError={categoryError}
-        onCategoryChange={(next) => {
-          setRankingLoading(true);
-          setRankingError("");
-          setCategory(next);
-        }}
-      />
+      <div style={{ display: tab === "ranking" ? "block" : "none" }}>
+        <RankingTable
+          rows={ranking}
+          loading={rankingLoading}
+          error={rankingError}
+          category={category}
+          categories={categories}
+          categoryError={categoryError}
+          onCategoryChange={(next) => {
+            setRankingLoading(true);
+            setRankingError("");
+            setCategory(next);
+          }}
+        />
+      </div>
 
       {tooltip && (
         <div

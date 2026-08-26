@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
-import ProvisionalNotice from "../components/ProvisionalNotice";
 
 // 조회 기준(점포 50곳)을 못 넘는 상권은 다른 화면에서 아예 사라진다.
 // 그렇게 빠지는 점포가 전체의 38%이고, 기배동·매송면은 커버율이 0%다.
@@ -65,10 +64,6 @@ export default function BlindspotPage() {
         점포 수가 적어 통계 판단을 보류한 상권입니다. 다른 화면에서는 목록에 오르지 않습니다.
         모델이 판단하지 않으므로 등급을 매기지 않고, <b>폐업 건수 순</b>으로만 보여줍니다.
       </p>
-
-      <div style={{ margin: "16px 0 0" }}>
-        <ProvisionalNotice />
-      </div>
 
       {data && (
         <>
