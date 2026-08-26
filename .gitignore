@@ -52,3 +52,4 @@ ai/*.pkl
 data/processed_backup/
 
 .pptx-build/
+.codex_ppt_edit_20260827/
