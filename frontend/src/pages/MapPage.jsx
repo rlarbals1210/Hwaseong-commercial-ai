@@ -119,6 +119,200 @@ function RankingTable({ rows, loading, error, category, categories, categoryErro
   );
 }
 
+/** 읍면동 상세 패널.
+ *
+ *  예전 패널은 "위험 업종 비율 0.0%"와 표본 충족률만 말하고 끝났다. 담당자의 다음 질문은
+ *  반드시 "그래서 어느 업종인가"인데 화면에서 동선이 끊겼다.
+ *
+ *  세 가지를 한 화면에서 답한다 —
+ *    ① 어느 업종이 나쁜가   업종 목록(표본충분, 폐업률 순)
+ *    ② 동 전체로는 어떤가   업종 구분 없이 묶은 폐업률 + 나머지 지역과의 비교
+ *    ③ 무엇이 안 보이는가   사각지대 규모
+ *  배후인구는 등급·유형 판정에 관여하지 않는다. 원인의 방향을 좁히는 참고 자료다.
+ */
+function Row({ label, children, hint }) {
+  return (
+    <div style={{ padding: "11px 0", borderTop: "1px solid var(--hairline)" }}>
+      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+        <span className="t-caption" style={{ color: "var(--ink-muted)" }}>{label}</span>
+        <span className="t-body-sm" style={{ marginLeft: "auto", color: "var(--on-surface)", fontWeight: 600, fontVariantNumeric: "tabular-nums", textAlign: "right" }}>
+          {children}
+        </span>
+      </div>
+      {hint && <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 3 }}>{hint}</div>}
+    </div>
+  );
+}
+
+function AreaPanel({ selected, detail, loading, onClose }) {
+  if (!selected) return null;
+  const judged = selected.risk_ratio != null;
+  const industries = detail?.industries ?? [];
+  const VS = {
+    높음: { label: "시 평균보다 높음", cls: "badge badge-warn" },
+    낮음: { label: "시 평균보다 낮음", cls: "badge badge-ok" },
+    차이없음: { label: "유의차 없음", cls: "badge badge-neutral" },
+  }[detail?.vs_city ?? "차이없음"];
+
+  return (
+    <div className="card" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 0 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+        <div>
+          <h3 className="t-h3" style={{ margin: 0 }}>{selected.name}</h3>
+          <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 2 }}>
+            {detail ? `${detail.quarter_label} 기준 · 점포 ${detail.total_stores.toLocaleString()}곳` : " "}
+          </div>
+        </div>
+        <button
+          onClick={onClose}
+          aria-label="닫기"
+          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--outline)", fontSize: 20, lineHeight: 1, padding: 0 }}
+        >
+          ×
+        </button>
+      </div>
+
+      {/* 등급 요약 */}
+      <div style={{ display: "flex", alignItems: "baseline", gap: 10, margin: "16px 0 4px", flexWrap: "wrap" }}>
+        {judged ? (
+          <>
+            <span className="t-metric" style={{ fontSize: 38, color: selected.color, lineHeight: 1 }}>
+              {fmt(selected.risk_ratio)}%
+            </span>
+            <span
+              style={{
+                fontSize: 12, fontWeight: 700, color: selected.color,
+                background: `color-mix(in srgb, ${selected.color} 12%, white)`,
+                padding: "4px 12px", borderRadius: "var(--radius-full)",
+              }}
+            >
+              {selected.risk_level}
+            </span>
+            {/* 근거의 두께는 칩 하나로만 말한다. 자세한 내용은 title과 아래
+                "분석 가능 업종" 줄, 지도 범례에 이미 있다. */}
+            {selected.evidence_thin && (
+              <span className="badge badge-neutral" title={selected.hold_notice ?? undefined}>
+                근거 얕음
+              </span>
+            )}
+          </>
+        ) : (
+          <GradeBadge grade="판단보류" />
+        )}
+      </div>
+      <div className="t-caption" style={{ color: "var(--ink-muted)", marginBottom: 12 }}>
+        {judged ? "위험 업종 비율 (최근 1년 누적)" : "읍면동 등급을 판정할 표본이 부족합니다"}
+      </div>
+
+      {loading && <div className="t-caption" style={{ color: "var(--ink-muted)", padding: "10px 0" }}>상세 불러오는 중…</div>}
+
+      {detail && (
+        <>
+          {/* 업종별로는 표본이 모자란 동도 동 전체를 묶으면 분모가 수천이 되어 판정할 수 있다.
+              이 줄이 "커버율 0% = 아무것도 모른다"를 막는다. */}
+          <Row
+            label="동 전체 폐업률"
+            hint={
+              detail.city_pooled_closure_rate_pct != null
+                ? `업종 구분 없이 묶은 값 · 화성시 ${fmt(detail.city_pooled_closure_rate_pct, 2)}%`
+                : "업종 구분 없이 묶은 값"
+            }
+          >
+            {fmt(detail.pooled_closure_rate_pct, 2)}%{" "}
+            <span className={VS.cls} style={{ marginLeft: 4, fontWeight: 600 }}>{VS.label}</span>
+          </Row>
+
+          <Row label="위험 · 주의 업종" hint={`표본 기준을 넘은 ${detail.sample_sufficient_cells}개 업종 중`}>
+            {detail.risk_cells} · {detail.caution_cells}개
+          </Row>
+
+          <Row label="폐업률 추이 기울기">{selected.trend?.toFixed(3)}</Row>
+
+          <Row
+            label="분석 가능 업종"
+            hint={
+              selected.evidence_thin
+                ? `표본 충족률 ${detail.coverage_pct}% · 업종 10개 미만이라 읍면동 등급의 근거가 얕습니다`
+                : `표본 충족률 ${detail.coverage_pct}% · 점포 50곳 이상 기준`
+            }
+          >
+            {detail.sample_sufficient_cells}/{detail.total_cells}개
+          </Row>
+
+          <Row
+            label="사각지대"
+            hint={`점포 ${detail.blindspot_stores.toLocaleString()}곳 · 전체의 ${
+              detail.total_stores ? Math.round(detail.blindspot_stores / detail.total_stores * 100) : 0
+            }%`}
+          >
+            {detail.blindspot_cells}개 업종
+          </Row>
+
+          {detail.population != null && (
+            <Row
+              label="배후인구"
+              hint={
+                detail.population_change_pct != null
+                  ? `${detail.population_from_label} → ${detail.population_to_label} ${detail.population_change_pct > 0 ? "+" : ""}${detail.population_change_pct}%`
+                  : null
+              }
+            >
+              {detail.population.toLocaleString()}명
+            </Row>
+          )}
+
+          {/* "그래서 어느 업종인가" — 이 목록이 이 패널의 존재 이유다 */}
+          {industries.length > 0 && (
+            <div style={{ marginTop: 16 }}>
+              <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 8 }}>
+                업종별 폐업률 (표본 기준 충족 {industries.length}개)
+              </div>
+              <div style={{ maxHeight: 260, overflowY: "auto", margin: "0 -6px" }}>
+                {industries.map((item) => (
+                  <Link
+                    key={item.industry_id}
+                    to={`/cells/${item.area_id}/${item.industry_id}`}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 8,
+                      padding: "7px 6px", borderRadius: "var(--radius-sm)",
+                      textDecoration: "none", color: "inherit",
+                    }}
+                  >
+                    <span className="t-caption" style={{ color: "var(--on-surface)", flex: "1 1 auto", minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {item.category}
+                    </span>
+                    <span className="t-caption" style={{ color: "var(--ink-muted)", fontVariantNumeric: "tabular-nums", flexShrink: 0 }}>
+                      {fmt(item.cumulative_closure_rate_pct, 1)}%
+                    </span>
+                    <GradeBadge grade={item.risk_grade} />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+            <Link
+              to="/dashboard"
+              className="btn-utility"
+              style={{ flex: 1, textAlign: "center", color: "var(--primary)", textDecoration: "none", boxSizing: "border-box" }}
+            >
+              조기경보
+            </Link>
+            <Link
+              to={`/blindspots?dong=${encodeURIComponent(selected.name)}`}
+              className="btn-utility"
+              style={{ flex: 1, textAlign: "center", color: "var(--primary)", textDecoration: "none", boxSizing: "border-box" }}
+            >
+              사각지대
+            </Link>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 export default function MapPage() {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -126,6 +320,8 @@ export default function MapPage() {
   const boundsFitRef = useRef(false);
   const [riskData, setRiskData] = useState([]);
   const [selected, setSelected] = useState(null);
+  const [detail, setDetail] = useState(null);
+  const [detailLoading, setDetailLoading] = useState(false);
   const [tooltip, setTooltip] = useState(null);
   const [ranking, setRanking] = useState([]);
   const [rankingLoading, setRankingLoading] = useState(true);
@@ -217,6 +413,30 @@ export default function MapPage() {
     });
   }, []);
 
+  // 읍면동을 고르면 상세를 따로 부른다. 지도 payload는 29개 동을 한 번에 내려주므로
+  // 업종 목록까지 얹으면 첫 로딩이 무거워진다 — 고른 동만 그때 가져온다.
+  useEffect(() => {
+    const areaId = selected?.area_id;
+    if (!areaId) { setDetail(null); return; }
+    setDetailLoading(true);
+    setDetail(null);
+    apiFetchJson(`/api/alerts/area/${areaId}/detail`)
+      .then(setDetail)
+      .catch(() => setDetail(null))
+      .finally(() => setDetailLoading(false));
+  }, [selected?.area_id]);
+
+  // 패널이 열리고 닫힐 때 지도 칸의 폭이 바뀐다. 네이버 지도는 컨테이너 크기 변화를
+  // 스스로 알아채지 못해서 타일이 잘린 채 남는다. 레이아웃이 끝난 뒤 resize를 알린다.
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !window.naver?.maps) return;
+    const timer = setTimeout(() => {
+      window.naver.maps.Event.trigger(map, "resize");
+    }, 60);
+    return () => clearTimeout(timer);
+  }, [selected]);
+
   useEffect(() => {
     if (!NAVER_CLIENT_ID) return;
     const riskMap = Object.fromEntries(riskData.map((r) => [r.dong, r]));
@@ -298,7 +518,8 @@ export default function MapPage() {
           한 단계 차이가 곧 2배 차이여서 화성시가 화면의 절반만 차지했다.
           지도를 본문 전체 폭으로 빼면 zoom 11이 들어가고, 상세 패널은 아래로 내린다. */}
       <div style={{ display: tab === "map" ? "block" : "none" }}>
-        <div style={{ position: "relative" }}>
+        <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
+        <div style={{ position: "relative", flex: "1 1 620px", minWidth: 0 }}>
           {mapError && (
             <div
               role="alert"
@@ -378,119 +599,19 @@ export default function MapPage() {
           </div>
         </div>
 
-        {/* 아무것도 안 고른 상태에서는 카드를 아예 그리지 않는다. 지도 아래로 내려온 뒤로
-            "읍면동을 선택하세요" 안내가 순위표를 한 화면 밀어내고 있었다.
-            안내 문구는 화면 설명("읍면동을 클릭하면 상세 지표가 표시됩니다")에 이미 있다. */}
+        {/* 아무것도 안 고른 상태에서는 패널을 그리지 않는다. 지도가 본문 전체 폭을 쓰고,
+            "읍면동을 클릭하면 상세 지표가 표시됩니다" 안내는 화면 설명에 이미 있다. */}
         {selected && (
-          <div className="card" style={{ marginTop: 16, height: "fit-content", maxWidth: 520 }}>
-            <>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 8 }}>
-                <h3 className="t-h3" style={{ margin: 0 }}>{selected.name}</h3>
-                <button
-                  onClick={() => setSelected(null)}
-                  style={{ background: "none", border: "none", cursor: "pointer", color: "var(--outline)", fontSize: 18, lineHeight: 1, padding: 0 }}
-                >
-                  ×
-                </button>
-              </div>
-
-              {selected.risk_ratio != null ? (
-                <>
-                  <div style={{ textAlign: "center", margin: "18px 0 20px" }}>
-                    <div className="t-metric" style={{ fontSize: 44, color: selected.color, lineHeight: 1.1 }}>{fmt(selected.risk_ratio)}%</div>
-                    <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 6 }}>위험 업종 비율 (최근 1년 누적 기준)</div>
-                    <span
-                      style={{
-                        display: "inline-block",
-                        marginTop: 10,
-                        fontSize: 12,
-                        fontWeight: 700,
-                        color: selected.color,
-                        background: `color-mix(in srgb, ${selected.color} 12%, white)`,
-                        padding: "4px 12px",
-                        borderRadius: "var(--radius-full)",
-                      }}
-                    >
-                      {selected.risk_level}
-                    </span>
-                  </div>
-                  <div className="t-body-sm" style={{ color: "var(--ink-muted)", padding: "12px 0", borderTop: "1px solid var(--hairline)" }}>
-                    폐업률 추이 기울기 <b style={{ color: "var(--on-surface)" }}>{selected.trend?.toFixed(3)}</b>
-                  </div>
-                  <div className="t-body-sm" style={{ color: "var(--ink-muted)", padding: "12px 0", borderTop: "1px solid var(--hairline)" }}>
-                    분석 가능 업종 <b style={{ color: "var(--on-surface)" }}>{selected.sample_sufficient_cells}/{selected.total_cells}개</b>
-                    <div className="t-caption" style={{ marginTop: 4, color: "var(--ink-faint)" }}>
-                      표본 충족률 {selected.coverage_pct}% · 점포 수 50개 이상 기준
-                    </div>
-                  </div>
-                  {selected.evidence_thin && selected.hold_notice && (
-                    <div
-                      className="t-caption"
-                      style={{
-                        color: "var(--ink-secondary)",
-                        background: "var(--surface-container-low)",
-                        padding: "10px 12px",
-                        borderRadius: "var(--radius-md)",
-                        marginTop: 12,
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      {selected.hold_notice}
-                    </div>
-                  )}
-                  <Link
-                    to="/dashboard"
-                    className="btn-utility"
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "center",
-                      gap: 6,
-                      marginTop: 16,
-                      width: "100%",
-                      boxSizing: "border-box",
-                      color: "var(--primary)",
-                      textDecoration: "none",
-                    }}
-                  >
-                    조기경보 대시보드에서 보기
-                  </Link>
-                </>
-              ) : (
-                /* 비율을 안 내려준 동. "데이터 없음" 한 줄로 끝내면 담당자가 왜인지 모른다.
-                   분모를 보여줘야 "위험하지 않다"가 아니라 "판단할 근거가 없다"로 읽힌다. */
-                <div style={{ padding: "20px 0" }}>
-                  <div style={{ textAlign: "center" }}>
-                    <GradeBadge grade="판단보류" />
-                  </div>
-                  <div className="t-body-sm" style={{ color: "var(--ink-muted)", marginTop: 14, lineHeight: 1.7 }}>
-                    {selected.hold_notice ?? "읍면동 단위 등급을 판정할 표본이 부족합니다."}
-                  </div>
-                  <div className="t-body-sm" style={{ color: "var(--ink-muted)", padding: "12px 0", marginTop: 8, borderTop: "1px solid var(--hairline)" }}>
-                    분석 가능 업종{" "}
-                    <b style={{ color: "var(--on-surface)" }}>
-                      {selected.sample_sufficient_cells}/{selected.total_cells}개
-                    </b>
-                    <div className="t-caption" style={{ marginTop: 4, color: "var(--ink-faint)" }}>
-                      표본 충족률 {selected.coverage_pct}% · 점포 수 50개 이상 기준
-                    </div>
-                  </div>
-                  <Link
-                    to={`/blindspots?dong=${encodeURIComponent(selected.name)}`}
-                    className="btn-utility"
-                    style={{
-                      display: "flex", alignItems: "center", justifyContent: "center", gap: 6,
-                      marginTop: 16, width: "100%", boxSizing: "border-box",
-                      color: "var(--primary)", textDecoration: "none",
-                    }}
-                  >
-                    사각지대에서 이 읍면동 보기
-                  </Link>
-                </div>
-              )}
-            </>
+          <div style={{ flex: "0 0 340px", maxWidth: "100%", position: "sticky", top: 16 }}>
+            <AreaPanel
+              selected={selected}
+              detail={detail}
+              loading={detailLoading}
+              onClose={() => setSelected(null)}
+            />
           </div>
         )}
+        </div>
       </div>
 
       <div style={{ display: tab === "ranking" ? "block" : "none" }}>

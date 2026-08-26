@@ -9,6 +9,7 @@ from ..auth.dependencies import get_current_official
 from ..database import get_db
 from ..models import (
     AdminArea,
+    AreaPopulationQuarter,
     AreaQuarterSummary,
     CommercialQuarter,
     IndustryCategory,
@@ -17,6 +18,8 @@ from ..models import (
     RiskPrediction,
 )
 from ..schemas import (
+    AreaDetailResponse,
+    AreaIndustryItem,
     BlindspotCoverageItem,
     BlindspotCoverageResponse,
     BlindspotIndustryItem,
@@ -267,6 +270,7 @@ def get_vacancy_risk_map(db: Session = Depends(get_db)):
         result.append(
             VacancyRiskItem(
                 dong=dong,
+                area_id=summary.area_id,
                 risk_ratio=summary.risk_industry_ratio_pct if judged else None,
                 risk_level=level,
                 color=colors.get(level, "#c1c6d5"),
@@ -283,6 +287,148 @@ def get_vacancy_risk_map(db: Session = Depends(get_db)):
             )
         )
     return sorted(result, key=lambda item: item.dong)
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# 읍면동 상세
+#
+# 지도에서 동을 누르면 "위험 업종 비율 0.0%"와 표본 충족률만 뜨고 끝났다. 담당자의 다음
+# 질문은 반드시 "그래서 어느 업종인가"인데 화면에서 동선이 끊겼다.
+#
+# 여기서 세 가지를 한 번에 답한다 —
+#   ① 어느 업종이 나쁜가       업종 목록(표본충분 셀, 폐업률 순)
+#   ② 동 전체로는 어떤가       업종 구분 없이 묶은 폐업률 + 나머지 지역과의 비교
+#   ③ 무엇이 안 보이는가       사각지대 규모
+# 배후 여건(등록인구)은 판정 축이 아니라 원인의 방향을 좁히는 참고 자료로만 붙인다.
+
+
+@router.get("/area/{area_id}/detail", response_model=AreaDetailResponse)
+def get_area_detail(area_id: int, db: Session = Depends(get_db)):
+    latest = db.query(func.max(CommercialQuarter.quarter_code)).scalar()
+    if not latest:
+        raise HTTPException(status_code=404, detail="적재된 분기 데이터가 없습니다")
+
+    area = db.query(AdminArea).filter(AdminArea.id == area_id).one_or_none()
+    if area is None:
+        raise HTTPException(status_code=404, detail="해당 읍면동을 찾을 수 없습니다")
+
+    rows = (
+        db.query(CommercialQuarter, IndustryCategory.industry_name)
+        .join(IndustryCategory, CommercialQuarter.industry_id == IndustryCategory.id)
+        .filter(
+            CommercialQuarter.quarter_code == latest,
+            CommercialQuarter.area_id == area_id,
+        )
+        .all()
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="해당 읍면동의 분기 데이터가 없습니다")
+
+    industries = [
+        AreaIndustryItem(
+            area_id=area_id,
+            industry_id=cell.industry_id,
+            category=name,
+            store_count=cell.store_count,
+            cumulative_closure_rate_pct=_pct(cell.closure_rate_cum4),
+            cumulative_closure_count=cell.closure_count_cum4,
+            risk_grade=cell.risk_grade,
+            cell_type=cell.cell_type,
+        )
+        for cell, name in rows
+        if not cell.sample_insufficient and cell.closure_rate_cum4 is not None
+    ]
+    industries.sort(key=lambda item: item.cumulative_closure_rate_pct or 0, reverse=True)
+
+    total_cells = len(rows)
+    sufficient = len(industries)
+    total_stores = sum(cell.store_count for cell, _ in rows)
+    blind = [cell for cell, _ in rows if cell.sample_insufficient]
+
+    # 동 단위 폐업률 — 셀별 분모를 복원해 합산한다. 누적 비율은 건수합/분모합이므로
+    # 동 전체 분모도 셀 분모의 합이어야 한다. 업종별로는 표본이 모자란 동도 이 단위에서는
+    # 분모가 수천이 되어 판정할 수 있다(기배동 1,855).
+    pooled_count = 0
+    pooled_denominator = 0
+    for cell, _ in rows:
+        denominator, _approx = cumulative_denominator(cell)
+        if denominator:
+            pooled_count += cell.closure_count_cum4 or 0
+            pooled_denominator += denominator
+
+    # 대조군은 "시 전체"가 아니라 "이 동을 뺀 나머지"다. 자기 자신을 포함한 평균과 비교하면
+    # 큰 동일수록 차이가 희석된다(동탄1동은 분모가 시 전체의 9%).
+    city_count = 0
+    city_denominator = 0
+    for cell in (
+        db.query(CommercialQuarter)
+        .filter(CommercialQuarter.quarter_code == latest)
+        .all()
+    ):
+        denominator, _approx = cumulative_denominator(cell)
+        if denominator:
+            city_count += cell.closure_count_cum4 or 0
+            city_denominator += denominator
+
+    pooled_rate = round(pooled_count / pooled_denominator * 100, 2) if pooled_denominator else None
+    city_rate = round(city_count / city_denominator * 100, 2) if city_denominator else None
+
+    verdict = "차이없음"
+    z_value = None
+    rest_count = city_count - pooled_count
+    rest_denominator = city_denominator - pooled_denominator
+    if pooled_denominator and rest_denominator > 0:
+        z = two_proportion_z(pooled_count, pooled_denominator, rest_count, rest_denominator)
+        if z is not None:
+            higher = pooled_count / pooled_denominator > rest_count / rest_denominator
+            z_value = round(z if higher else -z, 2)
+            if z >= 1.96:
+                verdict = "높음" if higher else "낮음"
+
+    population = (
+        db.query(AreaPopulationQuarter)
+        .filter(
+            AreaPopulationQuarter.area_id == area_id,
+            AreaPopulationQuarter.total_population.isnot(None),
+        )
+        .order_by(AreaPopulationQuarter.quarter_code)
+        .all()
+    )
+    pop_fields: dict = {}
+    if population:
+        window = population[-13:]   # 3년 + 기준점
+        first, last = window[0], window[-1]
+        pop_fields = {
+            "population": last.total_population,
+            "population_change_pct": (
+                round((last.total_population - first.total_population) / first.total_population * 100, 1)
+                if first.total_population else None
+            ),
+            "population_from_label": quarter_label(first.quarter_code),
+            "population_to_label": quarter_label(last.quarter_code),
+        }
+
+    return AreaDetailResponse(
+        area_id=area_id,
+        dong=area.area_name,
+        quarter_code=latest,
+        quarter_label=quarter_label(latest),
+        total_cells=total_cells,
+        sample_sufficient_cells=sufficient,
+        coverage_pct=round(sufficient / total_cells * 100, 1) if total_cells else 0.0,
+        risk_cells=sum(1 for item in industries if item.risk_grade == "위험"),
+        caution_cells=sum(1 for item in industries if item.risk_grade == "주의"),
+        pooled_closure_rate_pct=pooled_rate,
+        pooled_closure_count=pooled_count,
+        city_pooled_closure_rate_pct=city_rate,
+        vs_city=verdict,
+        vs_city_z=z_value,
+        blindspot_cells=len(blind),
+        blindspot_stores=sum(cell.store_count for cell in blind),
+        total_stores=total_stores,
+        industries=industries,
+        **pop_fields,
+    )
 
 
 BLINDSPOT_NOTICE = (

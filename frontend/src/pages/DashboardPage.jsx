@@ -57,82 +57,85 @@ function StatCard({ label, value, unit, tone }) {
 // 열 개를 훑는 자리에서 카드마다 네 줄씩 읽게 하면 정작 순위가 눈에 안 들어온다.
 // 잘라낸 값은 전부 CSV 내려받기와 셀 상세에 그대로 남아 있다.
 function RiskCard({ item }) {
+  // 카드 전체를 링크로 둔다. 예전에는 카드마다 "· 상세 →"를 적었는데 10장이면 같은 문구가
+  // 열 번 반복되고, 정작 누를 수 있는 곳은 제목 줄뿐이었다.
+  const watchOnly = item.risk_grade === "안정";
   return (
-    <div
+    <Link
+      to={`/cells/${item.area_id}/${item.industry_id}`}
       className="card"
-      style={{ padding: 14, display: "flex", flexDirection: "column", gap: 10, transition: "box-shadow .15s ease" }}
+      style={{
+        padding: 16,
+        display: "flex",
+        flexDirection: "column",
+        gap: 10,
+        textDecoration: "none",
+        color: "inherit",
+      }}
     >
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
-        <span className="badge" style={{ background: "var(--primary-fixed)", color: "var(--primary)" }}>
-          예측 #{item.predicted_rank}
+      {/* 순위는 칩이 아니라 숫자로 둔다. 칩이 셋이면 색이 셋이라 어디를 봐야 할지 흩어진다 —
+          색을 쓰는 것은 등급 하나뿐이고 순위와 유형은 글자로만 말한다. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <span className="t-eyebrow" style={{ color: "var(--ink-faint)", fontVariantNumeric: "tabular-nums" }}>
+          #{item.predicted_rank}
         </span>
-        <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
+        <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
           <TypeBadge type={item.cell_type} />
           {/* "안정"도 그린다. 감추면 등급이 없는 셀과 구분되지 않고,
               비교·상세 화면에서는 보이던 것이 여기서만 사라져 화면끼리 어긋났다. */}
           <GradeBadge grade={item.risk_grade} />
         </span>
-        {item.anomaly && (
-          <span className="badge badge-danger">
-            <span className="material-symbols-outlined" style={{ fontSize: 14 }}>trending_up</span>
-            트렌드 이상
-          </span>
-        )}
       </div>
 
-      <Link
-        to={`/cells/${item.area_id}/${item.industry_id}`}
-        style={{ textDecoration: "none" }}
-      >
-        <div className="t-title" style={{ color: "var(--on-surface)" }}>{item.dong}</div>
-        <div className="t-caption" style={{ color: "var(--ink-muted)" }}>
-          {item.category} <span style={{ color: "var(--primary)" }}>· 상세 →</span>
-        </div>
-      </Link>
-
-      {/* "안정인데 왜 조기경보에 있냐"는 질문이 나오는 자리다. 정렬은 모델이 본 2분기 뒤
-          위험 순위이고 등급은 이미 관측된 실적이라 둘은 어긋날 수 있다 — 그게 조기경보의
-          존재 이유이기도 하다. 화면 위쪽 설명만으로는 카드 단위에서 안 읽혀서 여기 붙인다. */}
-      {item.risk_grade === "안정" && (
-        <p
-          className="t-caption"
-          style={{
-            margin: 0,
-            padding: "6px 8px",
-            background: "var(--surface-container-low)",
-            borderRadius: "var(--radius-md)",
-            color: "var(--ink-secondary)",
-            lineHeight: 1.6,
-          }}
-        >
-          지금은 <b>안정</b>이지만 모델이 <b>2분기 뒤</b> 위험 상위로 봅니다.
-        </p>
-      )}
+      <div>
+        <div className="t-title" style={{ color: "var(--on-surface)", lineHeight: 1.3 }}>{item.dong}</div>
+        <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 2 }}>{item.category}</div>
+      </div>
 
       <div style={{ marginTop: "auto" }}>
-        <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 2 }}>최근 1년 누적 폐업률</div>
         <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-          <span className="t-metric" style={{ fontSize: 26 }}>{fmtPct(item.cumulative_closure_rate_pct)}</span>
-          <span style={{ fontSize: 14, color: "var(--ink-faint)", fontWeight: 500 }}>%</span>
+          <span className="t-metric" style={{ fontSize: 30 }}>{fmtPct(item.cumulative_closure_rate_pct)}</span>
+          <span style={{ fontSize: 15, color: "var(--ink-faint)", fontWeight: 500 }}>%</span>
         </div>
-        {/* 비율만 두면 점포 60곳에서 6곳 닫힌 것과 600곳에서 60곳 닫힌 것이 같아 보인다.
-            담당자가 규모를 함께 판단할 수 있도록 원래 건수를 병기한다.
+        {/* 라벨을 숫자 아래로 내렸다. 위에 두면 카드 열 장에서 같은 문구가 먼저 열 번 읽힌다. */}
+        <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 1 }}>최근 1년 누적 폐업률</div>
 
-            "N곳 / 전체 M곳"으로 쓰지 않는다. 위 비율의 분모는 4개 분기 직전점포수의 합이지
-            현재 점포수가 아니라서, 슬래시로 묶으면 눈으로 나눈 값이 큰 숫자와 4배쯤
-            어긋난다(2026-08-25 감사). 두 수를 가운뎃점으로 분리해 각각의 사실로 읽히게 한다.
-            분모까지 보여주는 건 셀 상세에서 한다. */}
+        {/* 비율만 두면 점포 60곳에서 6곳 닫힌 것과 600곳에서 60곳 닫힌 것이 같아 보인다.
+            "N곳 / M곳"으로 묶지 않는다 — 위 비율의 분모는 4개 분기 직전점포수의 합이지
+            현재 점포수가 아니라서, 슬래시로 묶으면 눈으로 나눈 값이 4배쯤 어긋난다
+            (2026-08-25 감사). 가운뎃점으로 갈라 각각의 사실로 읽히게 한다. */}
         {num(item.store_count) !== null && (
-          <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
+          <div
+            className="t-caption"
+            style={{ color: "var(--ink-muted)", marginTop: 8, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
+          >
             {num(item.cumulative_closure_count) !== null
-              ? `최근 1년 ${item.cumulative_closure_count.toLocaleString()}곳 닫힘`
-              : "누적 건수 미산출"}
-            {" · 현재 점포 "}{item.store_count.toLocaleString()}곳
+              ? `${item.cumulative_closure_count.toLocaleString()}곳 닫힘`
+              : "건수 미산출"}
+            {" · 점포 "}{item.store_count.toLocaleString()}곳
           </div>
         )}
-      </div>
 
-    </div>
+        {/* "안정인데 왜 조기경보에 있냐"는 질문이 나오는 자리다. 정렬은 모델이 본 2분기 뒤
+            위험 순위이고 등급은 이미 관측된 실적이라 둘은 어긋날 수 있다 — 그게 조기경보의
+            존재 이유이기도 하다. 예전에는 박스로 띄웠는데 그 카드만 키가 달라져 한 줄에
+            늘어선 숫자들이 어긋났다. 한 줄로 줄이고 자리를 항상 잡아 둔다. */}
+        <div
+          className="t-caption"
+          style={{
+            marginTop: 8,
+            paddingTop: 8,
+            borderTop: "1px solid var(--hairline)",
+            color: watchOnly ? "var(--ink-secondary)" : "var(--ink-faint)",
+            whiteSpace: "nowrap",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+          }}
+        >
+          {watchOnly ? "지금은 안정 · 2분기 뒤 위험 상위 예측" : item.anomaly ? "트렌드 이상 감지" : "\u00a0"}
+        </div>
+      </div>
+    </Link>
   );
 }
 
@@ -277,12 +280,12 @@ export default function DashboardPage() {
               unit="개"
               tone={anomalyCount > 0 ? "var(--error)" : "var(--on-surface)"}
             />
-            <StatCard label="그중 평균 폐업률" value={fmtPct(avgActual)} unit="%" tone="var(--primary)" />
+            <StatCard label="평균 폐업률" value={fmtPct(avgActual)} unit="%" tone="var(--primary)" />
           </div>
-          <p className="t-caption" style={{ color: "var(--ink-faint)", margin: "0 0 24px", lineHeight: 1.6 }}>
-            위 세 값은 이 화면이 보여주는 상위 {data.length}개 안에서 센 것입니다.
-            화성시 전체 분석 대상은 {meta?.eligible_cells ? `표본충분 ${meta.eligible_cells.toLocaleString()}개 상권` : "표본충분 상권"}이며,
-            표본이 부족해 판단을 보류한 상권은 <Link to="/blindspots" style={{ color: "var(--primary)" }}>사각지대</Link>에서 따로 관리합니다.
+          <p className="t-caption" style={{ color: "var(--ink-faint)", margin: "0 0 24px" }}>
+            상위 {data.length}개 안에서 센 값입니다. 전체 분석 대상{" "}
+            {meta?.eligible_cells ? `${meta.eligible_cells.toLocaleString()}개 상권` : "상권"} ·
+            표본 부족은 <Link to="/blindspots" style={{ color: "var(--primary)" }}>사각지대</Link>에서 관리
           </p>
         </>
       )}
@@ -322,7 +325,7 @@ export default function DashboardPage() {
           >
             {categoryError
               ? "업종 목록을 불러오지 못했습니다."
-              : `최신 분기 점포 수 50개 이상이며 AI 순위가 산출된 ${categories.length}개 업종`}
+              : `표본 기준을 넘고 AI 순위가 산출된 ${categories.length}개 업종`}
           </div>
         </div>
 
@@ -360,7 +363,7 @@ export default function DashboardPage() {
           />
         )
       ) : (
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 12, marginBottom: 24 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(242px, 1fr))", gap: 14, marginBottom: 24 }}>
           {data.map((item) => (
             <RiskCard key={`${item.dong}-${item.category}`} item={item} />
           ))}

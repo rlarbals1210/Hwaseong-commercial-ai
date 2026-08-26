@@ -188,6 +188,7 @@ class VacancyRiskItem(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     dong: str
+    area_id: int = 0            # 클릭한 읍면동의 상세를 부르려면 id가 필요하다
     # 표본충분 셀이 적은 동은 비율을 내리지 않는다(None). 0.0으로 채우면 "판단 불가"가
     # "위험 업종 0%"로 읽히고 지도가 초록으로 칠해진다(2026-08-25 감사).
     risk_ratio: float | None = None
@@ -201,6 +202,61 @@ class VacancyRiskItem(BaseModel):
     evidence_thin: bool = False
     # 보류 사유 또는 근거 얕음 안내. 충분히 판정된 동은 None
     hold_notice: str | None = None
+
+
+class AreaIndustryItem(BaseModel):
+    """읍면동 안의 업종 한 줄. 지도 패널이 "그래서 어느 업종인가"에 답하게 한다."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    area_id: int
+    industry_id: int
+    category: str
+    store_count: int
+    cumulative_closure_rate_pct: float | None = None
+    cumulative_closure_count: int | None = None
+    risk_grade: str | None = None
+    cell_type: str | None = None
+
+
+class AreaDetailResponse(BaseModel):
+    """지도에서 읍면동을 눌렀을 때 뜨는 상세.
+
+    예전 패널은 "위험 업종 비율 0.0%"와 표본 충족률만 말하고 끝났다. 담당자의 다음 질문은
+    반드시 "그래서 어느 업종인가"인데 화면에서 동선이 끊겼다. 업종 목록과 동 단위 실적,
+    배후 여건까지 한 패널에서 답한다.
+    """
+
+    area_id: int
+    dong: str
+    quarter_code: int
+    quarter_label: str
+
+    total_cells: int = 0
+    sample_sufficient_cells: int = 0
+    coverage_pct: float = 0.0
+    risk_cells: int = 0                  # 위험 등급 업종 수
+    caution_cells: int = 0               # 주의 등급 업종 수
+
+    # 업종 구분 없이 읍면동 전체를 묶은 폐업률. 표본이 부족한 동도 이 단위에서는 판정된다.
+    pooled_closure_rate_pct: float | None = None
+    pooled_closure_count: int = 0
+    city_pooled_closure_rate_pct: float | None = None
+    vs_city: str = "차이없음"            # 높음 / 낮음 / 차이없음
+    vs_city_z: float | None = None
+
+    # 배후 여건 — 판정 축이 아니라 원인의 방향을 좁히는 참고 자료
+    population: int | None = None
+    population_change_pct: float | None = None
+    population_from_label: str | None = None
+    population_to_label: str | None = None
+
+    # 사각지대 규모
+    blindspot_cells: int = 0
+    blindspot_stores: int = 0
+    total_stores: int = 0
+
+    industries: list[AreaIndustryItem] = []
 
 
 class PredictionContributionResponse(BaseModel):
