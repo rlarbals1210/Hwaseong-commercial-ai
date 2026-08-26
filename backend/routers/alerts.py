@@ -3,7 +3,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
-from sqlalchemy import func
+from sqlalchemy import case, func
 from typing import Optional
 from ..auth.dependencies import get_current_official
 from ..database import get_db
@@ -17,6 +17,10 @@ from ..models import (
     RiskPrediction,
 )
 from ..schemas import (
+    BlindspotCoverageItem,
+    BlindspotCoverageResponse,
+    BlindspotIndustryItem,
+    BlindspotIndustryResponse,
     BlindspotItem,
     BlindspotResponse,
     ClosureRiskItem,
@@ -24,6 +28,7 @@ from ..schemas import (
     PredictionExplanationResponse,
     VacancyRiskItem,
 )
+from ..services.compare import closure_interval_pct, cumulative_denominator, two_proportion_z
 from ..services.explain import EXPLANATION_NOTICE
 from ..services.risk import (
     AREA_HOLD_LEVEL,
@@ -286,10 +291,228 @@ BLINDSPOT_NOTICE = (
 )
 
 
+# ────────────────────────────────────────────────────────────────────────────
+# 사각지대의 모양
+#
+# "전체 점포의 38%가 안 보인다"는 한 숫자로는 구멍이 어디에 뚫려 있는지 알 수 없다.
+# 두 축으로 나눠 보면 구조가 드러난다 —
+#   지역 축: 기배동·매송면 커버율 0%, 동탄1동 35.1% (농촌·구도심에 몰려 있다)
+#   업종 축: 74개 업종 중 41개가 화성시 전역에서 판단 가능 셀 0개
+#
+# 이걸 화면이 스스로 드러내는 편이 낫다. 정책 우선순위를 고르는 도구가 도시 지역에
+# 편향돼 있다는 지적은 어차피 나오고, 우리가 먼저 재어 보여주면 한계 고지가 되지만
+# 감추면 결함이 된다.
+
+BLINDSPOT_SHAPE_NOTICE = (
+    f"점포 {SAMPLE_MIN}곳 미만이라 통계 판단을 보류한 상권의 분포입니다. "
+    "커버율이 낮다고 그 지역·업종이 더 위험하다는 뜻은 아닙니다. "
+    "우리가 판단할 근거를 갖지 못했다는 뜻입니다."
+)
+
+# 문턱 근처 구간의 하한. 기준(50)의 60%다. 그 이상의 통계적 근거는 없고,
+# "조금만 더 모이면 판단 가능한 상권"을 점포 3곳짜리와 갈라놓는 것이 목적이다.
+# 화면에도 이 근거를 그대로 적는다 — 없는 이유를 지어내지 않는다.
+NEAR_THRESHOLD_RATIO = 0.6
+NEAR_MIN_STORES = int(SAMPLE_MIN * NEAR_THRESHOLD_RATIO)
+
+
+@router.get("/blindspots/coverage", response_model=BlindspotCoverageResponse)
+def get_blindspot_coverage(db: Session = Depends(get_db)):
+    """읍면동별 커버율 — 사각지대의 지역 축.
+
+    셀 수는 area_quarter_summaries에 이미 집계돼 있지만 점포 수는 없다. 점포 기준 비중이
+    더 중요해서(셀 하나가 점포 3곳일 수도 400곳일 수도 있다) commercial_quarters에서
+    같이 집계한다.
+    """
+    latest = db.query(func.max(CommercialQuarter.quarter_code)).scalar()
+    if not latest:
+        return BlindspotCoverageResponse(
+            notice=BLINDSPOT_SHAPE_NOTICE, sample_min=SAMPLE_MIN, items=[], zero_coverage_dongs=[]
+        )
+
+    rows = (
+        db.query(
+            AdminArea.area_name,
+            func.count(CommercialQuarter.id).label("total_cells"),
+            func.sum(
+                case((CommercialQuarter.sample_insufficient.is_(False), 1), else_=0)
+            ).label("sufficient_cells"),
+            func.sum(CommercialQuarter.store_count).label("total_stores"),
+            func.sum(
+                case((CommercialQuarter.sample_insufficient.is_(True), CommercialQuarter.store_count), else_=0)
+            ).label("blindspot_stores"),
+            func.sum(func.coalesce(CommercialQuarter.closure_count_cum4, 0)).label("closure_count"),
+        )
+        .join(AdminArea, CommercialQuarter.area_id == AdminArea.id)
+        .filter(CommercialQuarter.quarter_code == latest)
+        .group_by(AdminArea.area_name)
+        .all()
+    )
+
+    # 동 단위 누적 폐업률의 분모. 셀마다 복원해서 더한다 — 누적 비율은 건수합/분모합이라
+    # 동 전체 분모도 셀 분모의 합이어야 한다. 셀별 분모는 건수/비율로 복원되고,
+    # 폐업 0건인 셀만 점포수 x 4로 근사한다(services/compare.cumulative_denominator).
+    denominators: dict[str, int] = {}
+    for commercial, dong_name in (
+        db.query(CommercialQuarter, AdminArea.area_name)
+        .join(AdminArea, CommercialQuarter.area_id == AdminArea.id)
+        .filter(CommercialQuarter.quarter_code == latest)
+        .all()
+    ):
+        n, _approx = cumulative_denominator(commercial)
+        if n:
+            denominators[dong_name] = denominators.get(dong_name, 0) + n
+
+    items = []
+    city_closures = 0
+    city_denominator = 0
+    for name, total_cells, sufficient, total_stores, blind_stores, closures in rows:
+        total_cells = int(total_cells or 0)
+        sufficient = int(sufficient or 0)
+        total_stores = int(total_stores or 0)
+        blind_stores = int(blind_stores or 0)
+        closures = int(closures or 0)
+        denominator = denominators.get(name, 0)
+        city_closures += closures
+        city_denominator += denominator
+        items.append(BlindspotCoverageItem(
+            dong=name,
+            total_cells=total_cells,
+            sufficient_cells=sufficient,
+            coverage_pct=round(sufficient / total_cells * 100, 1) if total_cells else 0.0,
+            total_stores=total_stores,
+            blindspot_stores=blind_stores,
+            blindspot_store_pct=round(blind_stores / total_stores * 100, 1) if total_stores else 0.0,
+            pooled_closure_rate_pct=round(closures / denominator * 100, 2) if denominator else None,
+            pooled_closure_count=closures,
+            pooled_denominator=denominator,
+        ))
+
+    # 안 보이는 곳이 위로. 이 화면의 주어는 "판단 가능한 곳"이 아니라 "판단 못 하는 곳"이다.
+    # 시 전체 합계가 나온 뒤에야 비교가 가능해서 두 번째 패스에서 채운다.
+    # 대조군은 "시 전체"가 아니라 "그 동을 뺀 나머지"다. 자기 자신을 포함한 평균과
+    # 비교하면 큰 동(동탄1동은 분모가 시 전체의 9%)일수록 차이가 희석된다.
+    for item in items:
+        if not item.pooled_denominator:
+            continue
+        rest_count = city_closures - item.pooled_closure_count
+        rest_denominator = city_denominator - item.pooled_denominator
+        if rest_denominator <= 0:
+            continue
+        z = two_proportion_z(
+            item.pooled_closure_count, item.pooled_denominator, rest_count, rest_denominator
+        )
+        if z is None:
+            continue
+        # two_proportion_z는 절대값을 돌려준다. 방향은 비율을 직접 비교해 붙인다.
+        higher = item.pooled_closure_count / item.pooled_denominator > rest_count / rest_denominator
+        item.vs_city_z = round(z if higher else -z, 2)
+        if z >= 1.96:
+            item.vs_city = "높음" if higher else "낮음"
+
+    items.sort(key=lambda item: (item.coverage_pct, -item.blindspot_store_pct))
+    return BlindspotCoverageResponse(
+        notice=BLINDSPOT_SHAPE_NOTICE,
+        sample_min=SAMPLE_MIN,
+        items=items,
+        zero_coverage_dongs=[item.dong for item in items if item.sufficient_cells == 0],
+        city_pooled_closure_rate_pct=(
+            round(city_closures / city_denominator * 100, 2) if city_denominator else None
+        ),
+    )
+
+
+@router.get("/blindspots/industries", response_model=BlindspotIndustryResponse)
+def get_blindspot_industries(
+    limit: int = Query(20, ge=1, le=100),
+    db: Session = Depends(get_db),
+):
+    """업종별 커버율 — 사각지대의 업종 축.
+
+    읍면동마다 조금씩 흩어져 있는 업종은 어느 셀도 기준을 못 넘어 화면에서 통째로
+    사라진다. 식물 소매는 화성시에 300곳 넘게 있고 최근 4분기 폐업 건수도 세 자리인데
+    판단 가능 셀이 0개다.
+
+    폐업은 건수만 낸다. 누적 분모(4개 분기 직전점포수 합)를 같이 주면 화면이 그걸로
+    폐업률을 계산할 텐데, 표본부족 셀의 률은 애초에 쓰지 않기로 한 값이다.
+    """
+    latest = db.query(func.max(CommercialQuarter.quarter_code)).scalar()
+    if not latest:
+        return BlindspotIndustryResponse(
+            notice=BLINDSPOT_SHAPE_NOTICE, sample_min=SAMPLE_MIN, items=[],
+            invisible_count=0, industry_total=0,
+        )
+
+    rows = (
+        db.query(
+            IndustryCategory.industry_name,
+            func.count(CommercialQuarter.id).label("total_cells"),
+            func.sum(
+                case((CommercialQuarter.sample_insufficient.is_(False), 1), else_=0)
+            ).label("sufficient_cells"),
+            func.sum(CommercialQuarter.store_count).label("total_stores"),
+            func.sum(func.coalesce(CommercialQuarter.closure_count_cum4, 0)).label("closure_count"),
+        )
+        .join(IndustryCategory, CommercialQuarter.industry_id == IndustryCategory.id)
+        .filter(CommercialQuarter.quarter_code == latest)
+        .group_by(IndustryCategory.industry_name)
+        .all()
+    )
+
+    parsed = []
+    for name, total_cells, sufficient, total_stores, closures in rows:
+        total_cells = int(total_cells or 0)
+        sufficient = int(sufficient or 0)
+        parsed.append(BlindspotIndustryItem(
+            category=name,
+            total_cells=total_cells,
+            sufficient_cells=sufficient,
+            coverage_pct=round(sufficient / total_cells * 100, 1) if total_cells else 0.0,
+            total_stores=int(total_stores or 0),
+            closure_count=int(closures or 0),
+        ))
+
+    invisible_count = sum(1 for item in parsed if item.sufficient_cells == 0)
+    # 커버율이 낮은 순, 같으면 점포가 많은 순 — 규모가 큰데 안 보이는 업종이 제일 아프다.
+    parsed.sort(key=lambda item: (item.coverage_pct, -item.total_stores))
+    return BlindspotIndustryResponse(
+        notice=BLINDSPOT_SHAPE_NOTICE,
+        sample_min=SAMPLE_MIN,
+        items=parsed[:limit],
+        invisible_count=invisible_count,
+        industry_total=len(parsed),
+    )
+
+
+def _blindspot_item(commercial, dong: str, industry: str) -> BlindspotItem:
+    """목록 한 줄. 등급 대신 신뢰구간을 함께 싣는다.
+
+    구간은 모든 구간에 대해 계산하되 화면이 문턱 근처에서만 쓴다. 점포 10곳 미만
+    구간은 폭이 중위 25.9%p라(위험 기준선의 2.5배) 숫자를 띄우는 것 자체가 오해를 만든다.
+    잘라내는 판단은 화면 쪽에 두고 API는 사실을 그대로 준다.
+    """
+    interval = closure_interval_pct(commercial) or {}
+    return BlindspotItem(
+        area_id=commercial.area_id,
+        industry_id=commercial.industry_id,
+        dong=dong,
+        category=industry,
+        store_count=commercial.store_count,
+        cumulative_closure_count=commercial.closure_count_cum4 or 0,
+        cumulative_closure_rate_pct=_pct(commercial.closure_rate_cum4),
+        closure_lower_pct=interval.get("lower_pct"),
+        closure_upper_pct=interval.get("upper_pct"),
+        interval_approximate=bool(interval.get("approximate", False)),
+    )
+
+
 @router.get("/blindspots", response_model=BlindspotResponse)
 def get_blindspots(
     limit: int = Query(30, ge=1, le=200),
     dong: Optional[str] = Query(None),
+    # near = 문턱 근처(점포 NEAR_MIN_STORES ~ SAMPLE_MIN-1). 점포 47곳짜리와 3곳짜리는
+    # 같은 표에 있으면 안 된다 — 전자는 "거의 다 왔다", 후자는 "원리상 못 본다"다.
+    band: str = Query("all", pattern="^(all|near)$"),
     db: Session = Depends(get_db),
 ):
     """사각지대 — 표본부족으로 등급·순위에서 빠진 셀.
@@ -304,7 +527,8 @@ def get_blindspots(
     if not latest:
         return BlindspotResponse(
             notice=BLINDSPOT_NOTICE, items=[], total_cells=0, total_stores=0,
-            total_closures=0, store_share_pct=0.0, sample_min=SAMPLE_MIN,
+            total_closures=0, store_share_pct=0.0, city_stores=0, sample_min=SAMPLE_MIN,
+            band=band, band_cells=0, band_stores=0, near_min_stores=NEAR_MIN_STORES,
         )
 
     base = (
@@ -330,6 +554,16 @@ def get_blindspots(
     q = base
     if dong:
         q = q.filter(AdminArea.area_name == dong)
+    if band == "near":
+        q = q.filter(CommercialQuarter.store_count >= NEAR_MIN_STORES)
+
+    # 탭 라벨에 개수를 박으려면 필터 적용 후 총계가 따로 필요하다. 상단 지표 4개는
+    # 구간과 무관하게 전체 사각지대 기준을 유지한다 — 탭을 옮길 때마다 "38%"가
+    # 흔들리면 그게 무엇의 38%인지 알 수 없어진다.
+    band_rows = q.all()
+    band_cells = len(band_rows)
+    band_stores = sum(commercial.store_count for commercial, _, _ in band_rows)
+
     rows = (
         q.order_by(CommercialQuarter.closure_count_cum4.desc())
         .limit(limit)
@@ -339,22 +573,19 @@ def get_blindspots(
     return BlindspotResponse(
         notice=BLINDSPOT_NOTICE,
         items=[
-            BlindspotItem(
-                area_id=commercial.area_id,
-                industry_id=commercial.industry_id,
-                dong=area,
-                category=industry,
-                store_count=commercial.store_count,
-                cumulative_closure_count=commercial.closure_count_cum4 or 0,
-                cumulative_closure_rate_pct=_pct(commercial.closure_rate_cum4),
-            )
+            _blindspot_item(commercial, area, industry)
             for commercial, area, industry in rows
         ],
         total_cells=len(all_rows),
         total_stores=total_stores,
         total_closures=total_closures,
         store_share_pct=round(total_stores / city_stores * 100, 1) if city_stores else 0.0,
+        city_stores=int(city_stores),
         sample_min=SAMPLE_MIN,
+        band=band,
+        band_cells=band_cells,
+        band_stores=band_stores,
+        near_min_stores=NEAR_MIN_STORES,
     )
 
 

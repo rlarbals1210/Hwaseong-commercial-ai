@@ -88,6 +88,12 @@ class BlindspotItem(BaseModel):
     store_count: int
     cumulative_closure_count: int
     cumulative_closure_rate_pct: float | None = None
+    # 신뢰구간. 등급 대신 준다 — 등급은 "위험/안정" 한 글자로 확실성을 지우지만
+    # 구간은 "8.5% (5.2~13.4%)"로 얼마나 못 믿을 값인지를 같이 전달한다.
+    # 폭이 좁은 문턱 근처 구간(중위 6.8%p)에서만 화면이 쓴다.
+    closure_lower_pct: float | None = None
+    closure_upper_pct: float | None = None
+    interval_approximate: bool = False   # 폐업 0건이면 분모를 복원할 수 없어 근사한다
 
 
 class BlindspotResponse(BaseModel):
@@ -97,7 +103,83 @@ class BlindspotResponse(BaseModel):
     total_stores: int
     total_closures: int
     store_share_pct: float          # 전체 점포 중 사각지대 비중
+    city_stores: int = 0            # 화성시 전체 점포 수 — 화면이 "n곳 중 m곳"으로 말하려면 분모가 필요하다
     sample_min: int
+    # 선택된 구간의 셀 수. 전체(all)와 문턱 근처(near)를 한 화면의 탭으로 두므로
+    # 탭 라벨에 개수를 박으려면 필터 적용 후 총계가 따로 필요하다.
+    band: str = "all"
+    band_cells: int = 0
+    band_stores: int = 0
+    near_min_stores: int = 0        # 문턱 근처 구간의 하한. 화면이 근거를 그대로 적는다
+
+
+class BlindspotCoverageItem(BaseModel):
+    """읍면동별 커버율 — 사각지대가 어디에 뚫려 있는지.
+
+    "전체의 38%가 안 보인다"는 한 숫자로는 구멍의 모양이 안 보인다. 실제로는 고르게
+    퍼져 있지 않고 농촌·구도심에 몰려 있다(기배동·매송면 커버율 0%, 동탄1동 35.1%).
+    분석 도구가 도시 지역에 편향돼 있다는 뜻이고, 정책 우선순위를 고르는 데 쓰이면
+    형평성 문제로 직결된다. 지적당하기 전에 화면이 먼저 드러내는 편이 낫다.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    dong: str
+    total_cells: int
+    sufficient_cells: int
+    coverage_pct: float
+    total_stores: int
+    blindspot_stores: int
+    blindspot_store_pct: float
+    # 업종 구분을 지우고 동 전체를 한 덩어리로 본 폐업률.
+    # 커버율 0%인 동도 이 단위에서는 표본이 충분하다(기배동 누적 분모 1,847).
+    # "이 동은 아무것도 모른다"가 아니라 "업종별로는 못 갈라도 동 단위로는 안다"가 사실이다.
+    pooled_closure_rate_pct: float | None = None
+    pooled_closure_count: int = 0
+    pooled_denominator: int = 0
+    # 화성시 전체와의 차이가 우연으로 설명되는지. 두 비율 차이의 z검정(양측 p<0.05).
+    # 값만 주면 "5.17%가 높은 건가 낮은 건가"를 담당자가 알 수 없다. 분모가 동마다
+    # 1,300~18,000으로 크게 달라서 눈대중 비교도 안 된다.
+    vs_city: str = "차이없음"          # 높음 / 낮음 / 차이없음
+    vs_city_z: float | None = None
+
+
+class BlindspotCoverageResponse(BaseModel):
+    notice: str
+    sample_min: int
+    items: list[BlindspotCoverageItem]     # 커버율 오름차순 — 안 보이는 곳이 위로
+    zero_coverage_dongs: list[str]         # 커버율 0%. 별도로 세어 화면이 문장으로 말할 수 있게
+    # 화성시 전체를 같은 방식으로 묶은 값. 동 값 하나만 주면 높은지 낮은지 알 수 없다.
+    city_pooled_closure_rate_pct: float | None = None
+
+
+class BlindspotIndustryItem(BaseModel):
+    """업종별 커버율 — 사각지대의 두 번째 축.
+
+    지역 축(위)만 보면 "시골 문제"로 읽히지만, 업종 축을 같이 보면 구조 문제가 드러난다.
+    읍면동마다 10곳씩 흩어진 업종은 어느 셀도 기준을 못 넘어 화성시 전역에서 통째로
+    사라진다(74개 업종 중 41개가 판단 가능 셀 0개).
+
+    closure_count는 건수만 준다. 누적 분모는 4개 분기 직전점포수의 합이라 store_count의
+    약 4배이고, 화면이 closure_count / store_count 를 폐업률처럼 계산하면 4배 부풀려진다.
+    """
+
+    model_config = ConfigDict(from_attributes=True)
+
+    category: str
+    total_cells: int
+    sufficient_cells: int
+    coverage_pct: float
+    total_stores: int
+    closure_count: int
+
+
+class BlindspotIndustryResponse(BaseModel):
+    notice: str
+    sample_min: int
+    items: list[BlindspotIndustryItem]
+    invisible_count: int      # 판단 가능 셀이 0개인 업종 수
+    industry_total: int       # 전체 업종 수 — 분모를 화면에 같이 띄운다
 
 
 class VacancyRiskItem(BaseModel):
