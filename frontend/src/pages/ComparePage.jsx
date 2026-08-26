@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiFetchJson } from "../lib/api";
+import { apiFetchJson, describeApiError } from "../lib/api";
+import { GradeBadge, TypeBadge } from "../components/Badge";
 import ProvisionalNotice from "../components/ProvisionalNotice";
 
 // 상권 비교 — 서울 프로젝트('노다지')의 지역 비교/업종 비교를 하나로 합친 화면.
@@ -13,13 +14,6 @@ import ProvisionalNotice from "../components/ProvisionalNotice";
 // 등급이 "위험"과 "주의"로 갈렸는데도 통계적으로는 구분되지 않는 조합이 실제로 있다.
 // 등급은 상위 10%/30%로 자른 상대 순위라 경계 근처에서 필연적으로 생기는 일이고,
 // 이 화면이 그걸 드러내는 유일한 곳이다. 숨기지 말 것.
-
-const TYPE_TONE = {
-  고회전: "var(--accent-orange)",
-  쇠퇴: "var(--primary)",
-  성장: "var(--ink-muted)",
-  정체: "var(--ink-muted)",
-};
 
 const fmt = (v, d = 1) =>
   typeof v === "number" && Number.isFinite(v) ? v.toFixed(d) : "—";
@@ -72,16 +66,10 @@ function CellHead({ cell, align }) {
         {cell.area_name} · {cell.industry_name}
       </Link>
       <div style={{ display: "flex", gap: 6, marginTop: 8, justifyContent: align === "right" ? "flex-end" : "flex-start", flexWrap: "wrap" }}>
-        {cell.risk_grade && (
-          <span className={cell.risk_grade === "위험" ? "badge badge-danger" : "badge"}>{cell.risk_grade}</span>
-        )}
-        {cell.cell_type && cell.cell_type !== "유형판정보류" && (
-          <span className="badge" style={{ color: TYPE_TONE[cell.cell_type] ?? "var(--ink-muted)" }}>
-            {cell.cell_type}
-          </span>
-        )}
+        <GradeBadge grade={cell.risk_grade} />
+        <TypeBadge type={cell.cell_type} />
         {cell.industry_rank && (
-          <span className="badge" style={{ color: "var(--ink-muted)" }}>
+          <span className="badge badge-neutral">
             업종 내 {cell.industry_rank}/{cell.industry_total_areas}위
           </span>
         )}
@@ -130,7 +118,7 @@ export default function ComparePage() {
           setRight({ areaId: areas[1].id, industryId: areas[1].industries[0]?.id });
         }
       })
-      .catch(() => setError("선택지를 불러오지 못했습니다."));
+      .catch((err) => setError(describeApiError(err)));
   }, []);
 
   useEffect(() => {
@@ -148,7 +136,7 @@ export default function ComparePage() {
     });
     apiFetchJson(`/api/compare?${q}`)
       .then(setData)
-      .catch(() => { setData(null); setError("비교 결과를 불러오지 못했습니다."); })
+      .catch((err) => { setData(null); setError(describeApiError(err)); })
       .finally(() => setLoading(false));
   }, [left, right]);
 

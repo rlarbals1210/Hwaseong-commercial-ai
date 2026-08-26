@@ -502,6 +502,9 @@ def import_normalized(
             "quarter_code": int(row.기준_년분기_코드),
             "store_count": int(row.점포수),
             "opening_rate": _nullable_float(row.개업_율_평균),
+            # 유형 판정이 쓰는 보정값. 이걸 안 넣으면 화면의 개업률과 유형 배지가
+            # 서로 다른 컬럼 기반이 된다(2026-08-26까지 실제로 그랬다).
+            "opening_rate_ma4": _nullable_float(getattr(row, "개업_율_보정_ma4", None)),
             "closure_rate": closure_rate,
             "closure_rate_cum4": _nullable_float(
                 row.누적폐업률_pct / 100 if pd.notna(row.누적폐업률_pct) else None
@@ -533,6 +536,7 @@ def import_normalized(
         [
             "store_count",
             "opening_rate",
+            "opening_rate_ma4",
             "closure_rate",
             "closure_rate_cum4",
             "closure_rate_lower4",

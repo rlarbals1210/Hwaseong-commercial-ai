@@ -17,7 +17,7 @@ import { apiFetchJson } from "./lib/api";
 const NAV = [
   { path: "/dashboard", label: "조기경보 대시보드", icon: "dashboard", Component: DashboardPage },
   { path: "/map", label: "공실위험 지도", icon: "map", Component: MapPage },
-  { path: "/policy", label: "현장점검 우선순위", icon: "grid_view", Component: PolicyPage },
+  { path: "/policy", label: "현장 확인 우선순위", icon: "grid_view", Component: PolicyPage },
   // 표본부족으로 다른 화면에서 빠지는 상권(전체 점포의 38%)을 별도 트랙으로 남긴다
   { path: "/blindspots", label: "사각지대", icon: "visibility_off", Component: BlindspotPage },
   // 두 상권을 나란히 놓는 화면. 차이가 표본 크기로 설명될 수 있으면 "차이 없음"으로 표시한다.

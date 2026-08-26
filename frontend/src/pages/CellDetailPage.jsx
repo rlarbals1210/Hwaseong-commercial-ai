@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link } from "react-router-dom";
-import { apiFetch, apiFetchJson } from "../lib/api";
+import { apiFetch, apiFetchJson, describeApiError } from "../lib/api";
+import { GradeBadge, TypeBadge } from "../components/Badge";
 import ProvisionalNotice from "../components/ProvisionalNotice";
 
 // 세 영역을 절대 섞지 않는다(CLAUDE.md 용어 규칙).
@@ -9,13 +10,6 @@ import ProvisionalNotice from "../components/ProvisionalNotice";
 //   ③ 공무원 확인 필요    데이터가 없어 모델이 보지 못한 원인 후보
 
 const WINDOW_LABEL = 4;
-
-const TYPE_TONE = {
-  고회전: "var(--accent-orange)",
-  쇠퇴: "var(--primary)",
-  성장: "var(--ink-muted)",
-  정체: "var(--ink-muted)",
-};
 
 const fmt = (v, d = 1) =>
   typeof v === "number" && Number.isFinite(v) ? v.toFixed(d) : "—";
@@ -196,13 +190,32 @@ export default function CellDetailPage() {
             .catch(() => setFactors(null));
         }
       })
-      .catch(() => setError("상권 정보를 불러오지 못했습니다."))
+      .catch((err) => setError(describeApiError(err)))
       .finally(() => setLoading(false));
     setNotice(null);
     setCopied(false);
     setFormOpen(false);
     setSaveError("");
   }, [areaId, industryId]);
+
+  // 본인이 남긴 기록만 지운다. 서버에서도 같은 규칙을 강제하지만, 남의 기록에 버튼이
+  // 보이지 않아야 "지울 수 있는 것"과 "지우면 안 되는 것"이 화면에서 구분된다.
+  const deleteContact = async (id) => {
+    if (!window.confirm("이 접촉 기록을 지울까요? 되돌릴 수 없습니다.")) return;
+    setSaveError("");
+    try {
+      const response = await apiFetch(`/api/cells/${areaId}/${industryId}/contacts/${id}`, {
+        method: "DELETE",
+      });
+      if (!response.ok && response.status !== 204) {
+        const body = await response.json().catch(() => ({}));
+        throw new Error(body.detail || "기록을 지우지 못했습니다.");
+      }
+      await reloadContacts();
+    } catch (err) {
+      setSaveError(err.message);
+    }
+  };
 
   const reloadContacts = () =>
     apiFetchJson(`/api/cells/${areaId}/${industryId}/contacts`)
@@ -266,20 +279,25 @@ export default function CellDetailPage() {
       </div>
 
       <div style={{ display: "flex", gap: 8, alignItems: "center", marginTop: 12, flexWrap: "wrap" }}>
-        {cell.cell_type && cell.cell_type !== "유형판정보류" && (
-          <span className="badge" style={{ color: TYPE_TONE[cell.cell_type] ?? "var(--ink-muted)" }}>
-            {cell.cell_type}
-          </span>
-        )}
-        {cell.risk_grade && (
-          <span className={cell.risk_grade === "위험" ? "badge badge-danger" : "badge"}>{cell.risk_grade}</span>
-        )}
+        <TypeBadge type={cell.cell_type} />
+        <GradeBadge grade={cell.risk_grade} />
         {cell.predicted_rank && (
           <span className="badge" style={{ background: "var(--primary-fixed)", color: "var(--primary)" }}>
             예측 #{cell.predicted_rank}
           </span>
         )}
       </div>
+
+      {/* 조기경보 1위를 눌러 들어오면 등급이 "안정"인 경우가 흔하다. 예측은 2분기 뒤를 보고
+          등급은 이미 관측된 값이라 그런 것인데, 그 설명이 이 화면에 없어서 "1위인데 안정?"으로
+          읽혔다. 현장 확인 화면에는 같은 안내를 붙여뒀다. */}
+      {cell.predicted_rank && cell.risk_grade && cell.risk_grade !== "위험" && (
+        <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "8px 0 0", lineHeight: 1.7 }}>
+          예측 순위와 등급은 서로 다른 것을 봅니다 — <b>예측 #{cell.predicted_rank}</b>은 모델이 본
+          <b> 2분기 뒤</b> 위험 순위이고, <b>{cell.risk_grade}</b>은 <b>이미 관측된</b> 최근 1년 실적입니다.
+          지금 나빠진 곳과 앞으로 나빠질 곳은 같지 않습니다.
+        </p>
+      )}
 
       <h1 className="t-h1" style={{ margin: "8px 0 2px" }}>{cell.dong} · {cell.category}</h1>
       <p className="t-caption" style={{ color: "var(--ink-muted)", margin: 0 }}>
@@ -376,7 +394,7 @@ export default function CellDetailPage() {
             className="t-caption"
             style={{ display: "flex", gap: 16, flexWrap: "wrap", paddingTop: 12, marginTop: 4, borderTop: "1px solid var(--hairline)", color: "var(--ink-muted)" }}
           >
-            <span title="원본 개업률입니다. 상권유형 판정에는 보정값을 씁니다.">개업률(원본) <b style={{ color: "var(--on-surface)" }}>{fmt(cell.opening_rate_pct)}%</b></span>
+            <span title="4분기 이동평균으로 보정한 값입니다. 상권유형 판정도 같은 값을 씁니다.">개업률 <b style={{ color: "var(--on-surface)" }}>{fmt(cell.opening_rate_pct)}%</b></span>
             <span>추세 <b style={{ color: cell.trend_slope > 0 ? "var(--accent-orange)" : "var(--on-surface)" }}>
               {cell.trend_slope > 0 ? "+" : ""}{cell.trend_slope}
             </b></span>
@@ -395,11 +413,47 @@ export default function CellDetailPage() {
       {cell.cell_type_advice && (
         <Section title="유형 판정과 후속 조치 검토안" note="AI가 지원 대상을 결정하지 않습니다. 최종 판단은 담당자가 합니다.">
           <div className="card" style={{ padding: 20 }}>
-            <div className="t-title" style={{ color: TYPE_TONE[cell.cell_type] ?? "var(--on-surface)" }}>
+            {/* 유형에 색을 주지 않는다. 유형은 위험도가 아니라 성격이고, 색을 주면 등급 축과 섞인다. */}
+            <div className="t-title" style={{ color: "var(--on-surface)" }}>
               {cell.cell_type}
             </div>
             <p style={{ margin: "6px 0 0", color: "var(--on-surface)" }}>{cell.cell_type_summary}</p>
-            <p style={{ margin: "8px 0 0", color: "var(--ink-secondary)" }}>{cell.cell_type_advice}</p>
+
+            {/* 판정 근거를 숫자로 보여준다. 이게 없으면 유형은 그냥 붙은 라벨로 읽히고,
+                "이 상권이 왜 쇠퇴입니까"를 물었을 때 화면으로 답할 수가 없다.
+                기준선은 표본충분 상권의 중위값이고 서버에서 받는다(하드코딩 금지). */}
+            {Number.isFinite(cell.cell_type_open_cut_pct) &&
+              Number.isFinite(cell.cell_type_close_cut_pct) &&
+              Number.isFinite(cell.opening_rate_pct) &&
+              Number.isFinite(cell.cumulative_closure_rate_pct) && (
+                <div
+                  className="t-caption"
+                  style={{
+                    margin: "10px 0 0",
+                    padding: "10px 12px",
+                    background: "var(--surface-container-low)",
+                    borderRadius: "var(--radius-md)",
+                    color: "var(--ink-secondary)",
+                    lineHeight: 1.8,
+                  }}
+                >
+                  <div style={{ color: "var(--ink-faint)", marginBottom: 4 }}>판정 근거</div>
+                  개업률{" "}
+                  <b style={{ color: "var(--on-surface)" }}>{fmt(cell.opening_rate_pct)}%</b>
+                  {" "}— 기준 {fmt(cell.cell_type_open_cut_pct)}%{" "}
+                  {cell.opening_rate_pct >= cell.cell_type_open_cut_pct ? "이상" : "미만"}
+                  <br />
+                  폐업률{" "}
+                  <b style={{ color: "var(--on-surface)" }}>{fmt(cell.cumulative_closure_rate_pct)}%</b>
+                  {" "}— 기준 {fmt(cell.cell_type_close_cut_pct)}%{" "}
+                  {cell.cumulative_closure_rate_pct >= cell.cell_type_close_cut_pct ? "이상" : "미만"}
+                  <div style={{ color: "var(--ink-faint)", marginTop: 6 }}>
+                    기준은 표본이 충분한 상권의 중위값입니다. 절대 임계가 아니라 화성시 안에서의 상대 위치입니다.
+                  </div>
+                </div>
+              )}
+
+            <p style={{ margin: "10px 0 0", color: "var(--ink-secondary)" }}>{cell.cell_type_advice}</p>
             {cell.cell_type_avoid && (
               <p className="t-caption" style={{ margin: "8px 0 0", color: "var(--ink-faint)" }}>
                 우선순위 낮음 — {cell.cell_type_avoid}
@@ -574,7 +628,7 @@ export default function CellDetailPage() {
             {Object.keys(contacts.outcome_counts || {}).length > 0 && (
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 10 }}>
                 {Object.entries(contacts.outcome_counts).map(([label, n]) => (
-                  <span key={label} className="badge">{label} {n}</span>
+                  <span key={label} className="badge badge-neutral">{label} {n}</span>
                 ))}
               </div>
             )}
@@ -667,7 +721,26 @@ export default function CellDetailPage() {
                       {c.note && (
                         <div className="t-caption" style={{ color: "var(--ink-secondary)", marginTop: 2 }}>{c.note}</div>
                       )}
-                      <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 2 }}>{c.official}</div>
+                      <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 2, display: "flex", gap: 8, alignItems: "center" }}>
+                        <span>{c.official}</span>
+                        {c.mine && (
+                          <button
+                            type="button"
+                            onClick={() => deleteContact(c.id)}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              padding: 0,
+                              cursor: "pointer",
+                              color: "var(--ink-muted)",
+                              textDecoration: "underline",
+                              font: "inherit",
+                            }}
+                          >
+                            삭제
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
                 ))}

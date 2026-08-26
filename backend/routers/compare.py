@@ -51,11 +51,9 @@ DIFF_METRICS = [
     ("cumulative_closure_rate_pct", "최근 1년 누적 폐업률", "%", 1, "rate"),
     ("cumulative_closure_count", "누적 폐업 건수", "건", 0, "count"),
     ("store_count", "점포 수", "개", 0, "count"),
-    # 라벨이 "보정 개업률"이었는데 DB에 적재된 값은 fix_opening_rate.py의 보정 컬럼이 아니라
-    # 원본(개업_율_평균)이다. 원본에는 수록 지연 결함이 남아 있다(2024Q3 0.13% -> 2024Q4 25.77%).
-    # 상권유형 판정은 보정값으로 하므로 이 화면의 배지와 숫자는 서로 다른 컬럼 기반이다.
-    # 보정값 적재는 마이그레이션이 필요해 미뤘고, 지금은 라벨을 사실대로 고쳐만 둔다.
-    ("opening_rate_pct", "개업률(원본)", "%", 1, "rate"),
+    # 보정 개업률(4분기 이동평균). 상권유형 판정이 쓰는 값과 같은 컬럼이라
+    # 이 화면의 배지와 숫자가 같은 근거 위에 선다(2026-08-26 마이그레이션 0006).
+    ("opening_rate_pct", "개업률", "%", 1, "rate"),
     ("saturation_rate", "업종 포화도", "", 2, "rate"),
     ("competition_index", "경쟁강도", "", 2, "rate"),
     ("trend_slope", "트렌드 기울기", "", 3, "rate"),
@@ -114,7 +112,7 @@ def _load_cell(db: Session, area_id: int, industry_id: int, quarter: int) -> dic
         "cumulative_closure_count": cell.closure_count_cum4,
         "confidence_lower_pct": _pct(cell.closure_rate_lower4),
         "interval": closure_interval_pct(cell),
-        "opening_rate_pct": _pct(cell.opening_rate),
+        "opening_rate_pct": _pct(cell.opening_rate_ma4),
         "saturation_rate": cell.saturation_rate,
         "competition_index": cell.competition_index,
         "trend_slope": round(cell.trend_slope or 0.0, 3),

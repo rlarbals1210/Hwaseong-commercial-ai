@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { apiFetchJson } from "../lib/api";
+import { apiFetchJson, describeApiError } from "../lib/api";
 import ProvisionalNotice from "../components/ProvisionalNotice";
 
 // 조회 기준(점포 50곳)을 못 넘는 상권은 다른 화면에서 아예 사라진다.
@@ -44,7 +44,7 @@ export default function BlindspotPage() {
   useEffect(() => {
     apiFetchJson("/api/analysis/dongs")
       .then((d) => setDongs(Array.isArray(d.dongs) ? d.dongs : Array.isArray(d) ? d : []))
-      .catch(() => setDongs([]));
+      .catch(() => setDongs([]));   // 필터 목록 실패는 화면을 막지 않는다(본문 오류가 이미 뜬다)
   }, []);
 
   useEffect(() => {
@@ -54,7 +54,7 @@ export default function BlindspotPage() {
     if (dong) params.set("dong", dong);
     apiFetchJson(`/api/alerts/blindspots?${params}`)
       .then(setData)
-      .catch(() => setError("사각지대 목록을 불러오지 못했습니다."))
+      .catch((err) => setError(describeApiError(err)))
       .finally(() => setLoading(false));
   }, [dong]);
 

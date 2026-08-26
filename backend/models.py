@@ -203,7 +203,11 @@ class CommercialQuarter(Base):
     industry_id = Column(Integer, ForeignKey("industry_categories.id"), nullable=False, index=True)
     quarter_code = Column(Integer, nullable=False, index=True)
     store_count = Column(Integer, nullable=False)
-    opening_rate = Column(Float, nullable=True)  # 0~1 비율
+    opening_rate = Column(Float, nullable=True)  # 0~1 비율. 원본(개업_율_평균) — 수록 지연 결함이 남아 있다
+    # 보정 개업률 4분기 이동평균. 상권유형 판정이 쓰는 값이고 화면 표시도 이쪽이다.
+    # 원본은 표본충분 셀의 26.8%가 0.0%로 나오지만 이 값은 5.2%다(2026-08-26 실측).
+    # 원본을 지우지 않은 이유: 두 값의 차이가 보정의 근거이고 감사에서 둘 다 필요하다.
+    opening_rate_ma4 = Column(Float, nullable=True)
     closure_rate = Column(Float, nullable=True)  # 0~1 비율 (단일 분기, 기존 의미 유지)
     # 4분기 누적 지표 (2026-08-20 추가). 등급·화면 표시는 이 값을 쓴다.
     # 단일 분기는 노이즈가 커서 분기 간 순위 상관이 +0.296에 불과했다(누적은 +0.857).

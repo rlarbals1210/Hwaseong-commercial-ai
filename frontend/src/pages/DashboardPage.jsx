@@ -1,12 +1,13 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { apiFetchJson } from "../lib/api";
+import { apiFetchJson, describeApiError } from "../lib/api";
+import { GradeBadge, TypeBadge } from "../components/Badge";
 import ProvisionalNotice from "../components/ProvisionalNotice";
 import { downloadCsv, csvNum } from "../lib/csv";
 
 const CSV_HEADERS = [
   "예측순위", "읍면동", "업종", "등급", "상권유형",
-  "최근1년누적_폐업률(%)", "최근1년_폐업건수", "점포수", "개업률_원본(%)", "트렌드이상", "후속조치_검토안",
+  "최근1년누적_폐업률(%)", "최근1년_폐업건수", "점포수", "개업률(%)", "트렌드이상", "후속조치_검토안",
 ];
 
 const csvRows = (rows) =>
@@ -20,17 +21,6 @@ const csvRows = (rows) =>
 // 예전에는 3.22를 상수로 박아뒀는데, 파이프라인을 다시 돌리면 값이 어긋나 화면이 거짓말을 했다.
 // 서버 응답 전에는 이 값을 쓰되, 도착하면 즉시 교체된다.
 const CITY_AVG_FALLBACK_PCT = 5.9;
-
-// 응답에 필드가 없거나 null이면 화면이 NaN을 그대로 뿌린다. 서버를 재시작하지 않아
-// 옛 응답이 오는 동안 실제로 "평균 NaN%로 화성시 전체의 NaN배"가 노출됐다.
-// 값이 없으면 계산을 포기하고 "—"를 보여준다.
-// 유형은 위험도가 아니라 성격이다. 등급(빨강)과 색이 겹치지 않게 중립 톤으로 둔다.
-const TYPE_TONE = {
-  고회전: "var(--accent-orange)",
-  쇠퇴: "var(--primary)",
-  성장: "var(--ink-muted)",
-  정체: "var(--ink-muted)",
-};
 
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v : null);
 const fmtPct = (v, digits = 1) => {
@@ -74,20 +64,10 @@ function RiskCard({ item }) {
           예측 #{item.predicted_rank}
         </span>
         <span style={{ display: "flex", gap: 6, alignItems: "center" }}>
-          {item.cell_type && item.cell_type !== "유형판정보류" && (
-            <span
-              className="badge"
-              title={item.cell_type_summary ?? ""}
-              style={{ color: TYPE_TONE[item.cell_type] ?? "var(--ink-muted)" }}
-            >
-              {item.cell_type}
-            </span>
-          )}
-          {item.risk_grade && item.risk_grade !== "안정" && (
-            <span className={item.risk_grade === "위험" ? "badge badge-danger" : "badge"}>
-              {item.risk_grade}
-            </span>
-          )}
+          <TypeBadge type={item.cell_type} />
+          {/* "안정"도 그린다. 감추면 등급이 없는 셀과 구분되지 않고,
+              비교·상세 화면에서는 보이던 것이 여기서만 사라져 화면끼리 어긋났다. */}
+          <GradeBadge grade={item.risk_grade} />
         </span>
         {item.anomaly && (
           <span className="badge badge-danger">
@@ -106,6 +86,25 @@ function RiskCard({ item }) {
           {item.category} <span style={{ color: "var(--primary)" }}>· 상세 →</span>
         </div>
       </Link>
+
+      {/* "안정인데 왜 조기경보에 있냐"는 질문이 나오는 자리다. 정렬은 모델이 본 2분기 뒤
+          위험 순위이고 등급은 이미 관측된 실적이라 둘은 어긋날 수 있다 — 그게 조기경보의
+          존재 이유이기도 하다. 화면 위쪽 설명만으로는 카드 단위에서 안 읽혀서 여기 붙인다. */}
+      {item.risk_grade === "안정" && (
+        <p
+          className="t-caption"
+          style={{
+            margin: "10px 0 0",
+            padding: "8px 10px",
+            background: "var(--surface-container-low)",
+            borderRadius: "var(--radius-md)",
+            color: "var(--ink-secondary)",
+            lineHeight: 1.6,
+          }}
+        >
+          지금은 <b>안정</b>이지만 모델이 <b>2분기 뒤</b> 위험 상위로 봅니다.
+        </p>
+      )}
 
       <div style={{ marginTop: "auto" }}>
         <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 2 }}>최근 1년 누적 폐업률</div>
@@ -143,7 +142,7 @@ function RiskCard({ item }) {
         }}
       >
         <span>
-          개업률(원본) <b style={{ color: "var(--on-surface)" }}>{fmtPct(item.open_rate_pct)}%</b>
+          개업률 <b style={{ color: "var(--on-surface)" }}>{fmtPct(item.open_rate_pct)}%</b>
         </span>
         <span>
           추세{" "}
@@ -227,9 +226,9 @@ export default function DashboardPage() {
         if (!Array.isArray(result)) throw new Error("Invalid alert response");
         setData(result);
       })
-      .catch(() => {
+      .catch((err) => {
         setData([]);
-        setError("데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+        setError(describeApiError(err));
       })
       .finally(() => setLoading(false));
   }, [category]);
@@ -471,7 +470,7 @@ export default function DashboardPage() {
               boxSizing: "border-box",
             }}
           >
-            현장점검 우선순위 보기
+            현장 확인 우선순위 보기
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
           </Link>
         </div>

@@ -33,7 +33,14 @@ from ..models import (
     RiskPrediction,
 )
 from ..services.compare import cumulative_denominator
-from ..services.risk import GRADE_NOTICE, WINDOW_QUARTERS, action_message, pct
+from ..services.risk import (
+    CELL_TYPE_CLOSE_CUT_PCT,
+    CELL_TYPE_OPEN_CUT_PCT,
+    GRADE_NOTICE,
+    WINDOW_QUARTERS,
+    action_message,
+    pct,
+)
 
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "ai"))
@@ -140,7 +147,10 @@ def get_cell_detail(area_id: int, industry_id: int, db: Session = Depends(get_db
         "denominator_estimated": _denom_estimated,
         "confidence_lower_pct": _pct(cell.closure_rate_lower4),
         "quarter_closure_rate_pct": _pct(cell.closure_rate),
-        "opening_rate_pct": _pct(cell.opening_rate),
+        # 유형 판정과 같은 컬럼을 쓴다. 원본(opening_rate)은 수록 지연 결함이 남아 있어
+        # 표본충분 셀의 26.8%가 0.0%로 나온다. 원본은 아래 provenance 옆에 참고로만 둔다.
+        "opening_rate_pct": _pct(cell.opening_rate_ma4),
+        "opening_rate_raw_pct": _pct(cell.opening_rate),
         "trend_slope": round(cell.trend_slope or 0.0, 3),
         "anomaly": cell.anomaly_flag,
         "saturation_rate": cell.saturation_rate,
@@ -155,6 +165,11 @@ def get_cell_detail(area_id: int, industry_id: int, db: Session = Depends(get_db
         "cell_type_summary": type_info.get("summary"),
         "cell_type_advice": type_info.get("advice"),
         "cell_type_avoid": type_info.get("avoid") or None,
+        # 판정 근거. 유형은 개업률·폐업률을 각각 표본충분 셀의 중위값으로 가른 결과다.
+        # 절단선을 함께 내려야 화면이 "왜 쇠퇴인가"를 그 자리에서 보여줄 수 있다 —
+        # 근거 없이 이름만 뜨면 유형은 그냥 라벨로 읽힌다.
+        "cell_type_open_cut_pct": CELL_TYPE_OPEN_CUT_PCT,
+        "cell_type_close_cut_pct": CELL_TYPE_CLOSE_CUT_PCT,
         "action": action_message(cell.risk_grade or "안정", cell.anomaly_flag),
 
         # ③ AI 예측 — 순위만. 절대값은 노출하지 않는다
@@ -203,7 +218,7 @@ def get_cell_trend(area_id: int, industry_id: int, db: Session = Depends(get_db)
             "store_count": r.store_count,
             "cumulative_closure_rate_pct": _pct(r.closure_rate_cum4),
             "quarter_closure_rate_pct": _pct(r.closure_rate),
-            "opening_rate_pct": _pct(r.opening_rate),
+            "opening_rate_pct": _pct(r.opening_rate_ma4),
         }
         for r in rows
     ]
@@ -388,7 +403,15 @@ def _official_id(payload: dict) -> int:
 
 
 @router.get("/{area_id}/{industry_id}/contacts")
-def list_cell_contacts(area_id: int, industry_id: int, db: Session = Depends(get_db)):
+def list_cell_contacts(
+    area_id: int,
+    industry_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(decode_token),
+):
+    # 삭제 버튼을 본인 기록에만 띄우기 위해 소유 여부를 함께 내린다.
+    # 남의 기록을 지울 수 있으면 접촉 이력 자체를 증빙으로 못 쓴다.
+    viewer_id = _official_id(payload)
     quarter_ids = _cell_quarter_ids(db, area_id, industry_id)
     items = []
     if quarter_ids:
@@ -412,6 +435,7 @@ def list_cell_contacts(area_id: int, industry_id: int, db: Session = Depends(get
                 "contacted_store_count": contact.contacted_store_count,
                 "note": contact.note,
                 "official": official_name or username or "미상",
+                "mine": contact.official_id == viewer_id,
             })
 
     outcome_counts: dict[str, int] = {}
@@ -500,3 +524,48 @@ def create_cell_contact(
 
     db.commit()
     return {"id": contact.id, "alert_case_id": case.id, "status": case.status}
+
+
+@router.delete("/{area_id}/{industry_id}/contacts/{contact_id}", status_code=204)
+def delete_cell_contact(
+    area_id: int,
+    industry_id: int,
+    contact_id: int,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(decode_token),
+):
+    """접촉 기록 1건 삭제.
+
+    **본인이 남긴 기록만 지울 수 있다.** 이 기록은 "어느 상권에 행정이 접촉했는가"의 증빙이라
+    남의 기록을 지울 수 있으면 이력 자체를 믿을 수 없게 된다.
+
+    지금은 실제로 행을 지운다(soft delete 아님). 잘못 입력한 기록을 남겨두면 목록이 오염되고,
+    현재 이 이력을 인용하는 산출물이 없어서다. 이력이 보고서·감사 자료로 쓰이기 시작하면
+    deleted_at 컬럼을 두는 쪽으로 바꿔야 한다 — 그때는 이 주석을 근거로 삼을 것.
+    """
+    official_id = _official_id(payload)
+    quarter_ids = _cell_quarter_ids(db, area_id, industry_id)
+    if not quarter_ids:
+        raise HTTPException(status_code=404, detail="해당 상권을 찾을 수 없습니다")
+
+    contact = (
+        db.query(AlertContact)
+        .join(AlertCase, AlertContact.alert_id == AlertCase.id)
+        .join(RiskPrediction, AlertCase.prediction_id == RiskPrediction.id)
+        .filter(
+            AlertContact.id == contact_id,
+            RiskPrediction.commercial_quarter_id.in_(quarter_ids),
+        )
+        .first()
+    )
+    if not contact:
+        raise HTTPException(status_code=404, detail="해당 접촉 기록을 찾을 수 없습니다")
+    if contact.official_id != official_id:
+        raise HTTPException(
+            status_code=403,
+            detail="본인이 남긴 기록만 삭제할 수 있습니다. 다른 담당자의 기록은 그 담당자에게 요청해 주세요.",
+        )
+
+    db.delete(contact)
+    db.commit()
+    return None

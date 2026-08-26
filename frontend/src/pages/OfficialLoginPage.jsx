@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useNavigate, Link } from "react-router-dom";
-import { apiFetch } from "../lib/api";
+import { apiFetch, consumeSessionExpired } from "../lib/api";
 import { useAuth } from "../context/auth-context";
 
 // 로그인은 페이지 셸(사이드바·상단바) 밖에서 렌더되므로 자체 전체화면 레이아웃을 갖는다.
@@ -30,6 +30,9 @@ export default function OfficialLoginPage() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
+  // 세션이 끊겨서 튕겨 나온 것인지, 그냥 처음 들어온 것인지 구분해준다.
+  // 예전에는 화면이 "데이터를 불러오지 못했습니다"만 반복하고 재로그인하라는 안내가 없었다.
+  const [expired] = useState(() => consumeSessionExpired());
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
@@ -145,6 +148,25 @@ export default function OfficialLoginPage() {
               </span>
             </button>
           </Field>
+
+          {expired && !error && (
+            <div
+              className="t-caption"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 8,
+                color: "var(--ink-secondary)",
+                background: "var(--surface-container-low)",
+                padding: "10px 12px",
+                borderRadius: "var(--radius-md)",
+                marginBottom: 16,
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--ink-faint)" }}>schedule</span>
+              세션이 만료되어 로그아웃되었습니다. 다시 로그인해주세요.
+            </div>
+          )}
 
           {error && (
             <div

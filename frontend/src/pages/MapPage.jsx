@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
-import { apiFetch } from "../lib/api";
+import { apiFetchJson, describeApiError } from "../lib/api";
+import { GradeBadge } from "../components/Badge";
 import ProvisionalNotice from "../components/ProvisionalNotice";
 
 // 다른 화면과 같은 정의. 이 파일에만 사본이 없어 백엔드 raw 값(2자리)이 그대로 찍혔다 —
@@ -21,30 +22,40 @@ const LEGEND = [
 ];
 
 // 색은 등급, 진하기는 근거의 두께다. 범례 아래 한 줄로 그 규칙을 밝힌다.
-const OPACITY_NOTE = "흐리게 칠해진 동은 표본이 충분한 업종이 10개 미만이라 등급의 근거가 얕습니다.";
+const OPACITY_NOTE = "흐리게 칠해진 읍면동은 표본이 충분한 업종이 10개 미만이라 등급의 근거가 얕습니다.";
 
 let naverMapLoadPromise = null;
 
+// onerror가 없으면 스크립트가 실패했을 때 promise가 영원히 pending으로 남고,
+// 화면에는 흰 사각형만 남는다. 시연 중 네트워크가 흔들리거나 도메인 등록이 안 됐을 때
+// 정확히 그 모양이 된다 — 원인을 화면에 말하게 한다.
 function loadNaverMap() {
   if (window.naver?.maps) return Promise.resolve();
   if (!naverMapLoadPromise) {
-    naverMapLoadPromise = new Promise((resolve) => {
+    naverMapLoadPromise = new Promise((resolve, reject) => {
+      if (!NAVER_CLIENT_ID) {
+        reject(new Error("지도 키(VITE_NAVER_MAP_CLIENT_ID)가 설정되지 않았습니다."));
+        return;
+      }
       const script = document.createElement("script");
       script.src = `https://oapi.map.naver.com/openapi/v3/maps.js?ncpKeyId=${NAVER_CLIENT_ID}`;
-      script.onload = resolve;
+      script.onload = () => {
+        if (window.naver?.maps) resolve();
+        else reject(new Error("지도 스크립트를 불러왔지만 초기화되지 않았습니다. 도메인 등록을 확인해주세요."));
+      };
+      script.onerror = () => {
+        naverMapLoadPromise = null;   // 다음 시도에서 다시 붙일 수 있게
+        reject(new Error("지도 스크립트를 불러오지 못했습니다. 네트워크와 지도 키를 확인해주세요."));
+      };
       document.head.appendChild(script);
     });
   }
   return naverMapLoadPromise;
 }
 
-// 실패를 조용히 빈 배열로 삼키면 담당자가 "데이터가 없다"로 읽고 DB 적재를 의심하게 된다.
-// (실제로 백엔드가 꺼져 있었을 때 그렇게 진단이 헛돌았다.) 원인을 화면에 그대로 말한다.
-function loadErrorMessage(status) {
-  if (status === 401 || status === 403) return "로그인이 만료되었습니다. 다시 로그인해주세요.";
-  if (status) return `데이터를 불러오지 못했습니다 (HTTP ${status}).`;
-  return "서버에 연결하지 못했습니다. 백엔드가 실행 중인지 확인해주세요.";
-}
+// 이 화면에만 있던 loadErrorMessage를 lib/api.js의 describeApiError로 옮겼다.
+// 다른 6개 화면이 같은 처리를 못 갖고 있어서, 토큰이 만료되면 그 화면들은
+// "불러오지 못했습니다"만 반복하고 재로그인하라는 안내가 없었다.
 
 function RankingTable({ rows, loading, error }) {
   return (
@@ -120,26 +131,26 @@ export default function MapPage() {
   const [rankingError, setRankingError] = useState("");
 
   useEffect(() => {
-    apiFetch(`/api/alerts/vacancy-risk/map`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    // apiFetchJson을 쓴다. 예전처럼 raw fetch로 상태를 직접 처리하면 401이 와도
+    // 앱이 로그아웃 상태로 넘어가지 않아, 화면만 오류 문구를 띄운 채 머문다.
+    apiFetchJson(`/api/alerts/vacancy-risk/map`)
       .then((d) => {
+        // 오류 본문은 배열이 아니라 {detail: ...}라 그대로 넣으면 map()에서 터진다
         setRiskData(Array.isArray(d) ? d : []);
         setMapError("");
       })
-      .catch((reason) => {
+      .catch((err) => {
         setRiskData([]);
-        setMapError(loadErrorMessage(typeof reason === "number" ? reason : null));
+        setMapError(describeApiError(err));
       });
-    apiFetch(`/api/alerts/closure-rate-ranking?limit=10`)
-      .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    apiFetchJson(`/api/alerts/closure-rate-ranking?limit=10`)
       .then((d) => {
-        // 401 본문은 배열이 아니라 {detail: ...}라 그대로 넣으면 rows.map()에서 터진다
         setRanking(Array.isArray(d) ? d : []);
         setRankingError("");
       })
-      .catch((reason) => {
+      .catch((err) => {
         setRanking([]);
-        setRankingError(loadErrorMessage(typeof reason === "number" ? reason : null));
+        setRankingError(describeApiError(err));
       })
       .finally(() => setRankingLoading(false));
   }, []);
@@ -157,8 +168,10 @@ export default function MapPage() {
       // 색은 등급, 진하기는 근거의 두께. 표본충분 업종이 적은 동은 등급을 내되 흐리게 칠해
       // "이 색을 얼마나 믿을지"를 같이 보여준다. 숨기는 것보다 알려주는 쪽을 택했다.
       const thin = Boolean(risk?.evidence_thin);
-      const baseOpacity = thin ? 0.22 : 0.5;
-      const hoverOpacity = thin ? 0.42 : 0.8;
+      // 배경 지도 위에서 0.5는 색이 씻겨 보인다. 등급을 색으로 읽는 화면이라 진하기를 올린다.
+      // 근거가 얕은 읍면동은 여전히 확실히 옅게 두되(0.22 -> 0.4), 진한 쪽과의 차이는 유지한다.
+      const baseOpacity = thin ? 0.4 : 0.72;
+      const hoverOpacity = thin ? 0.6 : 0.9;
 
       const coords = feat.geometry.type === "Polygon"
         ? [feat.geometry.coordinates]
@@ -168,7 +181,7 @@ export default function MapPage() {
         const path = rings[0].map(([lng, lat]) => new window.naver.maps.LatLng(lat, lng));
         const polygon = new window.naver.maps.Polygon({
           map, paths: [path], fillColor: color, fillOpacity: baseOpacity,
-          strokeColor: "#fff", strokeWeight: 1, clickable: true,
+          strokeColor: "#fff", strokeWeight: 1.5, clickable: true,
         });
 
         window.naver.maps.Event.addListener(polygon, "mouseover", (e) => {
@@ -221,8 +234,15 @@ export default function MapPage() {
             boundsFitRef.current = true;
           }
         })
-        .catch(() => console.warn("GeoJSON 없음 — 먼저 hwaseong_emd.geojson을 생성하세요"));
-    });
+        .catch(() => {
+          // console.warn만 하면 타일은 뜨는데 폴리곤이 하나도 없는 상태가 되고,
+          // 담당자는 "데이터가 없구나"로 읽는다. 원인을 화면에 남긴다.
+          setMapError(
+            "지도 경계 파일(hwaseong_emd.geojson)을 불러오지 못했습니다. " +
+            "frontend/public에 파일이 있는지 확인해주세요."
+          );
+        });
+    }).catch((err) => setMapError(err.message));
   }, [riskData, drawPolygons]);
 
   return (
@@ -386,7 +406,7 @@ export default function MapPage() {
                    분모를 보여줘야 "위험하지 않다"가 아니라 "판단할 근거가 없다"로 읽힌다. */
                 <div style={{ padding: "20px 0" }}>
                   <div style={{ textAlign: "center" }}>
-                    <span className="badge" style={{ color: "var(--ink-muted)" }}>판단보류</span>
+                    <GradeBadge grade="판단보류" />
                   </div>
                   <div className="t-body-sm" style={{ color: "var(--ink-muted)", marginTop: 14, lineHeight: 1.7 }}>
                     {selected.hold_notice ?? "읍면동 단위 등급을 판정할 표본이 부족합니다."}

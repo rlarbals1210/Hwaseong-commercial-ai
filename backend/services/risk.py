@@ -46,6 +46,12 @@ WINDOW_QUARTERS = _THRESHOLDS.get("window_quarters", 4)
 # 기준선을 산출한 표본충분 셀 수. 화면이 "상위 10개"를 전체 분석 대상으로 오해시키지 않도록
 # 실제 모수를 함께 내려준다.
 ELIGIBLE_CELLS = _THRESHOLDS.get("eligible_cells")
+
+# 상권유형 4분류의 가로·세로 절단선(표본충분 셀의 중위값).
+# 화면이 "이 상권이 왜 쇠퇴인가"를 그 자리에서 증명할 수 있게 함께 내려준다 —
+# 판정 근거를 숫자로 보여주지 못하면 유형은 그냥 라벨로 읽힌다.
+CELL_TYPE_OPEN_CUT_PCT = _THRESHOLDS.get("cell_type_open_cut_pct")
+CELL_TYPE_CLOSE_CUT_PCT = _THRESHOLDS.get("cell_type_close_cut_pct")
 GRADE_NOTICE = (
     f"등급은 최근 {WINDOW_QUARTERS}분기 누적 폐업률 기준이며, "
     "화성시 내 상대 순위입니다(위험 = 상위 10%, 주의 = 상위 30%). 절대 기준이 아닙니다."
@@ -84,7 +90,7 @@ AREA_MIN_SUFFICIENT_CELLS = 5
 AREA_THIN_EVIDENCE_CELLS = 10
 AREA_HOLD_LEVEL = "판단보류"
 AREA_HOLD_NOTICE = (
-    f"표본이 충분한 업종이 {AREA_MIN_SUFFICIENT_CELLS}개 미만이라 동 단위 등급 판정을 "
+    f"표본이 충분한 업종이 {AREA_MIN_SUFFICIENT_CELLS}개 미만이라 읍면동 단위 등급 판정을 "
     "보류했습니다. 위험하지 않다는 뜻이 아니라 판단할 근거가 부족하다는 뜻입니다."
 )
 AREA_THIN_NOTICE = (

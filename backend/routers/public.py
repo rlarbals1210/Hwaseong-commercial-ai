@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import AdminArea, CommercialQuarter, IndustryCategory
-from ..services.risk import WINDOW_QUARTERS, quarter_label
+from ..services.risk import WINDOW_QUARTERS, pct, quarter_label
 
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "ai"))
@@ -192,7 +192,7 @@ def get_public_cell(
         # 화면에서 감춰도 API를 직접 부른 쪽은 그 수치를 쓰게 된다. 건수는 사실이므로 남긴다.
         "closure_rate_pct": None if cell.sample_insufficient else _pct(cell.closure_rate_cum4),
         "closure_count": cell.closure_count_cum4,
-        "opening_rate_pct": None if cell.sample_insufficient else _pct(cell.opening_rate),
+        "opening_rate_pct": None if cell.sample_insufficient else _pct(cell.opening_rate_ma4),
 
         # 숫자 하나만 보면 "7.2%, 그래서 뭐?"다. 세 방향 평균과 나란히 놓아야 판단이 된다.
         "comparison": {

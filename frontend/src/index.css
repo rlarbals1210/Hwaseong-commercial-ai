@@ -63,6 +63,14 @@
   --error-soft: #fdecea;
   --orange-soft: #fdf0e7;
   --green-soft: #e9f8ed;
+
+  /* 배지 글씨 전용 색.
+     배지는 연한 배경 위에 12px 글씨를 올리므로 본문용 강조색을 그대로 쓰면 대비가 모자란다.
+     실측: --accent-green(#1aae39)을 --green-soft 위에 놓으면 대비 2.67로, 굵은 작은 글씨
+     최소 기준 3.0에도 못 미친다. --accent-orange도 3.37로 아슬아슬하다.
+     아래 값은 각각 4.97 / 4.23으로 본문 기준(4.5)에 맞춘 것이다. */
+  --badge-ok-ink: #147a28;
+  --badge-warn-ink: #c25000;
   --teal-soft: #e6f4f4;
 
   /* ── Radius ─────────────────────────────────────────────────────────── */
@@ -173,8 +181,8 @@ h1, h2, h3, h4 {
 }
 
 .badge-danger  { background: var(--error-soft);  color: var(--error); }
-.badge-warn    { background: var(--orange-soft); color: var(--accent-orange); }
-.badge-ok      { background: var(--green-soft);  color: var(--accent-green); }
+.badge-warn    { background: var(--orange-soft); color: var(--badge-warn-ink); }
+.badge-ok      { background: var(--green-soft);  color: var(--badge-ok-ink); }
 .badge-neutral { background: var(--surface-container); color: var(--ink-secondary); }
 
 /* 버튼 — 마케팅 CTA는 pill, 유틸리티는 8px. 이 대비는 의도된 것이다. */

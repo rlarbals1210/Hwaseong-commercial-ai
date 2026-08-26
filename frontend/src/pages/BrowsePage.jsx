@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiFetchJson } from "../lib/api";
+import { apiFetchJson, describeApiError } from "../lib/api";
 
 // 상권 둘러보기 — 로그인 없이 열리는 공개 화면.
 //
@@ -58,7 +58,7 @@ export default function BrowsePage() {
         const pick = first?.industries.find((i) => !i.sample_insufficient) ?? first?.industries[0];
         if (first && pick) { setAreaId(first.id); setIndustryId(pick.id); }
       })
-      .catch(() => setError("상권 목록을 불러오지 못했습니다."));
+      .catch((err) => setError(describeApiError(err)));
   }, []);
 
   useEffect(() => {
@@ -66,7 +66,7 @@ export default function BrowsePage() {
     setLoading(true); setError("");
     apiFetchJson(`/api/public/cell?area_id=${areaId}&industry_id=${industryId}`)
       .then(setCell)
-      .catch(() => { setCell(null); setError("상권 정보를 불러오지 못했습니다."); })
+      .catch((err) => { setCell(null); setError(describeApiError(err)); })
       .finally(() => setLoading(false));
   }, [areaId, industryId]);
 

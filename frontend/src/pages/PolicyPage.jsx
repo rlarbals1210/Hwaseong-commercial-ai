@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { apiFetchJson } from "../lib/api";
+import { apiFetchJson, describeApiError } from "../lib/api";
+import { GradeBadge, TypeBadge } from "../components/Badge";
 import ProvisionalNotice from "../components/ProvisionalNotice";
 import { downloadCsv, csvNum } from "../lib/csv";
 
@@ -123,11 +124,14 @@ function QuadrantPanel({ meta, items, highlight }) {
               }}
             >
               <div style={{ minWidth: 0 }}>
-                <div className="t-body-sm" style={{ fontWeight: 600, color: "var(--on-surface)" }}>{item.dong}</div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+                  <span className="t-body-sm" style={{ fontWeight: 600, color: "var(--on-surface)" }}>{item.dong}</span>
+                  {/* 등급·유형을 캡션 안 평문으로 두면 다른 화면의 배지와 같은 것으로 안 읽힌다. */}
+                  <GradeBadge grade={item.risk_grade} />
+                  <TypeBadge type={item.cell_type} />
+                </div>
                 <div className="t-caption" style={{ color: "var(--ink-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {item.category}
-                  {item.risk_grade && item.risk_grade !== "안정" ? ` · ${item.risk_grade}` : ""}
-                  {item.cell_type && item.cell_type !== "유형판정보류" ? ` · ${item.cell_type}` : ""}
                   {" · 최근 1년 "}
                   <b style={{ color: meta.tone, fontVariantNumeric: "tabular-nums" }}>{item.actual_closure_rate_pct}%</b>
                   {item.cumulative_closure_count ? (
@@ -216,9 +220,9 @@ export default function PolicyPage() {
         }
         setData(result);
       })
-      .catch(() => {
+      .catch((err) => {
         setData(EMPTY_DATA);
-        setError("데이터를 불러오지 못했습니다. 잠시 후 다시 시도해주세요.");
+        setError(describeApiError(err));
       })
       .finally(() => setLoading(false));
   }, [category]);
@@ -231,11 +235,11 @@ export default function PolicyPage() {
   return (
     <div>
       <PageHeader
-        title="현장점검 우선순위"
+        title="현장 확인 우선순위"
         desc="최근 1년 누적 폐업률(4분기 합산 관측치) × 영향 점포 수 기준 확인 순서입니다. 지원 대상 결정이 아닙니다."
       />
 
-      {/* 대시보드에 "현장점검 우선순위 보기" 버튼이 있어 시연 동선상 두 화면을 연달아 보게 된다.
+      {/* 대시보드에 "현장 확인 우선순위 보기" 버튼이 있어 시연 동선상 두 화면을 연달아 보게 된다.
           두 화면의 1순위가 다른 것은 정상인데(예측 vs 관측) 그 설명이 도착지에 없었다. */}
       <div
         className="t-caption"
@@ -328,8 +332,11 @@ export default function PolicyPage() {
             <div
               className="t-caption"
               style={{
+                // 한글은 vertical-rl에서 글자가 눕지 않고 똑바로 선다. 라틴 문자 기준으로
+                // 쓰던 rotate(180deg)를 그대로 얹으면 글자가 물구나무를 선다.
                 writingMode: "vertical-rl",
-                transform: "rotate(180deg)",
+                textOrientation: "upright",
+                letterSpacing: 1,
                 color: "var(--ink-muted)",
                 display: "flex",
                 alignItems: "center",
@@ -337,7 +344,7 @@ export default function PolicyPage() {
                 flexShrink: 0,
               }}
             >
-              영향 점포 수 (파급 규모) →
+              ↑ 영향 점포 수 — 파급 규모
             </div>
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gridTemplateRows: "1fr 1fr", gap: 12, minHeight: 520 }}>
