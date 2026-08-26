@@ -81,8 +81,14 @@ def get_closure_risk(
     같은 모순이 화면에 그대로 노출됐다. 순위(예측)와 근거(관측)가 서로 어긋나 보이지 않게
     누적값을 쓴다. 단일 분기 값은 참고용으로 함께 준다.
 
-    정렬은 모델 순위(predicted_rank)를 그대로 쓴다. 미래 4분기 폐업률 적중에서 모델이
-    관측 지표보다 낫기 때문이다(스피어만 0.566 vs 0.438)."""
+    정렬은 모델 순위(predicted_rank)를 그대로 쓴다.
+
+    2026-08-26 재검증(ai/validate_ranking.py) — 과거 시점 순위를 그 뒤 4분기 실제
+    폐업률과 맞춘 결과 스피어만은 모델 0.324 / 관측 0.268 / 앙상블 0.318,
+    리프트는 1.180 / 1.142 / 1.208이었다. 지표에 따라 승자가 갈리고 차이가 오차 수준이라
+    성능으로는 못 고른다. 모델 단독을 택한 이유는 화면 정체성이다 — 조기경보는
+    "모델이 본 2분기 뒤", 현장 확인은 "이미 관측된 최근 1년"으로 갈라놓았고 화면에
+    그렇게 안내한다. 여기에 관측을 섞으면 그 구분이 흐려진다."""
     q = (
         db.query(RiskPrediction, CommercialQuarter, AdminArea.area_name, IndustryCategory.industry_name)
         .join(ModelRun, RiskPrediction.model_run_id == ModelRun.id)
