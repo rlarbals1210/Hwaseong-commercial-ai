@@ -484,3 +484,26 @@ class PolicyOutcome(Base):
     observed_store_count = Column(Integer, nullable=True)
     evaluation_note = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class AreaPopulationQuarter(Base):
+    """읍면동 배후인구(등록인구) 분기 시계열 — KOSIS 주민등록인구.
+
+    등급·상권유형 판정에 관여하지 않는다. 인구증감과 폐업률의 순위상관이 +0.238로 약하고
+    부호도 직관과 반대라(정남면 인구 -9.8% / 폐업률 0.04, 봉담읍 +25.9% / 0.05) 판정 축으로
+    쓸 근거가 없다. 셀 상세에서 "같은 위험 등급이라도 원인 방향이 다르다"를 보이는 설명 근거다.
+
+    total_population이 NULL인 분기는 인구가 0명이었던 게 아니라 동이 아직 없었다는 뜻이다
+    (동탄9동은 2023Q3부터). 0으로 채우면 화면에 인구 폭증으로 그려진다.
+    """
+
+    __tablename__ = "area_population_quarters"
+    __table_args__ = (
+        UniqueConstraint("area_id", "quarter_code", name="uq_area_population_quarter"),
+    )
+
+    id = Column(Integer, primary_key=True)
+    area_id = Column(Integer, ForeignKey("admin_areas.id"), nullable=False, index=True)
+    quarter_code = Column(Integer, nullable=False, index=True)
+    total_population = Column(Integer, nullable=True)
+    source = Column(String(50), nullable=False, default="kosis_registered")

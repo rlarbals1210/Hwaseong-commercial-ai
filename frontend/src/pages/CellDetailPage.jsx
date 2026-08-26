@@ -67,6 +67,63 @@ function TrendChart({ rows }) {
   );
 }
 
+/** 배후인구(읍면동 등록인구) 추이.
+ *
+ * 이 그래프는 판정 근거가 아니다. 인구증감과 폐업률의 순위상관은 +0.238로 약하고 부호도
+ * 직관과 반대다. 같은 "쇠퇴·위험"이라도 사람이 늘고 있는지 줄고 있는지에 따라 현장에서
+ * 볼 것이 갈리므로, 원인의 방향을 좁히는 용도로만 둔다.
+ *
+ * 폐업률 그래프와 y축을 공유하지 않는다. 단위가 다르고(명 vs %), 한 축에 겹치면 두 선의
+ * 교차가 아무 의미 없는데도 관계처럼 읽힌다.
+ *
+ * 급변 분기(is_break)는 점으로 표시한다. 행정구역 조정이거나 대규모 입주인데 자료만으로는
+ * 구분되지 않아서, 어느 쪽인지 말하지 않고 "자연 증감이 아님"만 알린다.
+ */
+function PopulationChart({ series }) {
+  const points = (series || []).filter((p) => Number.isFinite(p.population));
+  if (points.length < 2) {
+    return <div className="t-caption" style={{ color: "var(--ink-muted)" }}>배후인구 추이를 그릴 자료가 부족합니다.</div>;
+  }
+  const W = 640;
+  const H = 160;
+  const PAD = 34;
+  const values = points.map((p) => p.population);
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  // 0을 바닥으로 잡으면 화성시 읍면동 대부분이 거의 수평선이 되어 변화가 안 보인다.
+  // 대신 축이 0에서 시작하지 않는다는 걸 눈금에 적어 과장으로 읽히지 않게 한다.
+  const span = max - min || 1;
+  const lo = min - span * 0.15;
+  const hi = max + span * 0.15;
+  const x = (i) => PAD + (i * (W - PAD * 2)) / (points.length - 1);
+  const y = (v) => H - PAD - ((v - lo) / (hi - lo)) * (H - PAD * 2);
+  const path = points.map((p, i) => `${i ? "L" : "M"}${x(i)},${y(p.population)}`).join(" ");
+  const breaks = points.map((p, i) => ({ ...p, i })).filter((p) => p.is_break);
+  const last = points[points.length - 1];
+
+  return (
+    <div style={{ overflowX: "auto" }}>
+      <svg width={W} height={H} role="img" aria-label="분기별 배후인구 추이">
+        <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--hairline)" />
+        <path d={path} fill="none" stroke="var(--ink-muted)" strokeWidth="2" />
+        {breaks.map((p) => (
+          <circle key={p.quarter_code} cx={x(p.i)} cy={y(p.population)} r="4" fill="var(--accent-orange)">
+            <title>{`${p.label} 직전 분기 대비 ${p.qoq_pct > 0 ? "+" : ""}${p.qoq_pct}% — 자연 증감이 아닙니다`}</title>
+          </circle>
+        ))}
+        <circle cx={x(points.length - 1)} cy={y(last.population)} r="3.5" fill="var(--ink-muted)" />
+        <text x={4} y={y(max) + 4} fontSize="11" fill="var(--ink-faint)">{max.toLocaleString()}</text>
+        <text x={4} y={y(min) + 4} fontSize="11" fill="var(--ink-faint)">{min.toLocaleString()}</text>
+        <text x={PAD} y={H - 8} fontSize="11" fill="var(--ink-faint)">{points[0].label}</text>
+        <text x={W - PAD} y={H - 8} fontSize="11" fill="var(--ink-faint)" textAnchor="end">{last.label}</text>
+      </svg>
+      <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 4 }}>
+        세로축은 0에서 시작하지 않습니다. 변화를 보이기 위한 눈금이며 막대 높이로 크기를 비교하지 마세요.
+      </div>
+    </div>
+  );
+}
+
 /** 3중 비교 — 숫자 하나로는 의미가 없다. 세 방향으로 비교해야 원인의 위치가 좁혀진다. */
 function Comparison({ value, comparison }) {
   const rows = [
@@ -158,6 +215,7 @@ export default function CellDetailPage() {
   const { areaId, industryId } = useParams();
   const [cell, setCell] = useState(null);
   const [trend, setTrend] = useState([]);
+  const [population, setPopulation] = useState(null);
   const [factors, setFactors] = useState(null);
   const [error, setError] = useState("");
   const [programs, setPrograms] = useState(null);
@@ -178,9 +236,11 @@ export default function CellDetailPage() {
       apiFetchJson(`/api/cells/${areaId}/${industryId}/trend`).catch(() => []),
       apiFetchJson(`/api/cells/${areaId}/${industryId}/programs`).catch(() => null),
       apiFetchJson(`/api/cells/${areaId}/${industryId}/contacts`).catch(() => null),
+      apiFetchJson(`/api/cells/${areaId}/${industryId}/population`).catch(() => null),
     ])
-      .then(([detail, series, progs, logs]) => {
+      .then(([detail, series, progs, logs, pop]) => {
         setContacts(logs);
+        setPopulation(pop);
         setCell(detail);
         setTrend(Array.isArray(series) ? series : []);
         setPrograms(progs);
@@ -472,6 +532,61 @@ export default function CellDetailPage() {
               style={{ marginTop: 12, padding: "8px 10px", background: "var(--surface-container-low)", borderRadius: "var(--radius-md)", color: "var(--ink-secondary)" }}
             >
               {cell.action}
+            </div>
+          </div>
+        </Section>
+      )}
+
+      {/* 배후인구 — 판정 축이 아니라 원인의 방향을 좁히는 참고 자료 */}
+      {population?.series?.length > 0 && (
+        <Section
+          title="배후인구 추이"
+          note={population.notice}
+        >
+          <div className="card" style={{ padding: 20 }}>
+            <div
+              className="t-caption"
+              style={{ display: "flex", gap: 16, flexWrap: "wrap", color: "var(--ink-muted)", marginBottom: 12 }}
+            >
+              <span>{population.area_name} 등록인구</span>
+              {population.change && (
+                <>
+                  <span>
+                    {population.change.from_label} <b style={{ color: "var(--on-surface)" }}>
+                      {population.change.from_population.toLocaleString()}
+                    </b>
+                    {" → "}
+                    {population.change.to_label} <b style={{ color: "var(--on-surface)" }}>
+                      {population.change.to_population.toLocaleString()}
+                    </b>
+                  </span>
+                  {/* 급변 구간이 섞였으면 변화율을 강조하지 않는다 — 경계 조정이 인구 이동으로 읽힌다. */}
+                  <span style={{ color: population.change.has_break ? "var(--ink-faint)" : "var(--ink-muted)" }}>
+                    {population.change.change_pct > 0 ? "+" : ""}{population.change.change_pct}%
+                  </span>
+                </>
+              )}
+            </div>
+
+            <PopulationChart series={population.series} />
+
+            {population.reading && (
+              <p
+                style={{
+                  margin: "12px 0 0",
+                  padding: "10px 12px",
+                  background: "var(--surface-container-low)",
+                  borderRadius: "var(--radius-md)",
+                  color: "var(--ink-secondary)",
+                  lineHeight: 1.7,
+                }}
+              >
+                {population.reading}
+              </p>
+            )}
+
+            <div className="t-caption" style={{ marginTop: 10, color: "var(--ink-faint)" }}>
+              출처 {population.source}
             </div>
           </div>
         </Section>

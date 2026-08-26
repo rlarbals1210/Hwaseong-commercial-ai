@@ -24,6 +24,7 @@ from ..models import (
     AdminArea,
     AlertCase,
     AlertContact,
+    AreaPopulationQuarter,
     PolicyProgram,
     CommercialQuarter,
     DataBatch,
@@ -222,6 +223,160 @@ def get_cell_trend(area_id: int, industry_id: int, db: Session = Depends(get_db)
         }
         for r in rows
     ]
+
+
+# ────────────────────────────────────────────────────────────────────────────
+# 배후인구 추이
+#
+# 등급·상권유형 판정에 관여하지 않는다. 인구증감과 폐업률의 순위상관이 +0.238로 약하고
+# 부호도 직관과 반대다(정남면 인구 -9.8%인데 폐업률 0.04, 봉담읍 +25.9%인데 0.05).
+# 판정 축으로 넣으면 근거 없는 가중치가 된다.
+#
+# 그럼에도 붙이는 이유: 같은 "쇠퇴·위험"이라도 배후인구가 늘고 있으면 원인이 수요 부족이
+# 아니라는 뜻이라 담당자가 현장에서 볼 것이 갈린다. 그 목적의 설명 근거다.
+
+POPULATION_SOURCE = "KOSIS 주민등록 등록인구"
+POPULATION_NOTICE = (
+    "배후인구는 등급·상권 유형 판정에 쓰지 않습니다. 화성시 29개 읍면동 기준 인구증감과 "
+    "폐업률의 순위상관은 +0.238로 약하고 부호도 직관과 반대여서 판정 축으로 쓸 근거가 없습니다. "
+    "원인의 방향을 좁히는 참고 자료로만 보시기 바랍니다."
+)
+
+# 직전 분기 대비 이 폭을 넘는 변동은 자연 증감으로 보기 어렵다. 실측상 분기 등락률 절대값은
+# 중위 0.43%, 90분위 1.75%다. 실제로 걸리는 사례는 두 종류이고 자료만으로는 구분되지 않는다 —
+#   · 행정구역 조정: 동탄7동 2023Q3 -40.1% (같은 분기에 동탄9동 39,046명이 새로 생겼다)
+#   · 대규모 택지 입주: 비봉면 2025Q1 +49.6%
+# 그래서 어느 쪽인지 단정하지 않고 "자연 증감으로 읽지 말 것"만 표시한다.
+POPULATION_BREAK_PCT = 15.0
+POPULATION_BREAK_NOTE = (
+    "직전 분기 대비 변동이 커서 행정구역 조정(분동·편입)이나 대규모 택지 입주로 보입니다. "
+    "자연 증감으로 읽으면 안 됩니다."
+)
+
+# 방향을 말할 최소 폭. 이보다 작으면 "큰 변화 없음"으로 둔다.
+POPULATION_FLAT_PCT = 3.0
+POPULATION_WINDOW_QUARTERS = 12  # 3년
+
+# 유형 x 인구방향. 유형은 "가게가 어떻게 드나드는가", 인구는 "손님이 느는가"라서
+# 둘이 어긋날 때 현장에서 볼 것이 갈린다. 어긋나는 칸이 이 기능의 존재 이유다.
+_POPULATION_READINGS = {
+    ("쇠퇴", "증가"): "사람은 느는데 나간 자리가 채워지지 않고 있습니다. 배후 수요 부족이 아닌 다른 원인(임대료·업종 과밀·접근성)을 현장에서 확인해주세요.",
+    ("쇠퇴", "감소"): "배후 수요 자체가 줄고 있습니다. 창업 유도보다 기존 점포 유지와 상권 환경 개선을 먼저 검토하시기 바랍니다.",
+    ("고회전", "증가"): "배후 수요는 늘고 있는데 점포가 자주 바뀝니다. 수요보다 업종 과밀 쪽을 먼저 보시기 바랍니다.",
+    ("고회전", "감소"): "점포가 자주 바뀌는데 배후 수요도 줄고 있습니다. 창업 사전상담에서 이 점을 알릴 필요가 있습니다.",
+    ("성장", "증가"): "배후 수요와 신규 진입이 같은 방향입니다. 당장 개입할 근거는 약합니다.",
+    ("성장", "감소"): "배후 수요는 줄고 있는데 신규 진입이 이어집니다. 과열 조짐인지 관찰해주세요.",
+    ("정체", "증가"): "사람은 느는데 드나듦이 없습니다. 신규 유입 여지를 검토해볼 수 있습니다.",
+    ("정체", "감소"): "배후 수요가 줄면서 드나듦도 멈춰 있습니다.",
+}
+
+
+def _population_direction(change_pct: float | None) -> str | None:
+    if change_pct is None:
+        return None
+    if change_pct >= POPULATION_FLAT_PCT:
+        return "증가"
+    if change_pct <= -POPULATION_FLAT_PCT:
+        return "감소"
+    return "보합"
+
+
+@router.get("/{area_id}/{industry_id}/population")
+def get_cell_population(area_id: int, industry_id: int, db: Session = Depends(get_db)):
+    """셀의 배후인구(읍면동 등록인구) 분기 추이.
+
+    industry_id는 값 자체에 쓰이지 않는다 — 배후인구는 읍면동 단위라 업종과 무관하다.
+    그래도 받는 이유는 셀이 실재하는지 확인해 형제 엔드포인트(trend/programs/notice)와
+    404 동작을 맞추기 위해서다. 없는 셀에 대해 인구만 돌려주면 화면이 빈 셀을 실재하는
+    것처럼 보여준다.
+    """
+    cell = (
+        db.query(CommercialQuarter)
+        .filter(
+            CommercialQuarter.area_id == area_id,
+            CommercialQuarter.industry_id == industry_id,
+        )
+        .order_by(CommercialQuarter.quarter_code.desc())
+        .first()
+    )
+    if cell is None:
+        raise HTTPException(status_code=404, detail="해당 상권을 찾을 수 없습니다")
+
+    area = db.query(AdminArea).filter(AdminArea.id == area_id).one_or_none()
+    rows = (
+        db.query(AreaPopulationQuarter)
+        .filter(
+            AreaPopulationQuarter.area_id == area_id,
+            AreaPopulationQuarter.total_population.isnot(None),
+        )
+        .order_by(AreaPopulationQuarter.quarter_code)
+        .all()
+    )
+
+    series = []
+    previous = None
+    for row in rows:
+        qoq = None
+        if previous:
+            qoq = round((row.total_population - previous) / previous * 100, 2)
+        series.append({
+            "quarter_code": row.quarter_code,
+            "label": f"{row.quarter_code // 10}Q{row.quarter_code % 10}",
+            "population": row.total_population,
+            "qoq_pct": qoq,
+            # 자연 증감으로 읽으면 안 되는 지점. 화면이 이 분기를 표시한다.
+            "is_break": qoq is not None and abs(qoq) >= POPULATION_BREAK_PCT,
+        })
+        previous = row.total_population
+
+    if not series:
+        return {
+            "area_name": area.area_name if area else None,
+            "source": POPULATION_SOURCE,
+            "notice": POPULATION_NOTICE,
+            "series": [],
+            "change": None,
+            "reading": "이 읍면동의 등록인구 자료가 없습니다.",
+        }
+
+    window = series[-(POPULATION_WINDOW_QUARTERS + 1):]
+    first, last = window[0], window[-1]
+    has_break = any(point["is_break"] for point in window[1:])
+    change_pct = round((last["population"] - first["population"]) / first["population"] * 100, 1)
+
+    change = {
+        "from_label": first["label"],
+        "to_label": last["label"],
+        "from_population": first["population"],
+        "to_population": last["population"],
+        "quarters": len(window) - 1,
+        "change_pct": change_pct,
+        "has_break": has_break,
+        "break_note": POPULATION_BREAK_NOTE if has_break else None,
+    }
+
+    if has_break:
+        # 경계 조정이 섞인 구간에서 방향을 말하면 없는 인구 이동을 있다고 하는 셈이 된다.
+        direction = None
+        reading = "구간 안에 급변 분기가 있어 증감 방향을 판단하지 않습니다. " + POPULATION_BREAK_NOTE
+    else:
+        direction = _population_direction(change_pct)
+        if direction == "보합":
+            reading = f"배후인구는 {first['label']} 이후 큰 변화가 없습니다({change_pct:+.1f}%)."
+        else:
+            reading = _POPULATION_READINGS.get(
+                (cell.cell_type, direction),
+                f"배후인구가 {first['label']} 이후 {change_pct:+.1f}% {direction}했습니다.",
+            )
+    change["direction"] = direction
+    return {
+        "area_name": area.area_name if area else None,
+        "source": POPULATION_SOURCE,
+        "notice": POPULATION_NOTICE,
+        "series": series,
+        "change": change,
+        "reading": reading,
+    }
 
 
 # ────────────────────────────────────────────────────────────────────────────
