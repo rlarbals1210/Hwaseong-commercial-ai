@@ -151,8 +151,8 @@ export default function ComparePage() {
     <div>
       <h1 className="t-h1" style={{ margin: 0 }}>상권 비교</h1>
       <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0", maxWidth: 660 }}>
-        두 상권을 나란히 놓고 봅니다. 폐업률 차이가 <b>표본 크기로 설명될 수 있는 크기</b>면
-        어느 쪽이 나쁘다고 말하지 않고 &ldquo;차이 없음&rdquo;으로 표시합니다.
+         폐업률 차이가 <b>표본 크기로 설명될 수 있는 크기</b>면
+         &ldquo;차이 없음&rdquo;으로 표시합니다.
       </p>
 
       <div className="card" style={{ padding: 18, margin: "18px 0", display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
