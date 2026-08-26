@@ -518,8 +518,10 @@ def create_cell_contact(
     db.add(contact)
 
     # 첫 접촉이 들어오면 사건 상태를 올린다. 목록에서 "손대지 않은 것"과 구분되게.
+    # 값은 workflow.py의 ALERT_STATUSES 어휘를 따른다 — 여기서만 쓰는 값을 넣으면
+    # 그 케이스를 workflow API로 갱신할 때 400이 나고 상태 필터에도 안 걸린다.
     if case.status == "new":
-        case.status = "in_progress"
+        case.status = "reviewing"
         case.reviewed_at = func.now()
 
     db.commit()
