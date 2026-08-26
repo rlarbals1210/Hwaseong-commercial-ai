@@ -422,7 +422,11 @@ export default function CellDetailPage() {
             {/* 판정 근거를 숫자로 보여준다. 이게 없으면 유형은 그냥 붙은 라벨로 읽히고,
                 "이 상권이 왜 쇠퇴입니까"를 물었을 때 화면으로 답할 수가 없다.
                 기준선은 표본충분 상권의 중위값이고 서버에서 받는다(하드코딩 금지). */}
-            {Number.isFinite(cell.cell_type_open_cut_pct) &&
+            {/* 판정보류 셀에는 근거를 띄우지 않는다. 값이 있어도 그 값으로 가르지 않았기
+                때문이다 — "판정할 자료가 부족합니다" 바로 아래 숫자 두 개가 있으면
+                "값이 있는데 왜 판정을 안 했나"로 읽힌다. */}
+            {cell.cell_type !== "유형판정보류" &&
+              Number.isFinite(cell.cell_type_open_cut_pct) &&
               Number.isFinite(cell.cell_type_close_cut_pct) &&
               Number.isFinite(cell.opening_rate_pct) &&
               Number.isFinite(cell.cumulative_closure_rate_pct) && (
@@ -437,15 +441,19 @@ export default function CellDetailPage() {
                     lineHeight: 1.8,
                   }}
                 >
+                  {/* 이 칸만 소수 2자리다. 화면 전체는 1자리로 통일했지만 여기서는 값과 기준선의
+                      대소가 결론이라 반올림이 모순을 만든다 — 개업률 1.98%와 기준 2.0%를 둘 다
+                      "2.0%"로 찍으면 "2.0% — 기준 2.0% 미만"이 된다(실측 2셀, 그중 하나는
+                      조기경보 예측 4위라 시연에서 눌릴 자리였다). */}
                   <div style={{ color: "var(--ink-faint)", marginBottom: 4 }}>판정 근거</div>
                   개업률{" "}
-                  <b style={{ color: "var(--on-surface)" }}>{fmt(cell.opening_rate_pct)}%</b>
-                  {" "}— 기준 {fmt(cell.cell_type_open_cut_pct)}%{" "}
+                  <b style={{ color: "var(--on-surface)" }}>{fmt(cell.opening_rate_pct, 2)}%</b>
+                  {" "}— 기준 {fmt(cell.cell_type_open_cut_pct, 2)}%{" "}
                   {cell.opening_rate_pct >= cell.cell_type_open_cut_pct ? "이상" : "미만"}
                   <br />
                   폐업률{" "}
-                  <b style={{ color: "var(--on-surface)" }}>{fmt(cell.cumulative_closure_rate_pct)}%</b>
-                  {" "}— 기준 {fmt(cell.cell_type_close_cut_pct)}%{" "}
+                  <b style={{ color: "var(--on-surface)" }}>{fmt(cell.cumulative_closure_rate_pct, 2)}%</b>
+                  {" "}— 기준 {fmt(cell.cell_type_close_cut_pct, 2)}%{" "}
                   {cell.cumulative_closure_rate_pct >= cell.cell_type_close_cut_pct ? "이상" : "미만"}
                   <div style={{ color: "var(--ink-faint)", marginTop: 6 }}>
                     기준은 표본이 충분한 상권의 중위값입니다. 절대 임계가 아니라 화성시 안에서의 상대 위치입니다.
