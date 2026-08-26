@@ -92,10 +92,7 @@ export default function OfficialLoginPage() {
           >
             RN
           </div>
-          <h1 className="t-h2" style={{ margin: 0 }}>리버스 노다지</h1>
-          <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>
-            화성시 소상공인 폐업위험 조기경보
-          </p>
+          <h1 className="t-h2" style={{ margin: 0 }}>화성시 소상공인 폐업위험 조기경보</h1>
         </div>
 
         {/* 로그인 카드 */}

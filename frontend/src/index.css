@@ -638,7 +638,7 @@ a { color: var(--primary); }
 }
 
 .nodaji-logo {
-  width: 178px;
+  width: 122px;
   height: 36px;
   overflow: visible;
 }
@@ -1270,7 +1270,7 @@ a { color: var(--primary); }
   }
 
   .nodaji-logo {
-    width: 150px;
+    width: 103px;
   }
 
   .nodaji-map-drawer {
@@ -1286,7 +1286,7 @@ a { color: var(--primary); }
   }
 
   .nodaji-logo {
-    width: 124px;
+    width: 85px;
   }
 
   .nodaji-map-menu a:nth-child(2),

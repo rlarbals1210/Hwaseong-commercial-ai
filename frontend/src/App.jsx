@@ -79,9 +79,6 @@ function Sidebar({ nav, pathname, username, onLogout }) {
           RN
         </div>
         <div style={{ lineHeight: 1.25 }}>
-          <div style={{ fontSize: 16, fontWeight: 700, letterSpacing: "-0.4px", color: "var(--on-surface)" }}>
-            리버스 노다지
-          </div>
           <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>화성시 소상공인 조기경보</div>
         </div>
       </div>

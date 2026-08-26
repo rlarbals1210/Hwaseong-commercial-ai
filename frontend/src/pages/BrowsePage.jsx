@@ -14,11 +14,11 @@ const fmt = (value, digits = 1) => (
 
 function NodajiLogo() {
   return (
-    <svg viewBox="0 0 178 32" aria-hidden="true" className="nodaji-logo">
+    <svg viewBox="0 0 108 32" aria-hidden="true" className="nodaji-logo">
       <text x="0" y="24" fontFamily="Arial Black, Helvetica Neue, Arial, sans-serif" fontWeight="900" fontSize="21" letterSpacing="1.1" fill="#cde0f0">
-        REVERSE NODAJI
+        NODAJI
       </text>
-      <g transform="translate(168,5) rotate(35)">
+      <g transform="translate(98,5) rotate(35)">
         <circle cx="0" cy="0" r="5.5" fill="none" stroke="#8ab0cc" strokeWidth="0.5" />
         <polygon points="0,-4.5 0.85,0 0,0.9 -0.85,0" fill="#d94e30" />
         <polygon points="0,4.5 0.85,0 0,-0.9 -0.85,0" fill="#b8d0e8" />
@@ -35,7 +35,7 @@ function NodajiMapNav() {
         <path d="M0 36 Q150 26,300 36 Q450 46,600 36 Q750 26,900 36 Q1050 46,1200 32" />
         <path d="M0 42 Q200 30,400 42 Q600 54,800 42 Q1000 30,1200 38" />
       </svg>
-      <Link to="/browse" className="nodaji-brand" aria-label="리버스 노다지 상권 둘러보기">
+      <Link to="/browse" className="nodaji-brand" aria-label="노다지 상권 둘러보기">
         <NodajiLogo />
       </Link>
       <nav aria-label="공개 상권 메뉴" className="nodaji-map-menu">

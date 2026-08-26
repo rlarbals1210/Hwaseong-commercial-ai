@@ -12,7 +12,6 @@ export default function PublicNav() {
     <nav aria-label="공개 상권 메뉴" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 16, marginBottom: 32 }}>
       <Link to="/browse" style={{ display: "flex", alignItems: "center", gap: 9, color: "var(--on-surface)", textDecoration: "none" }}>
         <span style={{ width: 32, height: 32, borderRadius: "var(--radius-md)", background: "var(--primary)", color: "white", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700 }}>RN</span>
-        <span className="t-body-sm" style={{ fontWeight: 700 }}>리버스 노다지</span>
       </Link>
       <div style={{ display: "flex", gap: 4, flexWrap: "wrap", justifyContent: "flex-end" }}>
         {LINKS.map((link) => {

@@ -135,6 +135,7 @@ hwaseong-commercial-ai/
 │   │   └── test_business_number.py
 │   ├── migrations/             # Alembic — pull 후 `alembic upgrade head` 필수
 │   │   └── versions/           # 0003 누적지표 / 0004 상권유형 / 0005 지원사업 매칭요건
+│   │                           # 0006 보정개업률 / 0007 평균업력 / 0008 점포격자 / 0009 배후인구
 │   ├── routers/
 │   │   ├── auth.py             # /api/auth/ (공무원 로그인)
 │   │   ├── alerts.py           # /api/alerts/ (공무원 전용)
@@ -335,7 +336,10 @@ hwaseong-commercial-ai/
 아래 'PolicyProgram' 절 참조.
 
 ⚠ **pull 후 `alembic upgrade head`를 돌리지 않으면 서버가 `UndefinedColumn`으로 죽는다.**
-`alembic current`로 현재 리비전을 확인할 것 — head는 `20260823_0005`다.
+`alembic current`로 현재 리비전을 확인할 것 — head는 `20260827_0009`다(2026-08-27 기준).
+0005 이후 추가분: `0006` 보정 개업률(`opening_rate_ma4`) / `0007` 셀 평균 업력
+(`avg_tenure_quarters`, 표시용 — 점수 축 아님) / `0008` 공개 지도용 점포 격자(`store_clusters`) /
+`0009` 읍면동 배후인구(`area_population_quarters`).
 
 ### 4분기 누적 전환 + 상권 유형 4분류 (2026-08-25)
 
@@ -497,12 +501,16 @@ python ai/import_normalized_db.py
 # 5. 상대 기여 요인 M1 검증 후 적재(단일 요인 쏠림 90% 초과면 비움)
 python ai/build_explanations.py --validate-only
 python ai/build_explanations.py
+
+# 6. 읍면동 배후인구(KOSIS 등록인구) 적재 — 셀 상세 그래프의 설명 근거. 등급·유형 판정에는 관여 안 함
+#    위 파이프라인과 독립이라 순서 제약 없음. 0009 마이그레이션 이후 최초 1회만 돌리면 된다
+python ai/load_population.py
 ```
 
 **3~4단계만 돌린 뒤에는 백엔드를 완전히 껐다 켠다.** `--reload`가 새 라우터를 못 잡아 화면에
 `NaN`이 뜨거나 신규 엔드포인트가 404가 나는 일이 실제로 있었다.
 
-`ai/build_dataset.py`와 `ai/fix_opening_rate.py`는 raw zip 로딩 + 인허가 매칭 부분이 외장
+`ai/build_dataset.py`·`ai/fix_opening_rate.py`·`ai/load_population.py`는 raw 파일 로딩이 외장
 SSD(`RAW_DATA_DIR`)에 의존한다 — SSD가 마운트 안 된 상태에서는 실행할 수 없다(나머지 스크립트는
 `data/processed/`의 기존 CSV만 있으면 SSD 없이도 실행 가능).
 
