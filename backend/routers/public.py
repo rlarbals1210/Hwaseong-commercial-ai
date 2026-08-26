@@ -34,7 +34,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import AdminArea, CommercialQuarter, IndustryCategory
-from ..services.risk import WINDOW_QUARTERS, quarter_label
+from ..services.risk import WINDOW_QUARTERS, pct, quarter_label
 
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "ai"))
