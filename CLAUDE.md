@@ -178,6 +178,7 @@ hwaseong-commercial-ai/
 │   ├── cumulative.py            # 4분기 누적 지표·등급 기준선·상권유형 공용 모듈 (아래 스크립트 2개가 공유)
 │   ├── build_risk_index.py      # 누적 폐업률 + 등급 + 상권유형 + 이상탐지 → risk_index.csv
 │   ├── analyze_tenure.py        # 업력별 폐업률 분석(보고서용)
+│   ├── build_industry_hierarchy.py # 업종 계층(대분류 10 → 중분류 74) → industry_hierarchy.csv
 │   ├── import_normalized_db.py  # 검증 CSV → 정규화 PostgreSQL(upsert)
 │   ├── build_explanations.py    # M1 검증 → 상대 기여 요인 적재
 │   ├── import_to_db.py          # 레거시 3테이블 적재(롤백용)

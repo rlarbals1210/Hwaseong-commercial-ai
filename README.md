@@ -121,6 +121,7 @@ data/processed/scores.csv               최신 분기 예측 점수
 data/processed/lgbm_model_cell.pkl      학습된 셀 모델
 data/processed/model_cell_results.json  모델 성능 지표
 data/processed/risk_thresholds.json     등급 기준선
+data/processed/industry_hierarchy.csv   업종 계층(대분류 10 × 중분류 74)
 ```
 
 전부 **집계 단위라 개별 점포를 식별할 수 없다.** 이 저장소는 공개이므로 이 기준을 벗어나는 파일은 넣지 않는다.
