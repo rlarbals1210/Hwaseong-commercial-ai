@@ -10,21 +10,27 @@ import ComparePage from "./pages/ComparePage";
 import BrowsePage from "./pages/BrowsePage";
 import TrendPage from "./pages/TrendPage";
 import ReportPage from "./pages/ReportPage";
+import LandingPage from "./pages/LandingPage";
 import RequireRole from "./components/RequireRole";
 import { useAuth } from "./context/auth-context";
 import { apiFetchJson } from "./lib/api";
+import { OFFICIAL_ROUTES, safeNext } from "./lib/officialRoutes";
 
 // 공무원 정책 의사결정 지원 전용.
 // 시민(소상공인) 직접조회 화면은 2026-08-18 설계 결정으로 제외했다 — 상세 사유는 CLAUDE.md '설계 결정' 절 참조.
-const NAV = [
-  { path: "/dashboard", label: "조기경보 대시보드", icon: "dashboard", Component: DashboardPage },
-  { path: "/map", label: "공실위험 지도", icon: "map", Component: MapPage },
-  { path: "/policy", label: "현장 확인 우선순위", icon: "grid_view", Component: PolicyPage },
-  // 표본부족으로 다른 화면에서 빠지는 상권(전체 점포의 38%)을 별도 트랙으로 남긴다
-  { path: "/blindspots", label: "사각지대", icon: "visibility_off", Component: BlindspotPage },
-  // 두 상권을 나란히 놓는 화면. 차이가 표본 크기로 설명될 수 있으면 "차이 없음"으로 표시한다.
-  { path: "/compare", label: "상권 비교", icon: "compare_arrows", Component: ComparePage },
-];
+// 경로·라벨·아이콘은 lib/officialRoutes.js가 단일 출처다(랜딩 카드가 같은 배열을 쓴다).
+// 여기서는 화면 컴포넌트만 짝지어 붙인다.
+//   /blindspots — 표본부족으로 다른 화면에서 빠지는 상권(전체 점포의 38%)의 별도 트랙
+//   /compare    — 두 상권을 나란히 놓고, 차이가 표본 크기로 설명되면 "차이 없음"으로 표시
+const COMPONENTS = {
+  "/dashboard": DashboardPage,
+  "/map": MapPage,
+  "/policy": PolicyPage,
+  "/blindspots": BlindspotPage,
+  "/compare": ComparePage,
+};
+
+const NAV = OFFICIAL_ROUTES.map((route) => ({ ...route, Component: COMPONENTS[route.path] }));
 
 // 사이드바는 짙은 남색 대신 캔버스와 같은 톤 + hairline 경계로 처리한다.
 // "크롬은 물러나고 콘텐츠가 말한다"는 원칙 — 내비게이션이 시각적 무게를 가져가지 않는다.
@@ -58,8 +64,11 @@ function Sidebar({ nav, pathname, username, onLogout }) {
         boxSizing: "border-box",
       }}
     >
-      {/* 브랜드 */}
-      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 8px 0" }}>
+      {/* 브랜드 — 로고를 누르면 홈(서비스 소개)으로 */}
+      <Link
+        to="/"
+        style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 8px 0", textDecoration: "none" }}
+      >
         <div
           style={{
             width: 36,
@@ -81,7 +90,7 @@ function Sidebar({ nav, pathname, username, onLogout }) {
         <div style={{ lineHeight: 1.25 }}>
           <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>화성시 소상공인 조기경보</div>
         </div>
-      </div>
+      </Link>
 
       <div style={{ height: 1, background: "var(--hairline)", margin: "16px 0" }} />
 
@@ -238,10 +247,10 @@ function TopBar({ title }) {
 }
 
 // 로그인 없이 열리는 경로. 공무원 셸(사이드바)을 씌우지 않고 전체화면으로 렌더한다.
-const PUBLIC_PATHS = ["/browse", "/trends", "/report"];
+const PUBLIC_PATHS = ["/", "/browse", "/trends", "/report"];
 
 export default function App() {
-  const { pathname } = useLocation();
+  const { pathname, search } = useLocation();
   const { isAuthenticated, role, username, logout } = useAuth();
   const navigate = useNavigate();
   const isOfficial = isAuthenticated && role === "official";
@@ -249,14 +258,18 @@ export default function App() {
 
   const handleLogout = () => {
     logout();
-    navigate("/");
+    navigate("/login/official");
   };
 
-  const loginElement = isOfficial ? <Navigate to="/dashboard" replace /> : <OfficialLoginPage />;
+  const loginElement = isOfficial
+    ? <Navigate to={safeNext(new URLSearchParams(search).get("next"))} replace />
+    : <OfficialLoginPage />;
 
   const routes = (
     <Routes>
-      <Route path="/" element={loginElement} />
+      {/* 진입 화면은 두 트랙의 공통 현관. 로그인 상태에서도 그대로 보여준다 —
+          로고로 홈에 돌아올 수 있어야 하는데, 여기서 대시보드로 튕기면 돌아올 곳이 없어진다. */}
+      <Route path="/" element={<LandingPage />} />
       <Route path="/login/official" element={loginElement} />
       {/* 상권 둘러보기 — 예비 창업자용 공개 화면. RequireRole로 감싸지 않는다.
           2026-08-18에 제외한 것은 기존 소상공인의 자가진단이고 이건 별개 트랙이다

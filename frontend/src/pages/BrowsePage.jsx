@@ -35,7 +35,8 @@ function NodajiMapNav() {
         <path d="M0 36 Q150 26,300 36 Q450 46,600 36 Q750 26,900 36 Q1050 46,1200 32" />
         <path d="M0 42 Q200 30,400 42 Q600 54,800 42 Q1000 30,1200 38" />
       </svg>
-      <Link to="/browse" className="nodaji-brand" aria-label="노다지 상권 둘러보기">
+      {/* 로고는 홈으로. 자기 자신(/browse)을 가리키면 눌러도 아무 일이 없다. */}
+      <Link to="/" className="nodaji-brand" aria-label="서비스 소개로 이동">
         <NodajiLogo />
       </Link>
       <nav aria-label="공개 상권 메뉴" className="nodaji-map-menu">
@@ -43,7 +44,7 @@ function NodajiMapNav() {
         <Link to="/trends">상권 트렌드</Link>
         <Link to="/report">요약 보고서</Link>
         <span className="nodaji-menu-divider" />
-        <Link to="/">담당자 로그인</Link>
+        <Link to="/login/official">담당자 로그인</Link>
       </nav>
     </header>
   );

@@ -1,7 +1,8 @@
 import { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, useSearchParams, Link } from "react-router-dom";
 import { apiFetch, consumeSessionExpired } from "../lib/api";
 import { useAuth } from "../context/auth-context";
+import { safeNext, officialRoute } from "../lib/officialRoutes";
 
 // 로그인은 페이지 셸(사이드바·상단바) 밖에서 렌더되므로 자체 전체화면 레이아웃을 갖는다.
 // 그라디언트 대신 웜 캔버스 위에 흰 카드 하나 — "겹친 종이" 원칙을 진입 화면에서도 유지한다.
@@ -36,6 +37,11 @@ export default function OfficialLoginPage() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  // 랜딩에서 기능 카드를 눌러 온 경우 그 화면으로 돌려보낸다. 화이트리스트를 통과하지
+  // 못한 값(외부 주소 등)은 조용히 대시보드로 떨어진다.
+  const [searchParams] = useSearchParams();
+  const next = safeNext(searchParams.get("next"));
+  const nextRoute = officialRoute(next);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -50,7 +56,7 @@ export default function OfficialLoginPage() {
       const data = await r.json();
       if (!r.ok) throw new Error(data.detail || "로그인에 실패했습니다.");
       login({ token: data.access_token, role: data.role, verificationType: data.verification_type });
-      navigate("/dashboard");
+      navigate(next);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -72,9 +78,30 @@ export default function OfficialLoginPage() {
       }}
     >
       <div style={{ width: "100%", maxWidth: 400 }}>
+        {/* 소개 화면으로 돌아가는 길. 아래 "상권 둘러보기"와 성격이 달라(되돌아가기 vs 다른 트랙)
+            같은 자리에 두지 않고, 로그인 CTA와 경쟁하지 않게 눈에 띄지 않는 텍스트 링크로 둔다. */}
+        <Link
+          to="/"
+          className="t-caption"
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: 4,
+            color: "var(--ink-muted)",
+            textDecoration: "none",
+            marginBottom: 16,
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 17 }}>arrow_back</span>
+          서비스 소개로 돌아가기
+        </Link>
+
         {/* 브랜드 */}
         <div style={{ textAlign: "center", marginBottom: 28 }}>
-          <div
+          {/* 로고를 누르면 홈으로 — 웹의 기본 동작이라 안 되면 어색하다 */}
+          <Link
+            to="/"
+            aria-label="서비스 소개로 이동"
             style={{
               width: 52,
               height: 52,
@@ -88,10 +115,11 @@ export default function OfficialLoginPage() {
               fontSize: 19,
               letterSpacing: "-0.5px",
               marginBottom: 16,
+              textDecoration: "none",
             }}
           >
             RN
-          </div>
+          </Link>
           <h1 className="t-h2" style={{ margin: 0 }}>화성시 소상공인 폐업위험 조기경보</h1>
         </div>
 
@@ -100,7 +128,9 @@ export default function OfficialLoginPage() {
           <div style={{ marginBottom: 22 }}>
             <h2 className="t-title" style={{ margin: 0 }}>공무원 로그인</h2>
             <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "4px 0 0" }}>
-              담당 부서 계정으로 접속하세요.
+              {nextRoute
+                ? `로그인하면 ${nextRoute.label} 화면으로 이동합니다.`
+                : "담당 부서 계정으로 접속하세요."}
             </p>
           </div>
 
