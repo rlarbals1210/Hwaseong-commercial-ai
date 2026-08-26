@@ -214,6 +214,11 @@ class CommercialQuarter(Base):
     closure_rate_cum4 = Column(Float, nullable=True)      # 4분기 누적 폐업률 0~1
     closure_rate_lower4 = Column(Float, nullable=True)    # 위 값의 Wilson 신뢰하한 (정렬용)
     closure_count_cum4 = Column(Integer, nullable=True)   # 4분기 누적 폐업 건수 (화면 병기용)
+    # 셀 평균 업력(분기 수). 원천은 cell_train_table.csv의 평균업력_분기수(모델 학습 피처).
+    # **점수 축이 아니라 표시 지표다.** 폐업률과의 스피어만이 -0.064로 사실상 무상관이고,
+    # 실제로는 신도시 여부의 대리변수라(면·읍이 높고 동탄이 낮다) 가중치를 줄 근거가 없다.
+    # 자세한 계측은 migrations/versions/20260826_0007_avg_tenure_quarters.py 참조.
+    avg_tenure_quarters = Column(Float, nullable=True)
     saturation_rate = Column(Float, nullable=True)
     competition_index = Column(Float, nullable=True)
     trend_slope = Column(Float, nullable=True)
@@ -226,6 +231,33 @@ class CommercialQuarter(Base):
     threshold_set_id = Column(
         Integer, ForeignKey("risk_threshold_sets.id"), nullable=True, index=True
     )
+    batch_id = Column(Integer, ForeignKey("data_batches.id"), nullable=False, index=True)
+
+
+class StoreCluster(Base):
+    """공개 지도용 점포 격자 집계.
+
+    개별 점포 좌표는 저장하지 않는다. 적재 단계에서 0.002도 격자로 합친 뒤 중심점과
+    개수만 남기며, 공개 API는 3개 미만 격자를 추가로 숨긴다.
+    """
+
+    __tablename__ = "store_clusters"
+    __table_args__ = (
+        UniqueConstraint(
+            "industry_id", "quarter_code", "grid_x", "grid_y",
+            name="uq_store_cluster_industry_quarter_grid",
+        ),
+        CheckConstraint("store_count > 0", name="ck_store_clusters_positive_count"),
+    )
+
+    id = Column(BIGINT_PK, primary_key=True)
+    industry_id = Column(Integer, ForeignKey("industry_categories.id"), nullable=False, index=True)
+    quarter_code = Column(Integer, nullable=False, index=True)
+    grid_x = Column(Integer, nullable=False)
+    grid_y = Column(Integer, nullable=False)
+    center_lng = Column(Float, nullable=False)
+    center_lat = Column(Float, nullable=False)
+    store_count = Column(Integer, nullable=False)
     batch_id = Column(Integer, ForeignKey("data_batches.id"), nullable=False, index=True)
 
 
