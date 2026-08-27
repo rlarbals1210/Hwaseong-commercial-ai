@@ -148,6 +148,7 @@ const CSS = `
   .lp-hero-title {
     font-size: clamp(36px, 4.6vw, 62px); font-weight: 700; line-height: 1.18;
     letter-spacing: -0.02em; margin: 0 0 22px; word-break: keep-all; max-width: 860px;
+    color: #fff;
   }
   .lp-hero-title .accent { color: #38bdf8; }
   .lp-hero-sub { font-size: 17px; color: #94a3b8; line-height: 1.8; margin: 0 0 40px; max-width: 560px; word-break: keep-all; }
@@ -174,7 +175,7 @@ const CSS = `
   .lp-section { padding: 100px 32px; position: relative; overflow: hidden; }
   .lp-section-inner { max-width: 1280px; margin: 0 auto; position: relative; z-index: 2; }
   .lp-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: .15em; color: #38bdf8; margin: 0 0 14px; }
-  .lp-section-title { font-size: clamp(26px, 2.8vw, 40px); font-weight: 700; line-height: 1.25; letter-spacing: -.02em; margin: 0 0 14px; word-break: keep-all; }
+  .lp-section-title { font-size: clamp(26px, 2.8vw, 40px); font-weight: 700; line-height: 1.25; letter-spacing: -.02em; margin: 0 0 14px; word-break: keep-all; color: #fff; }
   .lp-section-desc { font-size: 16px; color: #94a3b8; line-height: 1.75; margin: 0; max-width: 560px; word-break: keep-all; }
 
   /* ── 단계 ───────────────────────────────────────────────────────── */
