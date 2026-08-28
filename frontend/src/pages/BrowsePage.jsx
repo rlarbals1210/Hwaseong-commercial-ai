@@ -69,7 +69,7 @@ function NodajiMapNav() {
   );
 }
 
-function MapLegend({ mapData, clusterData, recommendationVisible }) {
+function MapLegend({ mapData, clusterData, recommendationVisible, recommendationCount }) {
   if (!mapData?.legend?.length) return null;
   return (
     <div className="nodaji-card-legend" aria-label="최근 1년 누적 폐업률 범례">
@@ -82,7 +82,9 @@ function MapLegend({ mapData, clusterData, recommendationVisible }) {
           </span>
         ))}
       </div>
-      {recommendationVisible && <p><b style={{ color: "#7c3aed" }}>보라색 테두리</b>는 선택 조건에 맞는 추천 3곳입니다.</p>}
+      {recommendationVisible && (
+        <p><b style={{ color: "#7c3aed" }}>보라색 테두리</b>는 선택 조건에 맞는 추천 {recommendationCount ?? 0}곳입니다.</p>
+      )}
     </div>
   );
 }
@@ -194,7 +196,7 @@ function RecommendationList({ data, priorityLabel, selectedAreaId, compareAreaId
       <div className="nodaji-drawer-heading">
         <div>
           <small>{data.quarter_label} 기준 · {data.industry_name} · {priorityLabel}</small>
-          <h2>나에게 맞는 상권 3곳</h2>
+          <h2>나에게 맞는 상권 {data.results.length}곳</h2>
         </div>
         <span>판단 가능 {data.measured_count}곳</span>
       </div>
@@ -541,9 +543,10 @@ export default function BrowsePage() {
           <select value={industryId ?? ""} onChange={(event) => {
             chooseIndustry(Number(event.target.value));
           }}>
-            {(options?.industries ?? []).map((industry) => (
+            {/* 판단 가능 상권이 0곳이면 추천 결과도 0곳이라 고를 이유가 없다 — 목록에서 아예 뺀다. */}
+            {(options?.industries ?? []).filter((industry) => measuredByIndustry[industry.id]).map((industry) => (
               <option key={industry.id} value={industry.id}>
-                {industry.name} · {measuredByIndustry[industry.id] ? `판단 가능 ${measuredByIndustry[industry.id]}곳` : "전체 판단보류"}
+                {industry.name}
               </option>
             ))}
           </select>
@@ -559,7 +562,7 @@ export default function BrowsePage() {
         )}
 
         <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("recommendations")} disabled={!recommendations}>
-          나에게 맞는 상권 3곳 보기
+          나에게 맞는 상권{recommendations ? ` ${recommendations.results.length}곳` : ""} 보기
         </button>
 
         {selectedMapArea && (
@@ -574,7 +577,12 @@ export default function BrowsePage() {
           </div>
         )}
 
-        <MapLegend mapData={mapData} clusterData={clusterData} recommendationVisible={drawerMode === "recommendations"} />
+        <MapLegend
+          mapData={mapData}
+          clusterData={clusterData}
+          recommendationVisible={drawerMode === "recommendations"}
+          recommendationCount={recommendations?.results?.length}
+        />
 
         {(error || mapError) && <div role="alert" className="nodaji-card-error">{error || mapError}</div>}
       </section>
