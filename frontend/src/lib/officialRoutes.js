@@ -11,7 +11,7 @@ export const OFFICIAL_ROUTES = [
   },
   {
     path: "/map",
-    label: "공실위험 지도",
+    label: "상권 위험 지도",
     icon: "map",
     summary: "읍면동별 위험 업종 비율을 지도에서 확인합니다.",
   },

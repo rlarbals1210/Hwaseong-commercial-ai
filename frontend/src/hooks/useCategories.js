@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiFetchJson } from "../lib/api";
 
-// 업종 목록 fetch. 조기경보·현장점검·공실위험 지도가 각자 같은 코드를 들고 있었다.
+// 업종 목록 fetch. 조기경보·현장점검·상권 위험 지도가 각자 같은 코드를 들고 있었다.
 //
 // purpose는 서버가 목록을 좁히는 기준이다(backend/routers/analysis.py).
 //   alert   최신 분기 표본충분 + AI 순위가 산출된 업종

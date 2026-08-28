@@ -489,7 +489,7 @@ export default function MapPage() {
   return (
     <div>
       <div style={{ marginBottom: 24 }}>
-        <h1 className="t-h1" style={{ margin: 0 }}>공실위험 지도</h1>
+        <h1 className="t-h1" style={{ margin: 0 }}>상권 위험 지도</h1>
         <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>
           읍면동별 위험 업종 비율 — 최근 1년 누적 폐업률 기준(4분기 합산, 보정 없음). 읍면동을 클릭하면 상세 지표가 표시됩니다.
         </p>
@@ -509,7 +509,7 @@ export default function MapPage() {
             setTooltip(null);
             setTab(next);
           }}
-          ariaLabel="공실위험 보기 선택"
+          ariaLabel="상권 위험 지도 보기 선택"
         />
       </div>
 

@@ -30,7 +30,7 @@ const HERO_FACTS = [
 const STEPS = [
   {
     label: "발견",
-    screen: "공실위험 지도",
+    screen: "상권 위험 지도",
     desc: "읍면동별로 위험 업종이 얼마나 몰려 있는지 한눈에 봅니다.",
   },
   {
