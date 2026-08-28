@@ -199,7 +199,7 @@ export default function DashboardPage() {
     <div>
       <PageHeader
         title="폐업 위험 조기경보"
-        desc="AI가 2분기 뒤 폐업 위험이 높을 것으로 예측한 상권입니다. 절대 확률이 아닌 상대 순위입니다."
+        desc="AI가 2분기 뒤 폐업 확률을 상대 순위로 예측한 상권입니다."
       />
 
       {!loading && data.length > 0 && (
@@ -238,7 +238,7 @@ export default function DashboardPage() {
                 )}
               </div>
               <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "12px 0 0", lineHeight: 1.6 }}>
-                예측은 관측 시점 기준 2분기 뒤를 봅니다. 개별 상권의 폐업률이 낮아도 상위 순위에 오를 수 있습니다.
+                2분기 뒤를 예측한 값입니다. 개별 상권의 폐업률이 낮아도 상위 순위에 오를 수 있습니다.
                 {meta?.notice ? ` ${meta.notice}` : ""}
               </p>
             </div>

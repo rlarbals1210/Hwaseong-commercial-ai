@@ -11,6 +11,7 @@ import { NAVER_CLIENT_ID, loadNaverMap, featureName, featurePaths } from "../lib
 const fmt = (value, digits = 1) => (
   typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—"
 );
+const hasRecommendationEvidence = (item) => ["sufficient", "medium"].includes(item?.evidence_key);
 
 const SAVED_INDUSTRY_KEY = "nodaji:browse:industry";
 const SAVED_PRESET_KEY = "nodaji:browse:preset";
@@ -69,7 +70,7 @@ function NodajiMapNav() {
   );
 }
 
-function MapLegend({ mapData, clusterData, recommendationVisible, recommendationCount }) {
+function MapLegend({ mapData, recommendationVisible, recommendationCount }) {
   if (!mapData?.legend?.length) return null;
   return (
     <div className="nodaji-card-legend" aria-label="최근 1년 누적 폐업률 범례">
@@ -82,9 +83,142 @@ function MapLegend({ mapData, clusterData, recommendationVisible, recommendation
           </span>
         ))}
       </div>
-      {recommendationVisible && (
+      {recommendationVisible && recommendationCount > 0 && (
         <p><b style={{ color: "#7c3aed" }}>보라색 테두리</b>는 선택 조건에 맞는 추천 {recommendationCount ?? 0}곳입니다.</p>
       )}
+    </div>
+  );
+}
+
+function IndustryPicker({ industries, coverageByIndustry, totalAreaCount, value, onChange }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [menuPosition, setMenuPosition] = useState(null);
+  const rootRef = useRef(null);
+  const triggerRef = useRef(null);
+  const selected = industries.find((industry) => industry.id === value) ?? null;
+  const filtered = industries.filter((industry) => industry.name.toLocaleLowerCase("ko").includes(query.trim().toLocaleLowerCase("ko")));
+
+  const updateMenuPosition = useCallback(() => {
+    const rect = triggerRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    const margin = 16;
+    const gap = 12;
+    const availableRight = window.innerWidth - rect.right - gap - margin;
+    const fitsRight = availableRight >= 240;
+    const width = fitsRight
+      ? Math.min(460, availableRight)
+      : Math.min(420, window.innerWidth - margin * 2);
+    const left = fitsRight ? rect.right + gap : window.innerWidth - width - margin;
+    const top = Math.max(68, Math.min(rect.top, window.innerHeight - 280));
+    setMenuPosition({
+      left: Math.round(left),
+      top: Math.round(top),
+      width: Math.round(width),
+      maxHeight: Math.max(260, Math.round(window.innerHeight - top - margin)),
+      pointsRight: fitsRight,
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const onPointerDown = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    window.addEventListener("resize", updateMenuPosition);
+    window.addEventListener("scroll", updateMenuPosition, true);
+    return () => {
+      document.removeEventListener("mousedown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+      window.removeEventListener("resize", updateMenuPosition);
+      window.removeEventListener("scroll", updateMenuPosition, true);
+    };
+  }, [open, updateMenuPosition]);
+
+  const choose = (industryId) => {
+    onChange(industryId);
+    setOpen(false);
+    setQuery("");
+  };
+
+  const toggle = () => {
+    if (!open) updateMenuPosition();
+    setOpen((current) => !current);
+  };
+
+  return (
+    <div className="nodaji-field">
+      <span className="nodaji-step-label"><b>1</b> 어떤 업종을 준비하고 있나요?</span>
+      <div className="nodaji-industry-picker" ref={rootRef}>
+        <button
+          type="button"
+          className={`nodaji-industry-trigger${open ? " open" : ""}`}
+          onClick={toggle}
+          ref={triggerRef}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+        >
+          <span className="nodaji-industry-icon material-symbols-outlined" aria-hidden="true">storefront</span>
+          <span className="nodaji-industry-current">
+            <small>선택한 업종</small>
+            <strong>{selected?.name ?? "업종을 선택해주세요"}</strong>
+          </span>
+          {selected && <em>전체 {totalAreaCount}곳 확인</em>}
+          <span className="nodaji-industry-chevron material-symbols-outlined" aria-hidden="true">expand_more</span>
+        </button>
+
+        {open && menuPosition && (
+          <div
+            className={`nodaji-industry-menu${menuPosition.pointsRight ? " points-right" : ""}`}
+            style={{
+              left: menuPosition.left,
+              top: menuPosition.top,
+              width: menuPosition.width,
+              maxHeight: menuPosition.maxHeight,
+            }}
+          >
+            <label className="nodaji-industry-search">
+              <span className="material-symbols-outlined" aria-hidden="true">search</span>
+              <input
+                autoFocus
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="업종 이름으로 검색"
+                aria-label="업종 검색"
+              />
+            </label>
+            <div className="nodaji-industry-options" role="listbox" aria-label="업종 목록">
+              {filtered.map((industry) => {
+                const coverage = coverageByIndustry[industry.id] ?? { observed: 0, sufficient: 0 };
+                return (
+                  <button
+                    key={industry.id}
+                    type="button"
+                    role="option"
+                    aria-selected={industry.id === value}
+                    className={industry.id === value ? "active" : ""}
+                    onClick={() => choose(industry.id)}
+                  >
+                    <span>
+                      <b>{industry.name}</b>
+                      <small>관측 {coverage.observed}곳 · 근거 충분 {coverage.sufficient}곳</small>
+                    </span>
+                    <span className="material-symbols-outlined" aria-hidden="true">
+                      {industry.id === value ? "check_circle" : "arrow_forward"}
+                    </span>
+                  </button>
+                );
+              })}
+              {!filtered.length && <p>검색 결과가 없습니다.</p>}
+            </div>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
@@ -145,6 +279,7 @@ function PriorityPicker({ data, value, onChange }) {
 }
 
 function cautionFor(item) {
+  if (item.adjustment_note) return item.adjustment_note;
   const weakest = [...(item.breakdown ?? [])].sort((a, b) => a.score - b.score)[0];
   if (weakest?.key === "competition") return "같은 업종 점포가 많은 편이라 실제 경쟁 상황을 확인해야 합니다.";
   if (weakest?.key === "saturation") return "읍면동 내 업종 비중이 높은 편이라 추가 수요를 확인해야 합니다.";
@@ -162,6 +297,7 @@ function ComparisonPanel({ data, areaIds }) {
   const pctText = (value) => typeof value === "number" ? `${fmt(value)}%` : "—";
   const rows = [
     ["조건 적합도", `${fmt(items[0].score)}점`, `${fmt(items[1].score)}점`],
+    ["근거 수준", items[0].evidence_label, items[1].evidence_label],
     ["최근 1년 폐업률", pctText(items[0].observed.closure_rate_cum4_pct), pctText(items[1].observed.closure_rate_cum4_pct)],
     ["현재 점포", `${items[0].observed.store_count}곳`, `${items[1].observed.store_count}곳`],
     ["평균 업력", tenure(items[0].observed.tenure_quarters), tenure(items[1].observed.tenure_quarters)],
@@ -188,6 +324,8 @@ function ComparisonPanel({ data, areaIds }) {
 
 function RecommendationList({ data, priorityLabel, selectedAreaId, compareAreaIds, onShowOnMap, onOpenDetail, onToggleCompare }) {
   if (!data) return null;
+  const scored = data.results.filter((item) => typeof item.score === "number");
+  const featured = scored.filter(hasRecommendationEvidence).slice(0, 3);
   const tenure = (quarters) => (
     typeof quarters === "number" ? `${(quarters / 4).toFixed(1)}년` : "—"
   );
@@ -196,10 +334,18 @@ function RecommendationList({ data, priorityLabel, selectedAreaId, compareAreaId
       <div className="nodaji-drawer-heading">
         <div>
           <small>{data.quarter_label} 기준 · {data.industry_name} · {priorityLabel}</small>
-          <h2>나에게 맞는 상권 {data.results.length}곳</h2>
+          <h2>{featured.length ? `추천 ${featured.length}곳과 전체 비교` : "추천 보류 · 전체 비교"}</h2>
         </div>
-        <span>판단 가능 {data.measured_count}곳</span>
+        <span>점수 비교 {data.ranked_count} / {data.total_count}곳</span>
       </div>
+
+      <div className="nodaji-comparison-notice">{data.comparison_notice}</div>
+
+      {!featured.length && (
+        <div role="alert" className="nodaji-drawer-alert">
+          이 업종은 근거 보통 이상인 지역이 없어 추천 3곳을 고르지 않았습니다. 아래 전체 비교표에서 근거 부족을 함께 확인해주세요.
+        </div>
+      )}
 
       {data.growth_spread_narrow && (
         <div role="alert" className="nodaji-drawer-alert">
@@ -208,18 +354,18 @@ function RecommendationList({ data, priorityLabel, selectedAreaId, compareAreaId
       )}
 
       <div className="nodaji-result-list">
-        {data.results.map((item) => (
+        {featured.map((item) => (
           <article key={item.area_id} className={item.area_id === selectedAreaId ? "active" : ""}>
             <div className="nodaji-result-topline">
               <span className="nodaji-rank">{item.rank}</span>
               <span className="nodaji-result-copy">
-                <b>{item.area_name}</b>
+                <b>{item.area_name} <i className={`nodaji-evidence evidence-${item.evidence_key}`}>{item.evidence_label}</i></b>
                 <small>
                   폐업률 {typeof item.observed.closure_rate_cum4_pct === "number" ? `${fmt(item.observed.closure_rate_cum4_pct)}%` : "—"}
                   · 점포 {item.observed.store_count === 0 ? "0개" : `${item.observed.store_count}개`}
                   · 업력 {tenure(item.observed.tenure_quarters)}
                 </small>
-                <em>{item.tags.slice(0, 2).join(" · ")}</em>
+                <em>{item.tags.filter((tag) => tag !== item.evidence_label).slice(0, 2).join(" · ")}</em>
               </span>
               <span className="nodaji-result-score">
                 <b>{fmt(item.score)}</b>
@@ -243,6 +389,40 @@ function RecommendationList({ data, priorityLabel, selectedAreaId, compareAreaId
           </article>
         ))}
       </div>
+
+      <details className="nodaji-all-area-list" open={!featured.length}>
+        <summary>
+          <span>화성시 전체 {data.total_count}곳 비교표</span>
+          <small>관측 {data.ranked_count}곳 · 미관측 {data.unobserved_count}곳</small>
+        </summary>
+        <div className="nodaji-all-area-head" aria-hidden="true">
+          <span>순위</span><span>지역과 근거</span><span>점수</span><span>비교</span>
+        </div>
+        <div className="nodaji-all-area-rows">
+          {data.results.map((item) => {
+            const scoreable = typeof item.score === "number";
+            return (
+              <div key={item.area_id} className={scoreable ? "" : "unobserved"}>
+                <span>{item.rank ?? "—"}</span>
+                <span>
+                  <b>{item.area_name}</b>
+                  <small className={`nodaji-evidence evidence-${item.evidence_key}`}>{item.evidence_label}</small>
+                </span>
+                <strong>{scoreable ? fmt(item.score) : "—"}</strong>
+                <button
+                  type="button"
+                  className={compareAreaIds.includes(item.area_id) ? "active" : ""}
+                  onClick={() => onToggleCompare(item.area_id)}
+                  disabled={!scoreable || (compareAreaIds.length >= 2 && !compareAreaIds.includes(item.area_id))}
+                  aria-label={`${item.area_name} ${compareAreaIds.includes(item.area_id) ? "비교 해제" : "비교 담기"}`}
+                >
+                  {compareAreaIds.includes(item.area_id) ? "해제" : "담기"}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </details>
 
       <ComparisonPanel data={data} areaIds={compareAreaIds} />
       <p className="nodaji-drawer-note">{data.relative_notice} {data.disclaimer}</p>
@@ -271,7 +451,7 @@ function ObservationSummary({ cell, loading }) {
 
 export default function BrowsePage() {
   const [options, setOptions] = useState(null);
-  const [measuredByIndustry, setMeasuredByIndustry] = useState({});
+  const [coverageByIndustry, setCoverageByIndustry] = useState({});
   const [industryId, setIndustryId] = useState(null);
   const [mapData, setMapData] = useState(null);
   const [clusterData, setClusterData] = useState(null);
@@ -353,14 +533,17 @@ export default function BrowsePage() {
     apiFetchJson("/api/public/areas")
       .then((data) => {
         setOptions(data);
-        const counts = new Map();
+        const coverage = new Map();
         (data.areas ?? []).forEach((area) => area.industries.forEach((industry) => {
-          if (!industry.sample_insufficient) counts.set(industry.id, (counts.get(industry.id) ?? 0) + 1);
+          const current = coverage.get(industry.id) ?? { observed: 0, sufficient: 0 };
+          current.observed += 1;
+          if (!industry.sample_insufficient) current.sufficient += 1;
+          coverage.set(industry.id, current);
         }));
-        setMeasuredByIndustry(Object.fromEntries(counts));
-        const best = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+        setCoverageByIndustry(Object.fromEntries(coverage));
+        const best = [...coverage.entries()].sort((a, b) => b[1].sufficient - a[1].sufficient)[0];
         const saved = Number(recall(SAVED_INDUSTRY_KEY));
-        const initial = counts.has(saved) ? saved : best ? best[0] : data.industries?.[0]?.id ?? null;
+        const initial = coverage.has(saved) ? saved : best ? best[0] : data.industries?.[0]?.id ?? null;
         setIndustryId(initial);
       })
       .catch((err) => setError(describeApiError(err)));
@@ -382,7 +565,7 @@ export default function BrowsePage() {
 
   useEffect(() => {
     if (!industryId) return;
-    apiFetchJson(`/api/recommend/areas?industry_id=${industryId}&preset=${encodeURIComponent(preset)}&limit=3`)
+    apiFetchJson(`/api/recommend/areas?industry_id=${industryId}&preset=${encodeURIComponent(preset)}&limit=30`)
       .then(setRecommendations)
       .catch((err) => { setRecommendations(null); setError(describeApiError(err)); })
       .finally(() => setRecommendationLoading(false));
@@ -415,7 +598,11 @@ export default function BrowsePage() {
   );
 
   const recommendedAreaIds = useMemo(
-    () => new Set(drawerMode === "recommendations" ? (recommendations?.results ?? []).map((item) => item.area_id) : []),
+    () => new Set(
+      drawerMode === "recommendations"
+        ? (recommendations?.results ?? []).filter(hasRecommendationEvidence).slice(0, 3).map((item) => item.area_id)
+        : [],
+    ),
     [drawerMode, recommendations],
   );
 
@@ -538,31 +725,27 @@ export default function BrowsePage() {
         </div>
 
 
-        <label className="nodaji-field">
-          <span className="nodaji-step-label"><b>1</b> 어떤 업종을 준비하고 있나요?</span>
-          <select value={industryId ?? ""} onChange={(event) => {
-            chooseIndustry(Number(event.target.value));
-          }}>
-            {/* 판단 가능 상권이 0곳이면 추천 결과도 0곳이라 고를 이유가 없다 — 목록에서 아예 뺀다. */}
-            {(options?.industries ?? []).filter((industry) => measuredByIndustry[industry.id]).map((industry) => (
-              <option key={industry.id} value={industry.id}>
-                {industry.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        <IndustryPicker
+          industries={(options?.industries ?? []).filter((industry) => coverageByIndustry[industry.id]?.observed)}
+          coverageByIndustry={coverageByIndustry}
+          totalAreaCount={options?.areas?.length ?? 0}
+          value={industryId}
+          onChange={chooseIndustry}
+        />
 
         <PriorityPicker data={presetOptions} value={preset} onChange={choosePreset} />
 
         {mapData && (
           <div className="nodaji-mini-stats">
-            <span><small>판단 가능</small><b>{mapData.measured_count} / {mapData.total_count}곳</b></span>
-            <span><small>화성시 업종 평균</small><b>{fmt(mapData.industry_avg_pct)}%</b></span>
+            <span><small>점수 비교</small><b>{recommendations?.ranked_count ?? "—"} / {recommendations?.total_count ?? mapData.total_count}곳</b></span>
+            <span><small>근거 충분 지역 평균</small><b>{fmt(mapData.industry_avg_pct)}%</b></span>
           </div>
         )}
 
         <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("recommendations")} disabled={!recommendations}>
-          나에게 맞는 상권{recommendations ? ` ${recommendations.results.length}곳` : ""} 보기
+          {recommendations?.results?.some(hasRecommendationEvidence)
+            ? `추천 ${Math.min(3, recommendations.results.filter(hasRecommendationEvidence).length)}곳과 전체 비교 보기`
+            : "전체 비교 보기 · 추천 근거 부족"}
         </button>
 
         {selectedMapArea && (
@@ -579,9 +762,8 @@ export default function BrowsePage() {
 
         <MapLegend
           mapData={mapData}
-          clusterData={clusterData}
           recommendationVisible={drawerMode === "recommendations"}
-          recommendationCount={recommendations?.results?.length}
+          recommendationCount={Math.min(3, recommendations?.results?.filter(hasRecommendationEvidence).length ?? 0)}
         />
 
         {(error || mapError) && <div role="alert" className="nodaji-card-error">{error || mapError}</div>}
@@ -627,7 +809,7 @@ export default function BrowsePage() {
         <div className="nodaji-map-ticker">
           <span>공개 통계</span>
           <b>{mapData.industry_name}</b>
-          <em>{mapData.measured_count}곳 판단 가능</em>
+          <em>{recommendations?.ranked_count ?? mapData.total_count}곳 점수 비교 · {mapData.measured_count}곳 근거 충분</em>
         </div>
       )}
 

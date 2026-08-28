@@ -29,10 +29,44 @@ def test_balanced_preset_scores_and_narrow_spread():
 
     meta = score_candidates(candidates, "균형")
 
-    assert meta["growth_spread"] == 2.0
+    # 소표본의 극단값이 폭을 부풀리지 않도록 표본충분 셀의 폭만 쓴다.
+    assert meta["growth_spread"] == 1.0
     assert meta["growth_spread_narrow"] is True
-    assert [candidate.rank for candidate in candidates] == [3, 2, 1]
-    assert candidates[-1].grade == "B"  # 3개 모집단의 1위는 상위 33.3%
+    assert [candidate.rank for candidate in candidates] == [3, 1, 2]
+    assert candidates[1].grade == "B"  # 3개 모집단의 1위는 상위 33.3%
+
+
+def test_small_samples_are_ranked_after_neutral_shrinkage():
+    candidates = [
+        Candidate(1, "표본충분동", 1, "한식", 80.0, 50, 0.3, 2.0, 2, 3.0, 20.0, None),
+        Candidate(2, "표본충분2동", 1, "한식", 90.0, 60, 0.2, 2.0, 2, 3.0, 20.0, None),
+        Candidate(
+            3, "표본보통동", 1, "한식", 100.0, 40, 0.1, 1.0, 1, 2.0, 10.0, None,
+            sample_insufficient=True,
+        ),
+        Candidate(
+            4, "표본부족동", 1, "한식", 100.0, 10, 0.0, 0.0, 0, 1.0, 5.0, None,
+            sample_insufficient=True,
+        ),
+        Candidate(
+            5, "미관측동", 1, "한식", None, 0, None, None, None, None, None, None,
+            sample_insufficient=True,
+        ),
+    ]
+
+    meta = score_candidates(candidates, "균형")
+
+    assert meta["ranked_count"] == 4
+    assert candidates[0].evidence_key == "sufficient"
+    assert candidates[2].evidence_key == "medium"
+    assert candidates[2].data_weight == 0.8
+    assert candidates[3].evidence_key == "low"
+    assert candidates[3].data_weight == 0.2
+    assert abs(candidates[3].score - 50) < abs(candidates[3].raw_score - 50)
+    assert candidates[3].grade is None
+    assert candidates[4].score is None
+    assert candidates[4].rank is None
+    assert candidates[4].evidence_key == "unobserved"
 
 
 def test_public_recommendation_never_returns_absolute_prediction():
@@ -56,7 +90,7 @@ def test_public_recommendation_never_returns_absolute_prediction():
     )
     areas = [
         AdminArea(area_code=f"4159000{i}", area_name=f"테스트{i}동", area_type="동")
-        for i in range(1, 5)
+        for i in range(1, 6)
     ]
     run = ModelRun(
         run_key="recommend-test-run",
@@ -90,17 +124,18 @@ def test_public_recommendation_never_returns_absolute_prediction():
         ),
     ])
 
-    for index, area in enumerate(areas, start=1):
+    for index, area in enumerate(areas[:4], start=1):
+        small_sample = index == 4
         cell = CommercialQuarter(
             area_id=area.id,
             industry_id=industry.id,
             quarter_code=20254,
-            store_count=50 + index * 10,
+            store_count=20 if small_sample else 50 + index * 10,
             saturation_rate=0.1 * index,
             closure_rate_cum4=0.01 * index,
             closure_count_cum4=index,
             opening_rate_ma4=0.02 * index,
-            sample_insufficient=False,
+            sample_insufficient=small_sample,
             batch_id=batch.id,
         )
         session.add(cell)
@@ -113,12 +148,12 @@ def test_public_recommendation_never_returns_absolute_prediction():
                 predicted_closure_rate_internal=0.1 + index * 0.01,
                 predicted_rank=index,
                 grade="A",
-                sample_insufficient=False,
+                sample_insufficient=small_sample,
             )
         )
     session.commit()
 
-    payload = recommend_areas(industry_id=industry.id, preset="균형", limit=4, db=session)
+    payload = recommend_areas(industry_id=industry.id, preset="균형", limit=30, db=session)
     detail = recommend_score(
         area_id=payload["results"][0]["area_id"],
         industry_id=industry.id,
@@ -127,6 +162,19 @@ def test_public_recommendation_never_returns_absolute_prediction():
     )
 
     assert all("growth_prob" not in row for row in payload["results"])
+    assert payload["total_count"] == 5
+    assert payload["ranked_count"] == 4
+    assert payload["sufficient_count"] == 3
+    assert payload["limited_count"] == 1
+    assert payload["unobserved_count"] == 1
+    low_sample = next(row for row in payload["results"] if row["area_name"] == "테스트4동")
+    assert low_sample["evidence_key"] == "low"
+    assert low_sample["score_adjusted"] is True
+    assert low_sample["observed"]["closure_rate_cum4_pct"] is None
+    unobserved = next(row for row in payload["results"] if row["area_name"] == "테스트5동")
+    assert unobserved["score"] is None
+    assert unobserved["rank"] is None
+    assert unobserved["evidence_key"] == "unobserved"
     assert "growth_prob" not in detail
     assert payload["results"][0]["score"] == detail["score"]
     assert payload["results"][0]["grade"] == detail["grade"]

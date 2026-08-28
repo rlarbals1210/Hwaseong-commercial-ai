@@ -353,16 +353,22 @@ class RecommendationBreakdown(BaseModel):
 
 
 class RecommendationAreaResult(BaseModel):
-    rank: int
+    rank: int | None = None
     area_id: int
     area_name: str
-    score: float
-    grade: str
-    percentile: float
+    score: float | None = None
+    grade: str | None = None
+    percentile: float | None = None
     breakdown: list[RecommendationBreakdown]
     tags: list[str]
     reason: str
     observed: RecommendationObserved
+    evidence_key: Literal["sufficient", "medium", "low", "unobserved"]
+    evidence_label: str
+    # 원점수를 얼마나 반영했는지이며, 성공확률이나 신뢰구간이 아니다.
+    data_weight_pct: int
+    score_adjusted: bool
+    adjustment_note: str | None = None
 
 
 class RecommendationAreaListResponse(BaseModel):
@@ -373,6 +379,13 @@ class RecommendationAreaListResponse(BaseModel):
     industry_name: str
     measured_count: int
     excluded_count: int
+    total_count: int
+    ranked_count: int
+    sufficient_count: int
+    limited_count: int
+    unobserved_count: int
+    sample_min: int
+    comparison_notice: str
     preset: str
     weights: dict[str, float]
     growth_spread: float
@@ -430,6 +443,11 @@ class RecommendationScoreResponse(BaseModel):
     pros: list[str]
     cons: list[str]
     observed: RecommendationObserved
+    evidence_key: Literal["sufficient", "medium", "low", "unobserved"]
+    evidence_label: str
+    data_weight_pct: int
+    score_adjusted: bool
+    adjustment_note: str | None = None
     preset: str
     weights: dict[str, float]
     growth_spread: float

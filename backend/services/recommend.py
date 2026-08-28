@@ -67,6 +67,7 @@ from ..models import (
     ModelRun,
     RiskPrediction,
 )
+from .risk import SAMPLE_MIN
 
 # 가중치 프리셋. 합이 1.0이 아니면 로드 시점에 걸린다(아래 검증 참조).
 # 이름과 설명은 화면에 그대로 나가므로 여기서만 고친다.
@@ -111,6 +112,11 @@ AXIS_DESCRIPTIONS = {
 # 정규화가 없는 차이를 있는 것처럼 벌려 놓기 때문이다.
 GROWTH_SPREAD_MIN = 3.0
 
+# 모든 관측 지역을 비교하되 작은 셀이 순위를 과도하게 흔들지 않게 한다.
+# 30은 셀 단위 모델의 학습 최소 점포 수이고, 50은 기존 통계 판정 기준이다.
+EVIDENCE_MEDIUM_MIN = 30
+NEUTRAL_SCORE = 50.0
+
 # 등급 경계(업종 내 상위 퍼센트). scores.csv의 to_grade와 같은 25/50/75다 —
 # 모집단만 '전체 배치'에서 '업종 내'로 바뀐다.
 GRADE_CUTS = ((25.0, "A"), (50.0, "B"), (75.0, "C"))
@@ -130,7 +136,7 @@ class Candidate:
     area_name: str
     industry_id: int
     industry_name: str
-    growth_prob: float            # 0~100, (1 - 예측폐업률) x 100
+    growth_prob: float | None     # 0~100, (1 - 예측폐업률) x 100. 미관측 지역은 None
     store_count: int
     saturation: float | None
     closure_rate_cum4_pct: float | None
@@ -138,12 +144,19 @@ class Candidate:
     opening_rate_pct: float | None
     tenure_quarters: float | None
     cell_type: str | None
+    sample_insufficient: bool = False
 
+    raw_axis_scores: dict = field(default_factory=dict)
     axis_scores: dict = field(default_factory=dict)
-    score: float = 0.0
-    rank: int = 0
-    percentile: float = 0.0
-    grade: str = "-"
+    raw_score: float | None = None
+    score: float | None = None
+    rank: int | None = None
+    percentile: float | None = None
+    grade: str | None = None
+    data_weight: float = 0.0
+    evidence_key: str = "unobserved"
+    evidence_label: str = "동종업종 미관측"
+    adjustment_note: str | None = None
 
 
 def load_rows(
@@ -195,6 +208,22 @@ def minmax(values: list[float]) -> list[float]:
     return [(v - lo) / (hi - lo) * 100 for v in values]
 
 
+def minmax_against(values: list[float], reference_values: list[float]) -> list[float]:
+    """충분한 표본의 범위를 기준으로 전체 후보를 0~100에 놓는다.
+
+    소표본의 극단값이 충분한 표본끼리의 차이를 눌러 버리지 않게 기준 범위는
+    표본충분 셀에서 잡는다. 범위를 벗어난 소표본은 0/100으로 자른 뒤 아래에서
+    다시 중립값 쪽으로 보정한다.
+    """
+    if not values:
+        return []
+    basis = reference_values or values
+    lo, hi = min(basis), max(basis)
+    if hi - lo < 1e-12:
+        return [50.0] * len(values)
+    return [max(0.0, min(100.0, (value - lo) / (hi - lo) * 100)) for value in values]
+
+
 def invert(scores: list[float]) -> list[float]:
     """적을수록 좋은 축(점포수·포화도)을 뒤집는다."""
     return [100.0 - s for s in scores]
@@ -214,6 +243,19 @@ def resolve_preset(name: str | None) -> tuple[str, dict]:
     return key, WEIGHT_PRESETS[key]["weights"]
 
 
+def evidence_for(candidate: Candidate) -> tuple[str, str, float]:
+    """점포 수를 점수 반영률로 바꾼다. 이는 성공확률이나 통계적 신뢰도가 아니다."""
+    count = max(0, candidate.store_count)
+    if count == 0 or candidate.growth_prob is None:
+        return "unobserved", "동종업종 미관측", 0.0
+    data_weight = min(1.0, count / SAMPLE_MIN)
+    if count >= SAMPLE_MIN and not candidate.sample_insufficient:
+        return "sufficient", "근거 충분", data_weight
+    if count >= EVIDENCE_MEDIUM_MIN:
+        return "medium", "근거 보통", data_weight
+    return "low", "근거 부족", data_weight
+
+
 def score_candidates(candidates: list[Candidate], preset: str | None = None) -> dict:
     """후보들에 종합점수·업종 내 순위·등급을 매긴다. 리스트를 제자리에서 고친다.
 
@@ -222,41 +264,71 @@ def score_candidates(candidates: list[Candidate], preset: str | None = None) -> 
     화면에 "이 목록 안에서의 상대 점수"임을 반드시 밝힌다.
     """
     preset_key, weights = resolve_preset(preset)
-    if not candidates:
+    scorable = [c for c in candidates if c.store_count > 0 and c.growth_prob is not None]
+    if not scorable:
         return {
             "preset": preset_key, "weights": weights,
             "growth_spread": 0.0, "growth_spread_narrow": True,
+            "ranked_count": 0,
         }
 
-    growth_raw = [c.growth_prob for c in candidates]
-    growth = minmax(growth_raw)
-    competition = invert(minmax([float(c.store_count) for c in candidates]))
-    saturation = invert(minmax([float(c.saturation or 0.0) for c in candidates]))
+    reference = [
+        c for c in scorable
+        if c.store_count >= SAMPLE_MIN and not c.sample_insufficient
+    ] or scorable
 
-    for i, c in enumerate(candidates):
-        c.axis_scores = {
+    growth_raw = [float(c.growth_prob) for c in scorable]
+    store_raw = [float(c.store_count) for c in scorable]
+    saturation_raw = [float(c.saturation or 0.0) for c in scorable]
+    growth = minmax_against(growth_raw, [float(c.growth_prob) for c in reference])
+    competition = invert(minmax_against(store_raw, [float(c.store_count) for c in reference]))
+    saturation = invert(minmax_against(
+        saturation_raw,
+        [float(c.saturation or 0.0) for c in reference],
+    ))
+
+    for c in candidates:
+        c.evidence_key, c.evidence_label, c.data_weight = evidence_for(c)
+        if c not in scorable:
+            c.adjustment_note = "동종업종 관측값이 없어 조건 적합도와 순위를 계산하지 않았습니다."
+
+    for i, c in enumerate(scorable):
+        c.raw_axis_scores = {
             "growth": round(growth[i], 1),
             "competition": round(competition[i], 1),
             "saturation": round(saturation[i], 1),
         }
+        c.axis_scores = {
+            axis: round(NEUTRAL_SCORE + c.data_weight * (c.raw_axis_scores[axis] - NEUTRAL_SCORE), 1)
+            for axis in AXES
+        }
+        c.raw_score = round(sum(c.raw_axis_scores[a] * weights[a] for a in AXES), 1)
         c.score = round(sum(c.axis_scores[a] * weights[a] for a in AXES), 1)
+        if c.data_weight < 1.0:
+            c.adjustment_note = (
+                f"점포 {c.store_count}곳의 작은 표본이 순위를 과도하게 흔들지 않도록 "
+                f"원점수의 {round(c.data_weight * 100)}%만 반영해 50점 쪽으로 보정했습니다."
+            )
 
     # 등급은 종합점수의 업종 내 백분위. 동점은 같은 등수를 준다 — 소수점 한 자리가
     # 같은데 등수가 갈리면 "왜 우리가 한 칸 아래냐"에 답할 근거가 없다.
-    ordered = sorted(candidates, key=lambda c: -c.score)
+    ordered = sorted(scorable, key=lambda c: (-float(c.score), c.area_name))
     total = len(ordered)
     seen: dict[float, int] = {}
     for idx, c in enumerate(ordered, start=1):
         c.rank = seen.setdefault(c.score, idx)
         c.percentile = round(c.rank / total * 100, 1)
-        c.grade = grade_for(c.percentile)
+        # 30곳 미만은 순위로는 비교하되 A~D 등급으로 확정적으로 요약하지 않는다.
+        c.grade = grade_for(c.percentile) if c.evidence_key != "low" else None
 
-    spread = max(growth_raw) - min(growth_raw)
+    reference_growth = [float(c.growth_prob) for c in reference]
+    spread = max(reference_growth) - min(reference_growth)
     return {
         "preset": preset_key,
         "weights": weights,
         "growth_spread": round(spread, 1),
         "growth_spread_narrow": spread < GROWTH_SPREAD_MIN,
+        "ranked_count": len(scorable),
     }
 
 
@@ -276,7 +348,7 @@ def breakdown_of(c: Candidate, weights: dict) -> list[dict]:
 
 def tags_for(c: Candidate) -> list[str]:
     """카드에 붙는 짧은 꼬리표. 점수가 아니라 관측 사실만 쓴다."""
-    tags: list[str] = []
+    tags: list[str] = [c.evidence_label]
     if c.store_count == 0:
         tags.append("점포 없음")
     elif c.axis_scores.get("competition", 0) >= 70:
@@ -292,12 +364,16 @@ def tags_for(c: Candidate) -> list[str]:
 
 def reason_for(c: Candidate, weights: dict) -> str:
     """한 줄 설명. 가장 크게 기여한 축을 지목하고 관측치를 덧붙인다."""
+    if c.score is None:
+        return "동종업종이 관측되지 않아 조건 적합도는 계산하지 않았습니다."
     top = max(AXES, key=lambda a: c.axis_scores.get(a, 0) * weights[a])
     head = {
         "growth": "같은 업종 안에서 AI 예측이 상대적으로 좋은 편입니다",
         "competition": "같은 업종 점포가 적은 편입니다",
         "saturation": "읍면동 안에서 이 업종이 아직 덜 찬 편입니다",
     }[top]
+    if c.data_weight < 1.0:
+        return f"{head}. 점포 {c.store_count}곳이라 점수는 중립값 쪽으로 보정했습니다."
     if c.closure_rate_cum4_pct is None:
         return f"{head}."
     return f"{head}. 최근 1년 누적 폐업률은 {c.closure_rate_cum4_pct:.1f}%입니다."

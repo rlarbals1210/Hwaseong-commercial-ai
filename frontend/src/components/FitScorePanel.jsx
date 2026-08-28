@@ -44,7 +44,10 @@ export default function FitScorePanel({ data, loading, preferenceLabel }) {
             {preferenceLabel ?? data.preset} 기준
           </div>
         </div>
-        {!data.is_fallback && <span className="badge badge-neutral">{data.grade}등급</span>}
+        <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+          <span className={`nodaji-evidence evidence-${data.evidence_key}`}>{data.evidence_label}</span>
+          {!data.is_fallback && data.grade && <span className="badge badge-neutral">{data.grade}등급</span>}
+        </div>
       </div>
 
       <TabStrip tabs={TABS} value={tab} onChange={setTab} ariaLabel="적합도 상세 보기" />
@@ -89,6 +92,12 @@ export default function FitScorePanel({ data, loading, preferenceLabel }) {
       {data.growth_spread_narrow && (
         <div role="alert" className="t-caption" style={{ color: "var(--badge-warn-ink)", background: "var(--orange-soft)", borderRadius: "var(--radius-md)", padding: "10px 12px", lineHeight: 1.6, marginTop: 18 }}>
           이 업종은 읍면동 간 예측 차이가 크지 않습니다. 성장 추세 점수 차이를 크게 해석하지 마세요.
+        </div>
+      )}
+
+      {data.score_adjusted && data.adjustment_note && (
+        <div role="note" className="t-caption" style={{ color: "#1d4ed8", background: "#eff6ff", borderRadius: "var(--radius-md)", padding: "10px 12px", lineHeight: 1.6, marginTop: 10 }}>
+          {data.adjustment_note}
         </div>
       )}
     </>

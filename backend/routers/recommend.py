@@ -19,8 +19,9 @@
    읍면동 하나를 한 등급으로 요약하는 응답은 이 라우터에 두지 않는다
    (공무원 화면의 `공실위험지수`가 그 역할이고, 그건 로그인 뒤에 있다).
 2. **지도 색칠은 등급이 아니라 관측치로 한다.** `/api/public/industry-map`이 이미 그렇다.
-3. **표본부족 셀에는 등급을 부여하지 않는다.** 후보에서 빼고 `excluded_count`로 몇 개를
-   뺐는지 밝힌다.
+3. **표본이 작은 셀도 숨기지 않는다.** 대신 점포 수에 비례해 원점수를
+   50점(중립)쪽으로 보정하고, 근거 수준을 점수와 함께 낸다. 동종업종이
+   관측되지 않은 지역은 목록에는 남기되 점수나 순위를 매기지 않는다.
 4. **면책 문구를 응답에 담는다.** 프론트에 박으면 문구가 두 곳에 생긴다.
 
 계산은 전부 `backend/services/recommend.py`에 있다. 여기서는 조회와 응답 조립만 한다.
@@ -31,7 +32,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from ..database import get_db
-from ..models import CommercialQuarter, StoreCluster
+from ..models import AdminArea, CommercialQuarter, StoreCluster
 from ..schemas import (
     RecommendationAreaListResponse,
     RecommendationIndustryListResponse,
@@ -40,7 +41,7 @@ from ..schemas import (
     StoreClusterResponse,
 )
 from ..services import recommend as R
-from ..services.risk import WINDOW_QUARTERS, pct, quarter_label
+from ..services.risk import SAMPLE_MIN, WINDOW_QUARTERS, pct, quarter_label
 
 router = APIRouter(prefix="/api/recommend", tags=["recommend"])
 
@@ -49,8 +50,9 @@ DISCLAIMER = (
     "예측하지 않습니다. 실제 창업 전에 현장 확인을 병행하시기 바랍니다."
 )
 RELATIVE_NOTICE = (
-    "점수는 이 목록 안에서의 상대값입니다. 등급도 절대 기준이 아니라 같은 업종 안에서의 "
-    "상대 순위입니다."
+    "점수는 이 목록 안에서의 상대값입니다. 점포 50곳 미만은 작은 표본이 순위를 "
+    "과도하게 흔들지 않도록 50점 쪽으로 보정했습니다. 등급은 절대 기준이 아니라 "
+    "같은 업종 안에서의 상대 순위입니다."
 )
 CLUSTER_PUBLIC_MIN = 3
 
@@ -70,12 +72,11 @@ def _rows(db: Session, quarter: int, *, area_id: int | None = None, industry_id:
 
 
 def _to_candidates(rows) -> tuple[list[R.Candidate], int]:
-    """표본부족 셀은 후보에서 뺀다. 몇 개를 뺐는지 함께 돌려준다."""
-    candidates, excluded = [], 0
+    """예측과 관측치가 있는 셀을 모두 후보로 옮긴다."""
+    candidates, limited = [], 0
     for cell, model_rate, area_name, industry_name in rows:
         if cell.sample_insufficient:
-            excluded += 1
-            continue
+            limited += 1
         # 성장확률 = (1 - 예측폐업률) x 100. 원본 내부값은 그대로 내리지 않는다.
         growth = round((1.0 - float(model_rate)) * 100, 1)
         candidates.append(R.Candidate(
@@ -93,19 +94,64 @@ def _to_candidates(rows) -> tuple[list[R.Candidate], int]:
                 round(cell.avg_tenure_quarters, 1) if cell.avg_tenure_quarters is not None else None
             ),
             cell_type=cell.cell_type,
+            sample_insufficient=bool(cell.sample_insufficient),
         ))
-    return candidates, excluded
+    return candidates, limited
+
+
+def _append_unobserved_areas(
+    db: Session,
+    candidates: list[R.Candidate],
+    *,
+    industry_id: int,
+    industry_name: str,
+) -> None:
+    """선택 업종이 관측되지 않은 읍면동도 목록에 남긴다.
+
+    값이 없는 것을 '경쟁이 없는 블루오션'으로 오인하지 않도록 이 후보들은
+    점수와 순위가 None인 동종업종 미관측로만 내린다.
+    """
+    present = {candidate.area_id for candidate in candidates}
+    for area in db.query(AdminArea).order_by(AdminArea.area_name).all():
+        if area.id in present:
+            continue
+        candidates.append(R.Candidate(
+            area_id=area.id,
+            area_name=area.area_name,
+            industry_id=industry_id,
+            industry_name=industry_name,
+            growth_prob=None,
+            store_count=0,
+            saturation=None,
+            closure_rate_cum4_pct=None,
+            closure_count_cum4=None,
+            opening_rate_pct=None,
+            tenure_quarters=None,
+            cell_type=None,
+            sample_insufficient=True,
+        ))
 
 
 def _observed(c: R.Candidate) -> dict:
     """관측 지표. 예측만 보여주면 방어가 안 되므로 항상 병기한다."""
+    stable = c.evidence_key == "sufficient"
     return {
-        "closure_rate_cum4_pct": c.closure_rate_cum4_pct,
+        "closure_rate_cum4_pct": c.closure_rate_cum4_pct if stable else None,
         "closure_count_cum4": c.closure_count_cum4,
         "store_count": c.store_count,
-        "opening_rate_pct": c.opening_rate_pct,
+        "opening_rate_pct": c.opening_rate_pct if stable else None,
         "tenure_quarters": c.tenure_quarters,
-        "cell_type": c.cell_type,
+        "cell_type": c.cell_type if stable else None,
+    }
+
+
+def _evidence(c: R.Candidate) -> dict:
+    return {
+        "evidence_key": c.evidence_key,
+        "evidence_label": c.evidence_label,
+        "data_weight_pct": round(c.data_weight * 100),
+        "score_adjusted": c.score is not None and c.data_weight < 1.0,
+        "adjustment_note": c.adjustment_note,
     }
 
 
@@ -185,17 +231,36 @@ def recommend_areas(
     if not rows:
         raise HTTPException(status_code=404, detail="해당 업종의 예측 결과가 없습니다")
     industry_name = rows[0][3]
-    candidates, excluded = _to_candidates(rows)
+    candidates, _ = _to_candidates(rows)
+    _append_unobserved_areas(
+        db, candidates, industry_id=industry_id, industry_name=industry_name,
+    )
     meta = R.score_candidates(candidates, preset)
-    ranked = sorted(candidates, key=lambda c: c.rank)[:limit]
+    ranked = sorted(
+        candidates,
+        key=lambda c: (c.rank is None, c.rank if c.rank is not None else 10_000, c.area_name),
+    )[:limit]
+    sufficient = sum(c.evidence_key == "sufficient" for c in candidates)
+    limited = sum(c.evidence_key in {"medium", "low"} for c in candidates)
+    unobserved = sum(c.evidence_key == "unobserved" for c in candidates)
     return {
         "quarter_code": quarter,
         "quarter_label": quarter_label(quarter),
         "window_quarters": WINDOW_QUARTERS,
         "industry_id": industry_id,
         "industry_name": industry_name,
-        "measured_count": len(candidates),
-        "excluded_count": excluded,
+        "measured_count": meta["ranked_count"],
+        "excluded_count": 0,
+        "total_count": len(candidates),
+        "sufficient_count": sufficient,
+        "limited_count": limited,
+        "unobserved_count": unobserved,
+        "sample_min": SAMPLE_MIN,
+        "comparison_notice": (
+            f"관측값이 있는 {meta['ranked_count']}곳은 모두 점수로 비교합니다. "
+            f"점포 {SAMPLE_MIN}곳 미만 {limited}곳은 점수를 50점 쪽으로 보정했고, "
+            f"동종업종 미관측 {unobserved}곳은 순위를 매기지 않았습니다."
+        ),
         **meta,
         "results": [{
             "rank": c.rank,
@@ -204,10 +269,11 @@ def recommend_areas(
             "score": c.score,
             "grade": c.grade,
             "percentile": c.percentile,
-            "breakdown": R.breakdown_of(c, meta["weights"]),
+            "breakdown": R.breakdown_of(c, meta["weights"]) if c.score is not None else [],
             "tags": R.tags_for(c),
             "reason": R.reason_for(c, meta["weights"]),
             "observed": _observed(c),
+            **_evidence(c),
         } for c in ranked],
         "relative_notice": RELATIVE_NOTICE,
         "disclaimer": DISCLAIMER,
@@ -302,40 +368,29 @@ def recommend_score(
     if not rows:
         raise HTTPException(status_code=404, detail="해당 업종의 예측 결과가 없습니다")
     industry_name = rows[0][3]
-    candidates, excluded = _to_candidates(rows)
+    candidates, _ = _to_candidates(rows)
+    _append_unobserved_areas(
+        db, candidates, industry_id=industry_id, industry_name=industry_name,
+    )
     meta = R.score_candidates(candidates, preset)
 
     target = next((c for c in candidates if c.area_id == area_id), None)
     if target is None:
-        # 표본부족이라 후보에서 빠진 경우. 404로 끊으면 화면이 "없는 상권"이라고 말하게 된다.
-        cell_rows = [r for r in rows if r[0].area_id == area_id]
-        if not cell_rows:
-            raise HTTPException(status_code=404, detail="해당 상권을 찾을 수 없습니다")
-        cell, _, area_name, _ = cell_rows[0]
+        raise HTTPException(status_code=404, detail="해당 상권을 찾을 수 없습니다")
+
+    if target.score is None:
         return {
             "quarter_code": quarter,
             "quarter_label": quarter_label(quarter),
-            "area_id": area_id, "area_name": area_name,
+            "area_id": area_id, "area_name": target.area_name,
             "industry_id": industry_id, "industry_name": industry_name,
             "is_fallback": True,
             "score": None, "grade": None, "percentile": None, "rank": None,
-            "total": len(candidates),
-            "summary": (
-                f"이 상권은 점포가 {cell.store_count}곳뿐이라 순위를 매기지 않습니다. "
-                "한두 곳만 문을 닫아도 수치가 크게 흔들리기 때문입니다."
-            ),
+            "total": meta["ranked_count"],
+            "summary": target.adjustment_note,
             "breakdown": [], "pros": [], "cons": [],
-            "observed": {
-                "closure_rate_cum4_pct": None,
-                "closure_count_cum4": cell.closure_count_cum4,
-                "store_count": cell.store_count,
-                "opening_rate_pct": None,
-                "tenure_quarters": (
-                    round(cell.avg_tenure_quarters, 1)
-                    if cell.avg_tenure_quarters is not None else None
-                ),
-                "cell_type": None,
-            },
+            "observed": _observed(target),
+            **_evidence(target),
             **{k: meta[k] for k in ("preset", "weights", "growth_spread", "growth_spread_narrow")},
             "relative_notice": RELATIVE_NOTICE,
             "disclaimer": DISCLAIMER,
@@ -360,13 +415,14 @@ def recommend_score(
         "grade": target.grade,
         "percentile": target.percentile,
         "rank": target.rank,
-        "total": len(candidates),
-        "excluded_count": excluded,
+        "total": meta["ranked_count"],
+        "excluded_count": 0,
         "summary": R.reason_for(target, meta["weights"]),
         "breakdown": breakdown,
         "pros": pros,
         "cons": cons,
         "observed": _observed(target),
+        **_evidence(target),
         **meta,
         "relative_notice": RELATIVE_NOTICE,
         "disclaimer": DISCLAIMER,
