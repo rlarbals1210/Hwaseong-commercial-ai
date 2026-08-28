@@ -16,10 +16,10 @@
 
 화성시로 옮기면서 두 가지가 달라졌다.
 
-**(1) 유동인구 축이 없다.** 절대값이 2021-12 -> 2022-01 사이 4.4배로 단절돼 쓸 수 없다
-(share는 보존되지만 아직 파이프라인에 없다). 그 자리를 평균 업력('정착도')으로 채우려
-했으나 계측에서 기각했다 — 2026-08-26, 표본충분 231셀 기준 각 후보와 최근 1년 누적
-폐업률의 스피어만:
+**(1) 원시 유동인구 대신 검증된 수요-공급 축을 쓴다.** 유동인구 절대값은
+2021-12 -> 2022-01 사이 4.4배로 단절돼 직접 추천 축으로 쓸 수 없다. 그 자리를 평균
+업력('정착도')으로 채우려 했으나 계측에서 기각했다 — 2026-08-26, 표본충분 231셀 기준
+각 후보와 최근 1년 누적 폐업률의 스피어만:
 
     평균 업력            -0.064
     보정 개업률          +0.420   <- 방향이 반대(개업 많은 곳이 폐업도 많다)
@@ -28,12 +28,15 @@
     업종 포화도          +0.068
 
 업력은 안전도가 아니라 신도시 여부의 대리변수였다(면·읍이 높고 동탄이 낮다). 그래서
-축에서 빼고 표시 지표로만 남겼다. 남은 축은 셋이다.
+축에서 빼고 표시 지표로만 남겼다. 이후 2026-08-29에 공개 카드매출로 다음 달의
+읍면동별 업종 수요점유율을 예측하고, 현재 점포점유율과 비교한 수요-공급 차이를 독립 축으로
+추가했다. 시간 순서대로 분리한 미사용 테스트에서 선택 모델이 직전 달 점유율을 그대로 쓰는
+기준선보다 MAE를 3.65% 낮춰 배포 기준을 통과했다.
 
-**(2) 가중치의 근거가 없다.** 위 표대로면 모델 예측 말고는 관측 결과를 설명하는 축이
-없으므로 "왜 40/30/15/15인가"에 답할 수 없다. 그래서 **가중치를 고정하지 않고 사용자가
-고르게** 한다(노다지의 PREFERENCE_WEIGHTS와 같은 구조). 기본값은 '균형'이고, 화면은
-어떤 프리셋으로 계산된 점수인지를 항상 함께 보여준다.
+**(2) 가중치는 사용 목적에 따라 달라진다.** 수요-공급 차이가 추가됐더라도 모두에게 맞는
+하나의 비율은 없다. 그래서 **가중치를 고정하지 않고 사용자가 고르게** 한다(노다지의
+PREFERENCE_WEIGHTS와 같은 구조). 기본값은 '균형'이고, 화면은 어떤 프리셋으로 계산된
+점수인지를 항상 함께 보여준다.
 
 ## 성장확률은 업종 안에서 다시 정규화한다
 
@@ -56,7 +59,11 @@
 """
 from __future__ import annotations
 
+import csv
+import json
 from dataclasses import dataclass, field
+from functools import lru_cache
+from pathlib import Path
 
 from sqlalchemy.orm import Session
 
@@ -74,36 +81,46 @@ from .risk import SAMPLE_MIN
 WEIGHT_PRESETS: dict[str, dict] = {
     "균형": {
         "label": "균형 있게",
-        "description": "AI 전망과 동종업종 점포 수, 업종 비중을 고르게 살펴봅니다.",
-        "weights": {"growth": 0.50, "competition": 0.30, "saturation": 0.20},
+        "description": "폐업 부담, 예측 수요와 공급의 차이, 경쟁·포화도를 함께 살펴봅니다.",
+        "weights": {"growth": 0.35, "demand": 0.30, "competition": 0.20, "saturation": 0.15},
     },
     "예측중심": {
         "label": "폐업 부담 낮게",
         "description": "AI가 2분기 뒤 폐업 위험을 상대적으로 낮게 본 곳을 우선합니다.",
-        "weights": {"growth": 0.80, "competition": 0.10, "saturation": 0.10},
+        "weights": {"growth": 0.60, "demand": 0.25, "competition": 0.10, "saturation": 0.05},
+    },
+    "수요중심": {
+        "label": "수요 여건 좋게",
+        "description": "예측한 지역 수요점유율이 현재 점포 공급보다 큰 곳을 우선합니다.",
+        "weights": {"growth": 0.20, "demand": 0.60, "competition": 0.10, "saturation": 0.10},
     },
     "블루오션": {
         "label": "동종업종 덜 몰리게",
         "description": "같은 업종 점포가 상대적으로 적은 곳을 우선합니다.",
-        "weights": {"growth": 0.25, "competition": 0.50, "saturation": 0.25},
+        "weights": {"growth": 0.20, "demand": 0.25, "competition": 0.40, "saturation": 0.15},
     },
     "여유": {
         "label": "업종 비중 낮게",
         "description": "읍면동 전체 점포 중 선택 업종의 비중이 낮은 곳을 우선합니다.",
-        "weights": {"growth": 0.25, "competition": 0.25, "saturation": 0.50},
+        "weights": {"growth": 0.20, "demand": 0.25, "competition": 0.15, "saturation": 0.40},
     },
 }
 DEFAULT_PRESET = "균형"
 
-AXES = ("growth", "competition", "saturation")
+AXES = ("growth", "demand", "competition", "saturation")
 
 AXIS_LABELS = {
     "growth": "성장 추세",
+    "demand": "수요 여건",
     "competition": "경쟁 우위",
     "saturation": "포화도",
 }
 AXIS_DESCRIPTIONS = {
     "growth": "AI가 예측한 2분기 뒤 폐업 위험의 반대값입니다. 같은 업종 안에서 상대 비교합니다.",
+    "demand": (
+        "공개 카드매출로 예측한 다음 달 지역 수요점유율과 현재 점포점유율의 차이입니다. "
+        "금액 예측이 아니라 같은 업종의 읍면동 간 상대 비교입니다."
+    ),
     "competition": "같은 업종 점포가 적을수록 높습니다.",
     "saturation": "읍면동 전체 점포 중 이 업종이 차지하는 비중이 낮을수록 높습니다.",
 }
@@ -116,6 +133,9 @@ GROWTH_SPREAD_MIN = 3.0
 # 30은 셀 단위 모델의 학습 최소 점포 수이고, 50은 기존 통계 판정 기준이다.
 EVIDENCE_MEDIUM_MIN = 30
 NEUTRAL_SCORE = 50.0
+PROCESSED_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
+DEMAND_SCORES_PATH = PROCESSED_DATA_DIR / "demand_scores.csv"
+DEMAND_RESULTS_PATH = PROCESSED_DATA_DIR / "demand_model_results.json"
 
 # 등급 경계(업종 내 상위 퍼센트). scores.csv의 to_grade와 같은 25/50/75다 —
 # 모집단만 '전체 배치'에서 '업종 내'로 바뀐다.
@@ -145,6 +165,8 @@ class Candidate:
     tenure_quarters: float | None
     cell_type: str | None
     sample_insufficient: bool = False
+    demand_gap: float | None = None
+    demand_mapping_level: str | None = None
 
     raw_axis_scores: dict = field(default_factory=dict)
     axis_scores: dict = field(default_factory=dict)
@@ -157,6 +179,44 @@ class Candidate:
     evidence_key: str = "unobserved"
     evidence_label: str = "동종업종 미관측"
     adjustment_note: str | None = None
+
+
+@lru_cache(maxsize=1)
+def load_demand_scores() -> dict[tuple[str, str], dict]:
+    """검증을 통과한 수요-공급 집계값만 읽는다. 원시 매출이나 예측 금액은 읽지 않는다."""
+    if not DEMAND_SCORES_PATH.exists():
+        return {}
+    result: dict[tuple[str, str], dict] = {}
+    with DEMAND_SCORES_PATH.open(encoding="utf-8-sig", newline="") as handle:
+        for row in csv.DictReader(handle):
+            if str(row.get("검증통과", "")).strip().lower() not in {"true", "1"}:
+                continue
+            key = (str(row["행정동명"]).strip(), str(row["통합카테고리"]).strip())
+            result[key] = {
+                "gap": float(row["수요공급격차_log"]),
+                "mapping_level": row.get("매핑수준") or None,
+            }
+    return result
+
+
+def demand_signal_for(area_name: str, industry_name: str) -> dict | None:
+    return load_demand_scores().get((area_name.strip(), industry_name.strip()))
+
+
+@lru_cache(maxsize=1)
+def demand_notice() -> str:
+    if not DEMAND_RESULTS_PATH.exists():
+        return "수요 여건 자료가 없어 이 축은 중립값으로 계산했습니다."
+    meta = json.loads(DEMAND_RESULTS_PATH.read_text(encoding="utf-8"))
+    source = str(meta.get("source_month", ""))
+    target = str(meta.get("forecast_target_month", ""))
+    if len(source) != 6 or len(target) != 6:
+        return "수요 여건은 가장 최근 공개 카드매출로 예측한 지역 간 상대값입니다."
+    return (
+        f"수요 여건은 {source[:4]}년 {int(source[4:])}월까지 공개 카드매출로 "
+        f"{target[:4]}년 {int(target[4:])}월의 지역 수요점유율을 예측한 값이며, "
+        "최신 점포 공급과 시차가 있습니다."
+    )
 
 
 def load_rows(
@@ -278,9 +338,16 @@ def score_candidates(candidates: list[Candidate], preset: str | None = None) -> 
     ] or scorable
 
     growth_raw = [float(c.growth_prob) for c in scorable]
+    demand_available = [c for c in scorable if c.demand_gap is not None]
     store_raw = [float(c.store_count) for c in scorable]
     saturation_raw = [float(c.saturation or 0.0) for c in scorable]
     growth = minmax_against(growth_raw, [float(c.growth_prob) for c in reference])
+    demand_lookup: dict[int, float] = {}
+    if demand_available:
+        demand_values = [float(c.demand_gap) for c in demand_available]
+        demand_reference = [float(c.demand_gap) for c in reference if c.demand_gap is not None]
+        demand_scores = minmax_against(demand_values, demand_reference or demand_values)
+        demand_lookup = {id(c): score for c, score in zip(demand_available, demand_scores)}
     competition = invert(minmax_against(store_raw, [float(c.store_count) for c in reference]))
     saturation = invert(minmax_against(
         saturation_raw,
@@ -295,6 +362,7 @@ def score_candidates(candidates: list[Candidate], preset: str | None = None) -> 
     for i, c in enumerate(scorable):
         c.raw_axis_scores = {
             "growth": round(growth[i], 1),
+            "demand": round(demand_lookup.get(id(c), NEUTRAL_SCORE), 1),
             "competition": round(competition[i], 1),
             "saturation": round(saturation[i], 1),
         }
@@ -353,6 +421,8 @@ def tags_for(c: Candidate) -> list[str]:
         tags.append("점포 없음")
     elif c.axis_scores.get("competition", 0) >= 70:
         tags.append("경쟁 적음")
+    if c.axis_scores.get("demand", 0) >= 70:
+        tags.append("수요 여건 양호")
     if c.axis_scores.get("saturation", 0) >= 70:
         tags.append("자리 여유")
     if c.cell_type:
@@ -369,6 +439,7 @@ def reason_for(c: Candidate, weights: dict) -> str:
     top = max(AXES, key=lambda a: c.axis_scores.get(a, 0) * weights[a])
     head = {
         "growth": "같은 업종 안에서 AI 예측이 상대적으로 좋은 편입니다",
+        "demand": "예측 수요점유율이 현재 점포 공급보다 상대적으로 큰 편입니다",
         "competition": "같은 업종 점포가 적은 편입니다",
         "saturation": "읍면동 안에서 이 업종이 아직 덜 찬 편입니다",
     }[top]

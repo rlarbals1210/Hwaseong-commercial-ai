@@ -69,6 +69,20 @@ def test_small_samples_are_ranked_after_neutral_shrinkage():
     assert candidates[4].evidence_key == "unobserved"
 
 
+def test_demand_supply_gap_is_a_scoring_axis():
+    candidates = [
+        Candidate(1, "수요우위동", 1, "한식", 80.0, 50, 0.2, 2.0, 2, 3.0, 20.0, None, demand_gap=1.0),
+        Candidate(2, "공급우위동", 1, "한식", 80.0, 50, 0.2, 2.0, 2, 3.0, 20.0, None, demand_gap=-1.0),
+    ]
+
+    meta = score_candidates(candidates, "수요중심")
+
+    assert meta["weights"]["demand"] == 0.60
+    assert candidates[0].axis_scores["demand"] == 100.0
+    assert candidates[1].axis_scores["demand"] == 0.0
+    assert candidates[0].rank == 1
+
+
 def test_public_recommendation_never_returns_absolute_prediction():
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(

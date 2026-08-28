@@ -1,0 +1,132 @@
+{
+  "method_version": "demand-share-v1",
+  "target_definition": "다음 달 카드 업종별 화성시 매출 중 행정동 점유율",
+  "source_month": "202506",
+  "forecast_target_month": "202507",
+  "usable_months": [
+    "202201",
+    "202202",
+    "202203",
+    "202204",
+    "202205",
+    "202206",
+    "202208",
+    "202210",
+    "202211",
+    "202212",
+    "202301",
+    "202302",
+    "202303",
+    "202304",
+    "202305",
+    "202306",
+    "202307",
+    "202401",
+    "202501",
+    "202502",
+    "202503",
+    "202504",
+    "202505",
+    "202506"
+  ],
+  "missing_card_months": [
+    "202402",
+    "202403",
+    "202404",
+    "202405",
+    "202406",
+    "202407",
+    "202408",
+    "202409",
+    "202410",
+    "202411",
+    "202412"
+  ],
+  "splits": {
+    "train_target_months": [
+      "202202",
+      "202203",
+      "202204",
+      "202205",
+      "202206",
+      "202211",
+      "202212"
+    ],
+    "validation_target_months": [
+      "202301",
+      "202302",
+      "202303",
+      "202304",
+      "202305",
+      "202306",
+      "202307"
+    ],
+    "test_target_months": [
+      "202502",
+      "202503",
+      "202504",
+      "202505",
+      "202506"
+    ],
+    "train_rows": 16849,
+    "validation_rows": 16849,
+    "test_rows": 12035
+  },
+  "validation": {
+    "persistence": {
+      "mae": 0.0075929954578818236,
+      "mean_spearman": 0.9402648653076939,
+      "mean_top5_overlap": 0.8822719449225471
+    },
+    "rolling_mean_blend": {
+      "name": "rolling_mean_blend",
+      "blend": 0.6000000000000001,
+      "validation_mae": 0.007072622573488921
+    },
+    "lightgbm_blend": {
+      "name": "lightgbm_blend",
+      "blend": 0.6000000000000001,
+      "validation_mae": 0.00723649760146535
+    }
+  },
+  "test": {
+    "persistence": {
+      "mae": 0.008380109771825574,
+      "mean_spearman": 0.9309332719121374,
+      "mean_top5_overlap": 0.8708433734939759
+    },
+    "selected": {
+      "mae": 0.008074441405376121,
+      "mean_spearman": 0.9334193642754286,
+      "mean_top5_overlap": 0.8732530120481927
+    },
+    "mae_improvement_pct": 3.647546091545576
+  },
+  "selected_model": {
+    "name": "rolling_mean_blend",
+    "blend": 0.6000000000000001,
+    "validation_mae": 0.007072622573488921
+  },
+  "deployment_gate_passed": true,
+  "deployment_gate": {
+    "minimum_test_mae_improvement_pct": 0.5,
+    "maximum_spearman_drop": 0.005,
+    "maximum_top5_overlap_drop": 0.02,
+    "minimum_non_baseline_blend": 0.1
+  },
+  "data_audit": {
+    "raw_rows": 89386,
+    "active_rows": 42979,
+    "official_card_codes": 83,
+    "modeled_card_codes": 83,
+    "current_admin_areas": 29,
+    "demand_score_rows": 1802,
+    "direct_mapping_industries": 74
+  },
+  "limitations": [
+    "카드매출은 2024-02~2024-12 원본이 없어 해당 구간을 학습·보간하지 않았다.",
+    "카드 업종과 소진공 업종은 공식 일대일 대응표가 없어 명칭 기반 프록시 매핑을 사용한다.",
+    "점수는 매출액 예측이 아니라 지역 수요점유율과 점포점유율의 상대 격차다.",
+    "2025-06 이후 공개 카드매출이 없어 예측 시점은 2025-07이며 최신 공급과 시차가 있다."
+  ]
+}

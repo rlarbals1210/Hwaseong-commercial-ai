@@ -57,6 +57,10 @@ RELATIVE_NOTICE = (
 CLUSTER_PUBLIC_MIN = 3
 
 
+def _relative_notice() -> str:
+    return f"{RELATIVE_NOTICE} {R.demand_notice()}"
+
+
 def _latest_quarter(db: Session) -> int:
     from sqlalchemy import func
 
@@ -79,6 +83,7 @@ def _to_candidates(rows) -> tuple[list[R.Candidate], int]:
             limited += 1
         # 성장확률 = (1 - 예측폐업률) x 100. 원본 내부값은 그대로 내리지 않는다.
         growth = round((1.0 - float(model_rate)) * 100, 1)
+        demand_signal = R.demand_signal_for(area_name, industry_name)
         candidates.append(R.Candidate(
             area_id=cell.area_id,
             area_name=area_name,
@@ -95,6 +100,8 @@ def _to_candidates(rows) -> tuple[list[R.Candidate], int]:
             ),
             cell_type=cell.cell_type,
             sample_insufficient=bool(cell.sample_insufficient),
+            demand_gap=demand_signal["gap"] if demand_signal else None,
+            demand_mapping_level=demand_signal["mapping_level"] if demand_signal else None,
         ))
     return candidates, limited
 
@@ -168,8 +175,8 @@ def list_presets():
             {"key": a, "label": R.AXIS_LABELS[a], "desc": R.AXIS_DESCRIPTIONS[a]} for a in R.AXES
         ],
         "notice": (
-            "가중치는 고정된 정답이 아닙니다. 화성시 데이터에서는 AI 예측 외의 축이 실제 "
-            "폐업률과 뚜렷한 상관을 보이지 않아, 무엇을 중요하게 볼지는 고르시도록 했습니다."
+            "가중치는 고정된 정답이 아닙니다. 폐업 부담 예측과 검증된 카드수요 전망, "
+            "경쟁·포화도 중 무엇을 중요하게 볼지 고르실 수 있습니다."
         ),
     }
 
@@ -275,7 +282,7 @@ def recommend_areas(
             "observed": _observed(c),
             **_evidence(c),
         } for c in ranked],
-        "relative_notice": RELATIVE_NOTICE,
+        "relative_notice": _relative_notice(),
         "disclaimer": DISCLAIMER,
     }
 
@@ -346,7 +353,7 @@ def recommend_industries(
             "각 점수는 같은 업종의 화성시 읍면동 안에서 계산했습니다. "
             "서로 다른 업종의 절대 우열을 뜻하지 않으며 등급은 표시하지 않습니다."
         ),
-        "relative_notice": RELATIVE_NOTICE,
+        "relative_notice": _relative_notice(),
         "disclaimer": DISCLAIMER,
     }
 
@@ -392,7 +399,7 @@ def recommend_score(
             "observed": _observed(target),
             **_evidence(target),
             **{k: meta[k] for k in ("preset", "weights", "growth_spread", "growth_spread_narrow")},
-            "relative_notice": RELATIVE_NOTICE,
+            "relative_notice": _relative_notice(),
             "disclaimer": DISCLAIMER,
         }
 
@@ -424,6 +431,6 @@ def recommend_score(
         "observed": _observed(target),
         **_evidence(target),
         **meta,
-        "relative_notice": RELATIVE_NOTICE,
+        "relative_notice": _relative_notice(),
         "disclaimer": DISCLAIMER,
     }

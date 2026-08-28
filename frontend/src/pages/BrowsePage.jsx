@@ -282,6 +282,7 @@ function cautionFor(item) {
   if (item.adjustment_note) return item.adjustment_note;
   const weakest = [...(item.breakdown ?? [])].sort((a, b) => a.score - b.score)[0];
   if (weakest?.key === "competition") return "같은 업종 점포가 많은 편이라 실제 경쟁 상황을 확인해야 합니다.";
+  if (weakest?.key === "demand") return "예측 수요에 비해 현재 점포 공급이 많은 편이라 현장 수요를 확인해야 합니다.";
   if (weakest?.key === "saturation") return "읍면동 내 업종 비중이 높은 편이라 추가 수요를 확인해야 합니다.";
   return "AI 전망은 상대 비교이므로 임대료와 유동인구 등 현장 조건을 함께 확인해야 합니다.";
 }
