@@ -103,6 +103,7 @@ function Sidebar({ nav, pathname, username, onLogout, onOpenQuickStart }) {
             <Link
               key={path}
               to={path}
+              data-quickstart-path={path}
               style={{
                 ...rowBase,
                 color: active ? "var(--primary)" : "var(--ink-muted)",
@@ -286,11 +287,6 @@ export default function App() {
     setManualQuickStartOpen(false);
   };
 
-  const navigateFromQuickStart = (path) => {
-    closeQuickStart();
-    navigate(path);
-  };
-
   const handleLogout = () => {
     logout();
     navigate("/login/official");
@@ -353,7 +349,6 @@ export default function App() {
         <OfficialQuickStart
           open={quickStartOpen}
           onClose={closeQuickStart}
-          onNavigate={navigateFromQuickStart}
         />
       </div>
     );
