@@ -272,6 +272,232 @@ a { color: var(--primary); }
 .spin { animation: spin 1s linear infinite; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
 
+/* 공무원 업무 퀵스타트 — 기능 위치가 아니라 "이 일을 하려면"을 기준으로 안내한다. */
+.quickstart-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(20, 26, 35, 0.48);
+  backdrop-filter: blur(2px);
+}
+
+.quickstart-dialog {
+  width: min(820px, 100%);
+  max-height: calc(100vh - 48px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--elev-2);
+}
+
+.quickstart-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px 30px 22px;
+  border-bottom: 1px solid var(--hairline);
+}
+
+.quickstart-eyebrow,
+.quickstart-section-label {
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.quickstart-header h2 {
+  margin-top: 5px;
+  font-size: 26px;
+  line-height: 1.25;
+  letter-spacing: -0.6px;
+}
+
+.quickstart-header p {
+  margin: 7px 0 0;
+  color: var(--ink-muted);
+  font-size: 14px;
+}
+
+.quickstart-close {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  flex: 0 0 auto;
+  place-items: center;
+  padding: 0;
+  color: var(--ink-muted);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.quickstart-close:hover,
+.quickstart-close:focus-visible {
+  color: var(--on-surface);
+  background: var(--surface-container-low);
+  outline: none;
+}
+
+.quickstart-content {
+  padding: 24px 30px 26px;
+  overflow-y: auto;
+}
+
+.quickstart-section-label {
+  margin-bottom: 10px;
+  color: var(--ink-muted);
+}
+
+.quickstart-section-label:not(:first-child) {
+  margin-top: 22px;
+}
+
+.quickstart-primary-list {
+  display: grid;
+  gap: 10px;
+}
+
+.quickstart-secondary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.quickstart-task {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 14px;
+  padding: 16px 18px;
+  color: var(--on-surface);
+  text-align: left;
+  font-family: inherit;
+  background: var(--surface-container-lowest);
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease, transform 0.12s ease;
+}
+
+.quickstart-task:hover,
+.quickstart-task:focus-visible {
+  background: #f8fbff;
+  border-color: var(--primary-fixed-dim);
+  outline: none;
+  transform: translateY(-1px);
+}
+
+.quickstart-task-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  color: var(--primary);
+  background: var(--primary-fixed);
+  border-radius: var(--radius-md);
+}
+
+.quickstart-task-copy {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.quickstart-task-copy strong {
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.quickstart-task-copy > span {
+  color: var(--ink-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.quickstart-task-copy > span b {
+  display: inline-block;
+  min-width: 92px;
+  margin-right: 7px;
+  color: var(--ink-secondary);
+  font-size: 12px;
+  letter-spacing: 0.1px;
+}
+
+.quickstart-task-copy em {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-top: 2px;
+  color: var(--primary);
+  font-size: 13px;
+  font-style: normal;
+  font-weight: 600;
+}
+
+.quickstart-task-copy em .material-symbols-outlined {
+  font-size: 17px;
+}
+
+.quickstart-task.compact {
+  grid-template-columns: 36px minmax(0, 1fr);
+  padding: 15px;
+}
+
+.quickstart-task.compact .quickstart-task-icon {
+  width: 36px;
+  height: 36px;
+  font-size: 20px;
+}
+
+.quickstart-task.compact .quickstart-task-copy > span b {
+  display: block;
+  margin: 0 0 2px;
+}
+
+.quickstart-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 30px;
+  background: var(--surface-container-low);
+  border-top: 1px solid var(--hairline);
+}
+
+.quickstart-footer p {
+  margin: 0;
+  color: var(--ink-muted);
+  font-size: 13px;
+}
+
+.quickstart-footer .btn-primary {
+  flex: 0 0 auto;
+  font-size: 14px;
+}
+
+@media (max-width: 720px) {
+  .quickstart-backdrop { padding: 12px; }
+  .quickstart-dialog { max-height: calc(100vh - 24px); }
+  .quickstart-header { padding: 22px 20px 18px; }
+  .quickstart-header h2 { font-size: 22px; }
+  .quickstart-content { padding: 20px; }
+  .quickstart-secondary-grid { grid-template-columns: 1fr; }
+  .quickstart-task { grid-template-columns: 36px minmax(0, 1fr); padding: 14px; }
+  .quickstart-task-icon { width: 36px; height: 36px; font-size: 20px; }
+  .quickstart-task-copy > span b { display: block; margin: 0 0 2px; }
+  .quickstart-footer { align-items: stretch; flex-direction: column; padding: 14px 20px 18px; }
+  .quickstart-footer .btn-primary { width: 100%; }
+}
+
 /* 상권 둘러보기 — 지도를 중심에 두고 필요한 조작만 오른쪽 패널에 모은다. */
 .browse-page-heading {
   display: flex;

@@ -12,6 +12,7 @@ import TrendPage from "./pages/TrendPage";
 import ReportPage from "./pages/ReportPage";
 import LandingPage from "./pages/LandingPage";
 import RequireRole from "./components/RequireRole";
+import OfficialQuickStart from "./components/OfficialQuickStart";
 import { useAuth } from "./context/auth-context";
 import { apiFetchJson } from "./lib/api";
 import { OFFICIAL_ROUTES, safeNext } from "./lib/officialRoutes";
@@ -32,9 +33,31 @@ const COMPONENTS = {
 
 const NAV = OFFICIAL_ROUTES.map((route) => ({ ...route, Component: COMPONENTS[route.path] }));
 
+const QUICKSTART_STORAGE_PREFIX = "hcai_official_quickstart_v1";
+
+function quickStartStorageKey(username) {
+  return `${QUICKSTART_STORAGE_PREFIX}:${username || "official"}`;
+}
+
+function hasSeenOfficialQuickStart(username) {
+  try {
+    return localStorage.getItem(quickStartStorageKey(username)) === "1";
+  } catch {
+    return false;
+  }
+}
+
+function markOfficialQuickStartSeen(username) {
+  try {
+    localStorage.setItem(quickStartStorageKey(username), "1");
+  } catch {
+    // 프라이빗 모드 등에서 저장이 막혀도 안내 사용은 계속한다.
+  }
+}
+
 // 사이드바는 짙은 남색 대신 캔버스와 같은 톤 + hairline 경계로 처리한다.
 // "크롬은 물러나고 콘텐츠가 말한다"는 원칙 — 내비게이션이 시각적 무게를 가져가지 않는다.
-function Sidebar({ nav, pathname, username, onLogout }) {
+function Sidebar({ nav, pathname, username, onLogout, onOpenQuickStart }) {
   const initials = username ? username.slice(0, 2).toUpperCase() : "?";
 
   const rowBase = {
@@ -126,6 +149,26 @@ function Sidebar({ nav, pathname, username, onLogout }) {
       {/* 계정 + 로그아웃 */}
       <div style={{ marginTop: "auto" }}>
         <div style={{ height: 1, background: "var(--hairline)", marginBottom: 12 }} />
+        <button
+          type="button"
+          onClick={onOpenQuickStart}
+          style={{
+            ...rowBase,
+            width: "100%",
+            marginBottom: 8,
+            background: "none",
+            border: "1px solid transparent",
+            color: "var(--ink-muted)",
+            cursor: "pointer",
+            textAlign: "left",
+            fontFamily: "inherit",
+          }}
+        >
+          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
+            help
+          </span>
+          업무별 사용법
+        </button>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px 12px" }}>
           <div
             style={{
@@ -255,6 +298,23 @@ export default function App() {
   const navigate = useNavigate();
   const isOfficial = isAuthenticated && role === "official";
   const isPublicPage = PUBLIC_PATHS.includes(pathname);
+  const [manualQuickStartOpen, setManualQuickStartOpen] = useState(false);
+  const [quickStartDismissedFor, setQuickStartDismissedFor] = useState(null);
+  const shouldAutoOpenQuickStart = isOfficial
+    && quickStartDismissedFor !== username
+    && !hasSeenOfficialQuickStart(username);
+  const quickStartOpen = isOfficial && (manualQuickStartOpen || shouldAutoOpenQuickStart);
+
+  const closeQuickStart = () => {
+    markOfficialQuickStartSeen(username);
+    setQuickStartDismissedFor(username);
+    setManualQuickStartOpen(false);
+  };
+
+  const navigateFromQuickStart = (path) => {
+    closeQuickStart();
+    navigate(path);
+  };
 
   const handleLogout = () => {
     logout();
@@ -304,11 +364,22 @@ export default function App() {
     const current = NAV.find((n) => n.path === pathname);
     return (
       <div style={{ minHeight: "100vh", background: "var(--surface-gray)" }}>
-        <Sidebar nav={NAV} pathname={pathname} username={username} onLogout={handleLogout} />
+        <Sidebar
+          nav={NAV}
+          pathname={pathname}
+          username={username}
+          onLogout={handleLogout}
+          onOpenQuickStart={() => setManualQuickStartOpen(true)}
+        />
         <div style={{ marginLeft: 248, display: "flex", flexDirection: "column", minHeight: "100vh" }}>
           <TopBar title={current?.label ?? "조기경보 대시보드"} />
           <main style={{ maxWidth: 1440, padding: "28px 40px 48px", boxSizing: "border-box" }}>{routes}</main>
         </div>
+        <OfficialQuickStart
+          open={quickStartOpen}
+          onClose={closeQuickStart}
+          onNavigate={navigateFromQuickStart}
+        />
       </div>
     );
   }
