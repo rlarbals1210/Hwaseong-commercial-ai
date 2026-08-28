@@ -21,7 +21,7 @@ function BulletList({ title, items, tone }) {
   );
 }
 
-export default function FitScorePanel({ data, loading }) {
+export default function FitScorePanel({ data, loading, preferenceLabel }) {
   const [tab, setTab] = useState("summary");
 
   if (loading) {
@@ -41,7 +41,7 @@ export default function FitScorePanel({ data, loading }) {
         <div>
           <div className="t-title">{data.area_name} · {data.industry_name}</div>
           <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 4 }}>
-            {data.preset} 프리셋
+            {preferenceLabel ?? data.preset} 기준
           </div>
         </div>
         {!data.is_fallback && <span className="badge badge-neutral">{data.grade}등급</span>}

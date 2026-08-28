@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import PublicNav from "../components/PublicNav";
 import { apiFetchJson, describeApiError } from "../lib/api";
 
 const COLORS = ["#005db2", "#dd5b00", "#2a9d99", "#4958aa"];
 
 function LineChart({ series = [], metrics }) {
+  const svgRef = useRef(null);
+  const [hoverIndex, setHoverIndex] = useState(null);
+
   if (series.length < 2) return <p className="t-body-sm" style={{ color: "var(--ink-muted)" }}>추이를 그릴 분기가 부족합니다.</p>;
   // 맨 오른쪽 분기 레이블이 viewBox 밖으로 잘리지 않도록 글자 반 폭 이상을 남긴다.
   const width = 720, height = 230, left = 42, right = 38, top = 18, bottom = 38;
@@ -13,9 +16,37 @@ function LineChart({ series = [], metrics }) {
   const x = (index) => left + (index / (series.length - 1)) * (width - left - right);
   const y = (value) => top + (1 - value / max) * (height - top - bottom);
 
+  // 화면 픽셀(getBoundingClientRect)을 viewBox 좌표로 환산 — svg가 width:100%로 늘어나
+  // 실제 렌더 폭과 viewBox 폭이 다르기 때문에 비율로 보정해야 정확한 분기를 짚는다.
+  const handleMove = (event) => {
+    const svg = svgRef.current;
+    if (!svg) return;
+    const rect = svg.getBoundingClientRect();
+    if (!rect.width) return;
+    const px = (event.clientX - rect.left) * (width / rect.width);
+    const ratio = (px - left) / (width - left - right);
+    const index = Math.round(ratio * (series.length - 1));
+    setHoverIndex(Math.min(series.length - 1, Math.max(0, index)));
+  };
+  const handleLeave = () => setHoverIndex(null);
+
+  const hovered = hoverIndex !== null ? series[hoverIndex] : null;
+  const tooltipW = 192, tooltipLineH = 15;
+  const tooltipH = 22 + metrics.length * tooltipLineH;
+  const tipRight = hovered && x(hoverIndex) > width / 2;
+  const tipX = hovered ? (tipRight ? x(hoverIndex) - tooltipW - 10 : x(hoverIndex) + 10) : 0;
+
   return (
     <div style={{ overflowX: "auto" }}>
-      <svg viewBox={`0 0 ${width} ${height}`} role="img" aria-label="분기별 상권 지표 추이" style={{ display: "block", width: "100%", minWidth: 560 }}>
+      <svg
+        ref={svgRef}
+        viewBox={`0 0 ${width} ${height}`}
+        role="img"
+        aria-label="분기별 상권 지표 추이"
+        style={{ display: "block", width: "100%", minWidth: 560, cursor: hovered ? "crosshair" : "default" }}
+        onMouseMove={handleMove}
+        onMouseLeave={handleLeave}
+      >
         {[0, 0.5, 1].map((ratio) => {
           const value = max * ratio;
           return (
@@ -35,6 +66,34 @@ function LineChart({ series = [], metrics }) {
             <text key={point.quarter_code} x={x(index)} y={height - 12} textAnchor="middle" fontSize="11" fill="var(--ink-muted)">{point.quarter_label.replace("년 ", ".")}</text>
           )
         ))}
+
+        {/* 호버 가이드선 + 값 툴팁. 마우스가 지나간 분기의 정확한 수치를 그래프 위에 그대로 짚어준다. */}
+        {hovered && (
+          <g pointerEvents="none">
+            <line x1={x(hoverIndex)} x2={x(hoverIndex)} y1={top} y2={height - bottom} stroke="var(--ink-faint)" strokeWidth="1" strokeDasharray="3,3" />
+            {metrics.map((metric, metricIndex) => {
+              const value = hovered[metric.key];
+              if (typeof value !== "number") return null;
+              return <circle key={metric.key} cx={x(hoverIndex)} cy={y(value)} r="3.5" fill={COLORS[metricIndex]} stroke="var(--surface-container-lowest)" strokeWidth="1.5" />;
+            })}
+            <g transform={`translate(${tipX}, ${top - 4})`}>
+              <rect width={tooltipW} height={tooltipH} rx="6" fill="var(--surface-container-lowest)" stroke="var(--hairline)" />
+              <text x="10" y="16" fontSize="11" fontWeight="700" fill="var(--on-surface)">{hovered.quarter_label}</text>
+              {metrics.map((metric, metricIndex) => {
+                const value = hovered[metric.key];
+                return (
+                  <text key={metric.key} x="10" y={16 + (metricIndex + 1) * tooltipLineH} fontSize="11" fill="var(--ink-muted)">
+                    <tspan fill={COLORS[metricIndex]}>● </tspan>
+                    {metric.label} {typeof value === "number" ? `${value.toFixed(2)}%` : "—"}
+                  </text>
+                );
+              })}
+            </g>
+          </g>
+        )}
+
+        {/* 실제 커서 감지 영역 — 다른 그림 요소 위에 투명 사각형을 얹어 그래프 어디를 눌러도 반응하게 한다. */}
+        <rect x={left} y={top} width={width - left - right} height={height - top - bottom} fill="transparent" onMouseMove={handleMove} onMouseLeave={handleLeave} />
       </svg>
       <div style={{ display: "flex", gap: 18, justifyContent: "center", flexWrap: "wrap" }}>
         {metrics.map((metric, index) => (
@@ -166,7 +225,7 @@ export default function TrendPage() {
         <PublicNav />
         <h1 className="t-h1">상권 트렌드</h1>
         <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "8px 0 0", lineHeight: 1.7 }}>
-          예측이 아니라 분기별 관측 흐름을 봅니다. 최근 값 하나보다 방향과 표본 범위를 함께 확인하세요.
+        상권의 분기별 트렌드를 확인해보세요.
         </p>
         {error && <div role="alert" className="t-body-sm" style={{ color: "var(--accent-orange)", marginTop: 16 }}>{error}</div>}
 
@@ -176,7 +235,6 @@ export default function TrendPage() {
               <h2 className="t-h3">화성시 전체 흐름</h2>
               <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "5px 0 0" }}>{overview?.method_notice}</p>
             </div>
-            <span className="t-caption" style={{ color: "var(--ink-faint)" }}>표본충분 셀만 집계</span>
           </div>
           <div style={{ marginTop: 18 }}><LineChart series={overview?.series} metrics={metrics} /></div>
         </section>

@@ -72,23 +72,23 @@ from ..models import (
 # 이름과 설명은 화면에 그대로 나가므로 여기서만 고친다.
 WEIGHT_PRESETS: dict[str, dict] = {
     "균형": {
-        "label": "균형",
-        "description": "AI 예측을 절반, 경쟁과 포화도를 나머지로 봅니다.",
+        "label": "균형 있게",
+        "description": "AI 전망과 동종업종 점포 수, 업종 비중을 고르게 살펴봅니다.",
         "weights": {"growth": 0.50, "competition": 0.30, "saturation": 0.20},
     },
     "예측중심": {
-        "label": "AI 예측 중심",
-        "description": "모델이 예측한 다음 분기 전망에 무게를 둡니다.",
+        "label": "폐업 부담 낮게",
+        "description": "AI가 2분기 뒤 폐업 위험을 상대적으로 낮게 본 곳을 우선합니다.",
         "weights": {"growth": 0.80, "competition": 0.10, "saturation": 0.10},
     },
     "블루오션": {
-        "label": "블루오션",
-        "description": "같은 업종이 적은 곳을 우선합니다.",
+        "label": "동종업종 덜 몰리게",
+        "description": "같은 업종 점포가 상대적으로 적은 곳을 우선합니다.",
         "weights": {"growth": 0.25, "competition": 0.50, "saturation": 0.25},
     },
     "여유": {
-        "label": "자리 여유",
-        "description": "읍면동 안에서 그 업종이 아직 덜 찬 곳을 우선합니다.",
+        "label": "업종 비중 낮게",
+        "description": "읍면동 전체 점포 중 선택 업종의 비중이 낮은 곳을 우선합니다.",
         "weights": {"growth": 0.25, "competition": 0.25, "saturation": 0.50},
     },
 }
@@ -102,7 +102,7 @@ AXIS_LABELS = {
     "saturation": "포화도",
 }
 AXIS_DESCRIPTIONS = {
-    "growth": "AI가 예측한 다음 분기 폐업 위험의 반대값입니다. 같은 업종 안에서 상대 비교합니다.",
+    "growth": "AI가 예측한 2분기 뒤 폐업 위험의 반대값입니다. 같은 업종 안에서 상대 비교합니다.",
     "competition": "같은 업종 점포가 적을수록 높습니다.",
     "saturation": "읍면동 전체 점포 중 이 업종이 차지하는 비중이 낮을수록 높습니다.",
 }

@@ -903,7 +903,7 @@ a { color: var(--primary); }
   top: 68px;
   left: 16px;
   z-index: 82;
-  width: 302px;
+  width: 330px;
   max-height: calc(100vh - 84px);
   padding: 0;
   overflow: auto;
@@ -988,6 +988,29 @@ a { color: var(--primary); }
   color: #3b82f6;
   font-style: normal;
   font-weight: 600;
+}
+
+.nodaji-step-label,
+.nodaji-priority-block legend {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.nodaji-step-label b,
+.nodaji-priority-block legend span {
+  width: 20px;
+  height: 20px;
+  display: inline-grid;
+  flex: 0 0 20px;
+  place-items: center;
+  color: #fff;
+  font-size: 10px;
+  background: #3b82f6;
+  border-radius: 999px;
 }
 
 .nodaji-field select {
@@ -1107,9 +1130,9 @@ a { color: var(--primary); }
 .nodaji-map-drawer {
   position: absolute;
   top: 68px;
-  left: 330px;
+  left: 362px;
   z-index: 81;
-  width: 390px;
+  width: 430px;
   height: calc(100vh - 84px);
   overflow: hidden;
   background: #fff;
@@ -1168,41 +1191,96 @@ a { color: var(--primary); }
   scrollbar-width: none;
 }
 
-.nodaji-preset-block {
-  padding-bottom: 16px;
-  border-bottom: 1px solid #f3f4f6;
+.nodaji-priority-block {
+  min-width: 0;
+  margin: 13px 18px 0;
+  padding: 0;
+  border: 0;
 }
 
-.nodaji-preset-row {
-  display: flex;
-  flex-wrap: wrap;
+.nodaji-priority-block legend {
+  padding: 0;
+}
+
+/* 사분면 매트릭스 — 2×2로 나란히 놓아 네 조건을 한 판에서 비교하게 한다 */
+.nodaji-priority-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
   gap: 6px;
   margin-top: 8px;
 }
 
-.nodaji-preset-row button {
-  padding: 5px 10px;
-  color: #6b7280;
+.nodaji-priority-grid button {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 60px;
+  padding: 10px 22px 10px 10px;
+  text-align: center;
+  color: #4b5563;
   font-family: inherit;
-  font-size: 12px;
-  background: #fff;
+  background: #f9fafb;
   border: 1px solid #e5e7eb;
-  border-radius: 999px;
+  border-radius: 8px;
   cursor: pointer;
 }
 
-.nodaji-preset-row button.active {
-  color: #2563eb;
-  font-weight: 700;
+.nodaji-priority-grid button b {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.nodaji-priority-grid button:hover,
+.nodaji-priority-grid button.active {
+  color: #1d4ed8;
   background: #eff6ff;
   border-color: #93c5fd;
 }
 
-.nodaji-preset-block p {
-  margin: 7px 0 0;
+/* 카드 클릭(선택)과 겹치지 않게 모서리에 작게 둔다 */
+.nodaji-help-icon {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 15px;
+  height: 15px;
+  display: inline-grid;
+  place-items: center;
   color: #9ca3af;
+  font-size: 10px;
+  font-weight: 700;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 999px;
+  cursor: help;
+}
+
+.nodaji-priority-grid button.active .nodaji-help-icon {
+  color: #1d4ed8;
+  border-color: #93c5fd;
+}
+
+/* 좌측 패널이 overflow:auto 카드라 카드 기준 절대배치 툴팁은 사분면 어느 칸이든
+   경계에 잘린다. position:fixed로 뷰포트 좌표를 직접 계산해 그 클리핑을 우회한다
+   (좌표 계산은 PriorityPicker의 showTooltip 참고). */
+.nodaji-help-tip-fixed {
+  position: fixed;
+  z-index: 200;
+  width: 190px;
+  padding: 8px 10px;
+  color: #f9fafb;
   font-size: 11px;
+  font-weight: 400;
   line-height: 1.5;
+  text-align: left;
+  background: #1f2937;
+  border-radius: 7px;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 10px));
 }
 
 .nodaji-drawer-heading {
@@ -1245,27 +1323,26 @@ a { color: var(--primary); }
   gap: 7px;
 }
 
-.nodaji-result-list > button {
+.nodaji-result-list > article {
   width: 100%;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+}
+
+.nodaji-result-list > article.active {
+  background: #f8fbff;
+  border-color: #93c5fd;
+  transform: translateY(-1px);
+}
+
+.nodaji-result-topline {
   display: grid;
   grid-template-columns: 28px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  padding: 11px 12px;
-  text-align: left;
-  font-family: inherit;
-  background: #fff;
-  border: 1px solid #e5e7eb;
-  border-radius: 10px;
-  cursor: pointer;
-  transition: transform 0.15s ease, border-color 0.15s ease, background 0.15s ease;
-}
-
-.nodaji-result-list > button:hover,
-.nodaji-result-list > button.active {
-  background: #f8fbff;
-  border-color: #93c5fd;
-  transform: translateY(-1px);
 }
 
 .nodaji-rank {
@@ -1318,6 +1395,113 @@ a { color: var(--primary); }
 
 .nodaji-result-score small {
   color: #6b7280;
+  font-size: 10px;
+}
+
+.nodaji-result-reason,
+.nodaji-result-caution {
+  display: grid;
+  grid-template-columns: 56px 1fr;
+  gap: 7px;
+  margin: 9px 0 0;
+  color: #4b5563;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.nodaji-result-reason b,
+.nodaji-result-caution b {
+  color: #2563eb;
+  font-size: 10px;
+}
+
+.nodaji-result-caution b {
+  color: #b45309;
+}
+
+.nodaji-result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 10px;
+}
+
+.nodaji-result-actions button {
+  padding: 5px 8px;
+  color: #4b5563;
+  font-family: inherit;
+  font-size: 10px;
+  font-weight: 600;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.nodaji-result-actions button:hover,
+.nodaji-result-actions button.active {
+  color: #2563eb;
+  background: #eff6ff;
+  border-color: #93c5fd;
+}
+
+.nodaji-result-actions button:disabled {
+  color: #c1c6d5;
+  cursor: default;
+  background: #f9fafb;
+  border-color: #edf0f4;
+}
+
+.nodaji-compare-hint,
+.nodaji-compare-panel {
+  margin-top: 12px;
+  padding: 11px 12px;
+  color: #4b5563;
+  font-size: 11px;
+  line-height: 1.55;
+  background: #f5f3ff;
+  border: 1px solid #ddd6fe;
+  border-radius: 9px;
+}
+
+.nodaji-compare-grid {
+  display: grid;
+  grid-template-columns: 1.25fr 1fr 1fr;
+  align-items: center;
+  gap: 0;
+  margin-top: 8px;
+}
+
+.nodaji-compare-grid > b {
+  padding: 6px;
+  text-align: center;
+  color: #5b21b6;
+  font-size: 11px;
+}
+
+.nodaji-compare-row {
+  display: contents;
+}
+
+.nodaji-compare-row span,
+.nodaji-compare-row strong {
+  padding: 7px 6px;
+  border-top: 1px solid #e9e5ff;
+}
+
+.nodaji-compare-row span {
+  color: #6b7280;
+}
+
+.nodaji-compare-row strong {
+  text-align: center;
+  color: #111827;
+  font-size: 11px;
+}
+
+.nodaji-compare-panel > p {
+  margin: 9px 0 0;
+  color: #7c7190;
   font-size: 10px;
 }
 
@@ -1493,7 +1677,7 @@ a { color: var(--primary); }
   .nodaji-map-drawer {
     left: 16px;
     z-index: 90;
-    width: min(390px, calc(100vw - 32px));
+    width: min(430px, calc(100vw - 32px));
   }
 }
 
@@ -1518,7 +1702,7 @@ a { color: var(--primary); }
   }
 
   .nodaji-control-card {
-    width: min(302px, calc(100vw - 32px));
+    width: min(330px, calc(100vw - 32px));
   }
 
   .nodaji-map-ticker {

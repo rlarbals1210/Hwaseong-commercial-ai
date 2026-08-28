@@ -110,8 +110,12 @@ const CSS = `
   .lp-nav-links a { color: #cbd5e1; text-decoration: none; font-size: 14px; font-weight: 500; white-space: nowrap; transition: color .2s; }
   .lp-nav-links a:hover { color: #7dd3fc; }
   .lp-nav-right { display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
-  .lp-nav-ghost { color: #94a3b8; text-decoration: none; font-size: 14px; font-weight: 500; white-space: nowrap; transition: color .2s; }
-  .lp-nav-ghost:hover { color: #7dd3fc; }
+  .lp-nav-ghost {
+    color: #cbd5e1; text-decoration: none; font-size: 14px; font-weight: 500; white-space: nowrap;
+    background: rgba(255,255,255,.06); border: 1px solid rgba(255,255,255,.12);
+    padding: 9px 18px; border-radius: 8px; transition: background .2s, border-color .2s, color .2s;
+  }
+  .lp-nav-ghost:hover { background: rgba(255,255,255,.1); border-color: rgba(255,255,255,.22); color: #7dd3fc; }
   .lp-nav-cta {
     background: #0ea5e9; color: #fff; text-decoration: none;
     padding: 10px 22px; border-radius: 8px; font-size: 14px; font-weight: 600;
@@ -167,7 +171,7 @@ const CSS = `
     display: inline-flex; align-items: center; gap: 8px; transition: border-color .2s, color .2s;
   }
   .lp-btn-secondary:hover { border-color: #38bdf8; color: #7dd3fc; }
-  .lp-facts { display: flex; gap: 52px; flex-wrap: wrap; margin-top: 64px; padding-top: 34px; border-top: 1px solid rgba(255,255,255,.07); }
+  .lp-facts { display: flex; gap: 52px; flex-wrap: wrap; margin-top: 8px; padding-top: 34px; border-top: 1px solid rgba(255,255,255,.07); }
   .lp-fact-value { font-size: 34px; font-weight: 700; color: #38bdf8; line-height: 1; margin-bottom: 7px; }
   .lp-fact-label { font-size: 13px; color: #94a3b8; line-height: 1.4; word-break: keep-all; }
 
@@ -198,6 +202,7 @@ const CSS = `
 
   /* ── 원칙 ───────────────────────────────────────────────────────── */
   .lp-principles { background: #060e1e; }
+  .lp-principles .lp-section-desc { max-width: 780px; }
   .lp-principle-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 2px; margin-top: 56px; }
   .lp-principle {
     background: #0d2040; border: 1px solid rgba(255,255,255,.04);
@@ -268,7 +273,7 @@ const CSS = `
     .lp-nav-name { display: none; }
     .lp-hero { padding: 112px 20px 64px; }
     .lp-section { padding: 68px 20px; }
-    .lp-facts { gap: 30px; margin-top: 48px; }
+    .lp-facts { gap: 30px; margin-top: 8px; }
     .lp-principle { padding: 28px 24px; }
   }
 `;
@@ -356,17 +361,6 @@ export default function LandingPage() {
             읍면동 × 업종 단위로 폐업 위험을 예측하고, 담당 공무원이 어디부터 확인할지 좁혀 줍니다.
             시민이 행정을 찾아오게 하는 대신, 행정이 먼저 찾아가게 만드는 도구입니다.
           </p>
-
-          <div className="lp-actions lp-reveal lp-d3">
-            <Link to={enterHref} className="lp-btn-primary">
-              <Icon name={isOfficial ? "dashboard" : "login"} size={19} />
-              {enterLabel}
-            </Link>
-            <Link to="/browse" className="lp-btn-secondary">
-              <Icon name="map_search" size={19} />
-              로그인 없이 상권 둘러보기
-            </Link>
-          </div>
 
           <div className="lp-facts lp-reveal lp-d4">
             {HERO_FACTS.map((fact) => (

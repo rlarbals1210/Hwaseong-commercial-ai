@@ -289,7 +289,7 @@ export default function App() {
 
   const handleLogout = () => {
     logout();
-    navigate("/login/official");
+    navigate("/");
   };
 
   const loginElement = isOfficial
