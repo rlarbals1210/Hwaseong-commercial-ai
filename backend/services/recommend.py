@@ -80,29 +80,24 @@ from .risk import SAMPLE_MIN
 # 이름과 설명은 화면에 그대로 나가므로 여기서만 고친다.
 WEIGHT_PRESETS: dict[str, dict] = {
     "균형": {
-        "label": "균형 있게",
-        "description": "폐업 부담, 예측 수요와 공급의 차이, 경쟁·포화도를 함께 살펴봅니다.",
+        "label": "추천에 맡길게요",
+        "description": "특별히 정한 기준이 없다면 수요·폐업 부담·경쟁과 업종 비중을 함께 살펴봅니다.",
         "weights": {"growth": 0.35, "demand": 0.30, "competition": 0.20, "saturation": 0.15},
     },
-    "예측중심": {
-        "label": "폐업 부담 낮게",
-        "description": "AI가 2분기 뒤 폐업 위험을 상대적으로 낮게 본 곳을 우선합니다.",
-        "weights": {"growth": 0.60, "demand": 0.25, "competition": 0.10, "saturation": 0.05},
-    },
     "수요중심": {
-        "label": "수요 여건 좋게",
+        "label": "손님 수요가 충분한 곳",
         "description": "예측한 지역 수요점유율이 현재 점포 공급보다 큰 곳을 우선합니다.",
         "weights": {"growth": 0.20, "demand": 0.60, "competition": 0.10, "saturation": 0.10},
     },
+    "예측중심": {
+        "label": "폐업 부담이 낮은 곳",
+        "description": "AI가 2분기 뒤 폐업 위험을 상대적으로 낮게 본 곳을 우선합니다.",
+        "weights": {"growth": 0.60, "demand": 0.25, "competition": 0.10, "saturation": 0.05},
+    },
     "블루오션": {
-        "label": "동종업종 덜 몰리게",
+        "label": "경쟁 매장이 적은 곳",
         "description": "같은 업종 점포가 상대적으로 적은 곳을 우선합니다.",
         "weights": {"growth": 0.20, "demand": 0.25, "competition": 0.40, "saturation": 0.15},
-    },
-    "여유": {
-        "label": "업종 비중 낮게",
-        "description": "읍면동 전체 점포 중 선택 업종의 비중이 낮은 곳을 우선합니다.",
-        "weights": {"growth": 0.20, "demand": 0.25, "competition": 0.15, "saturation": 0.40},
     },
 }
 DEFAULT_PRESET = "균형"

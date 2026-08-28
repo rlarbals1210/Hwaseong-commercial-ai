@@ -17,7 +17,18 @@ from backend.routers.recommend import (
     recommend_score,
     store_clusters,
 )
-from backend.services.recommend import Candidate, score_candidates
+from backend.services.recommend import AXES, WEIGHT_PRESETS, Candidate, score_candidates
+
+
+def test_public_presets_match_user_decisions_and_keep_saturation_internal():
+    assert [preset["label"] for preset in WEIGHT_PRESETS.values()] == [
+        "추천에 맡길게요",
+        "손님 수요가 충분한 곳",
+        "폐업 부담이 낮은 곳",
+        "경쟁 매장이 적은 곳",
+    ]
+    assert AXES == ("growth", "demand", "competition", "saturation")
+    assert all(preset["weights"]["saturation"] > 0 for preset in WEIGHT_PRESETS.values())
 
 
 def test_balanced_preset_scores_and_narrow_spread():

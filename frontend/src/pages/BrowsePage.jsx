@@ -240,8 +240,8 @@ function PriorityPicker({ data, value, onChange }) {
 
   return (
     <fieldset className="nodaji-priority-block">
-      <legend><span>2</span> 어떤 조건을 가장 중요하게 볼까요?</legend>
-      {/* 사분면 매트릭스 — 4개 조건을 2×2로 나란히 놓아 한눈에 비교하게 한다 */}
+      <legend><span>2</span> 상권을 고를 때 무엇이 가장 걱정되나요?</legend>
+      {/* 기본 추천과 사용자가 실제로 고민하는 세 조건을 2×2로 나란히 놓는다. */}
       <div className="nodaji-priority-grid">
         {data.presets.map((item) => (
           <button
@@ -526,6 +526,7 @@ export default function BrowsePage() {
         const initial = data.presets.some((item) => item.key === saved) ? saved : data.default;
         setPresetOptions(data);
         setPreset(initial);
+        remember(SAVED_PRESET_KEY, initial);
       })
       .catch((err) => setError(describeApiError(err)));
   }, []);
