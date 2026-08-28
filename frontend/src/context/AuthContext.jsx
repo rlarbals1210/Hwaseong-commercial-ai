@@ -4,10 +4,14 @@ import { AuthContext } from "./auth-context";
 
 export function AuthProvider({ children }) {
   const [auth, setAuth] = useState(() => getStoredAuth());
+  // 저장된 토큰을 복원한 것과 이번 화면에서 새로 로그인한 것을 구분한다.
+  // 퀵스타트는 성공한 로그인 직후마다 띄우되, 새로고침에서는 반복하지 않는다.
+  const [loginSequence, setLoginSequence] = useState(0);
 
   const login = useCallback((data) => {
     setStoredAuth(data);
     setAuth(data);
+    setLoginSequence((sequence) => sequence + 1);
   }, []);
 
   const logout = useCallback(() => {
@@ -31,6 +35,7 @@ export function AuthProvider({ children }) {
         role: auth?.role ?? null,
         verificationType: auth?.verificationType ?? null,
         username: auth?.token ? decodeJwtPayload(auth.token)?.username ?? null : null,
+        loginSequence,
         login,
         logout,
       }}

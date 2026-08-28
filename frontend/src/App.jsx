@@ -33,28 +33,6 @@ const COMPONENTS = {
 
 const NAV = OFFICIAL_ROUTES.map((route) => ({ ...route, Component: COMPONENTS[route.path] }));
 
-const QUICKSTART_STORAGE_PREFIX = "hcai_official_quickstart_v1";
-
-function quickStartStorageKey(username) {
-  return `${QUICKSTART_STORAGE_PREFIX}:${username || "official"}`;
-}
-
-function hasSeenOfficialQuickStart(username) {
-  try {
-    return localStorage.getItem(quickStartStorageKey(username)) === "1";
-  } catch {
-    return false;
-  }
-}
-
-function markOfficialQuickStartSeen(username) {
-  try {
-    localStorage.setItem(quickStartStorageKey(username), "1");
-  } catch {
-    // 프라이빗 모드 등에서 저장이 막혀도 안내 사용은 계속한다.
-  }
-}
-
 // 사이드바는 짙은 남색 대신 캔버스와 같은 톤 + hairline 경계로 처리한다.
 // "크롬은 물러나고 콘텐츠가 말한다"는 원칙 — 내비게이션이 시각적 무게를 가져가지 않는다.
 function Sidebar({ nav, pathname, username, onLogout, onOpenQuickStart }) {
@@ -294,20 +272,17 @@ const PUBLIC_PATHS = ["/", "/browse", "/trends", "/report"];
 
 export default function App() {
   const { pathname, search } = useLocation();
-  const { isAuthenticated, role, username, logout } = useAuth();
+  const { isAuthenticated, role, username, loginSequence, logout } = useAuth();
   const navigate = useNavigate();
   const isOfficial = isAuthenticated && role === "official";
   const isPublicPage = PUBLIC_PATHS.includes(pathname);
   const [manualQuickStartOpen, setManualQuickStartOpen] = useState(false);
-  const [quickStartDismissedFor, setQuickStartDismissedFor] = useState(null);
-  const shouldAutoOpenQuickStart = isOfficial
-    && quickStartDismissedFor !== username
-    && !hasSeenOfficialQuickStart(username);
+  const [dismissedLoginSequence, setDismissedLoginSequence] = useState(0);
+  const shouldAutoOpenQuickStart = isOfficial && loginSequence > dismissedLoginSequence;
   const quickStartOpen = isOfficial && (manualQuickStartOpen || shouldAutoOpenQuickStart);
 
   const closeQuickStart = () => {
-    markOfficialQuickStartSeen(username);
-    setQuickStartDismissedFor(username);
+    setDismissedLoginSequence(loginSequence);
     setManualQuickStartOpen(false);
   };
 
