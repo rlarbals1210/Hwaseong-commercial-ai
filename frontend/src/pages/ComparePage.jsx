@@ -57,10 +57,27 @@ function CellPicker({ label, options, areaId, industryId, onChange, compact }) {
  *  순위 막대는 위치·간격·이웃을 한 번에 보여준다. 유형은 배지로 옆에 붙인다.
  */
 function IndustryRanking({ context, targetAreaId, onPick }) {
-  const rows = context?.distribution ?? [];
-  if (rows.length < 3) return null;
-  const max = Math.max(...rows.map((r) => r.cumulative_closure_rate_pct), 1);
+  const all = context?.distribution ?? [];
+  // 18줄을 항상 펼치면 표 하나가 880px을 먹고, 정작 결론이 그만큼 아래로 밀린다.
+  // 기본은 "상위 3 + 내 상권 주변"만 보여주고 나머지는 펼쳐서 본다.
+  const [expanded, setExpanded] = useState(false);
+  if (all.length < 3) return null;
+  const max = Math.max(...all.map((r) => r.cumulative_closure_rate_pct), 1);
   const median = context.industry_median_pct;
+
+  let rows = all;
+  let hiddenCount = 0;
+  if (!expanded && all.length > 8) {
+    const selfIndex = all.findIndex((r) => r.is_self);
+    const keep = new Set([0, 1, 2]);
+    if (selfIndex >= 0) [selfIndex - 1, selfIndex, selfIndex + 1].forEach((i) => { if (i >= 0 && i < all.length) keep.add(i); });
+    if (targetAreaId != null) {
+      const t = all.findIndex((r) => r.area_id === targetAreaId);
+      if (t >= 0) keep.add(t);
+    }
+    rows = all.filter((_, i) => keep.has(i));
+    hiddenCount = all.length - rows.length;
+  }
 
   return (
     <div>
@@ -138,8 +155,227 @@ function IndustryRanking({ context, targetAreaId, onPick }) {
           );
         })}
       </div>
+      {hiddenCount > 0 && (
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="t-caption"
+          style={{
+            width: "100%", marginTop: 8, padding: "8px 0", cursor: "pointer",
+            border: "1px dashed var(--hairline)", background: "transparent",
+            borderRadius: "var(--radius-sm)", color: "var(--primary)", fontWeight: 600,
+          }}
+        >
+          가운데 {hiddenCount}곳 더 보기 (전체 {all.length}곳)
+        </button>
+      )}
       <div className="t-body-sm" style={{ color: "var(--ink-faint)", marginTop: 12 }}>
         가는 세로선은 업종 중위값 {fmt(median, 2)}%. 이름을 누르면 그 상권과 비교합니다.
+      </div>
+    </div>
+  );
+}
+
+/** 상단 고정 비교 바.
+ *
+ *  예전에는 드롭다운 두 개와 "아래 후보에서 선택"이 한 카드에 섞여 있었고, 스크롤하면
+ *  화면 밖으로 사라졌다. 페이지가 3,400px이라 아래쪽에서는 무엇과 무엇을 비교하는 중인지
+ *  알 수 없었다. 지금은 두 상권이 항상 화면 위에 붙어 있고, 슬롯을 누르면 고르는 창이 뜬다.
+ */
+function CompareBar({ left, right, leftRank, rightRank, onEditLeft, onEditRight, onSwap, onCsv }) {
+  const Slot = ({ cell, rank, role, onEdit }) => (
+    <button
+      type="button"
+      onClick={onEdit}
+      className="compare-slot"
+      style={{
+        flex: "1 1 240px", minWidth: 0, textAlign: "left", cursor: "pointer",
+        border: "1px solid var(--hairline)", borderRadius: "var(--radius-md)",
+        background: "var(--surface-container-lowest)", padding: "12px 14px",
+      }}
+    >
+      <div className="t-eyebrow" style={{ color: "var(--ink-faint)", display: "flex", alignItems: "center", gap: 6 }}>
+        {role}
+        <span className="material-symbols-outlined" style={{ fontSize: 15, marginLeft: "auto", color: "var(--primary)" }}>edit</span>
+      </div>
+      {cell ? (
+        <>
+          <div className="t-title" style={{ color: "var(--on-surface)", marginTop: 4, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+            {cell.area_name}
+            <span className="t-caption" style={{ color: "var(--ink-muted)", fontWeight: 400, marginLeft: 6 }}>{cell.industry_name}</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
+            <span className="t-metric" style={{ fontSize: 20 }}>{fmt(cell.cumulative_closure_rate_pct, 1)}%</span>
+            {rank && <span className="t-caption" style={{ color: "var(--ink-faint)" }}>{rank}</span>}
+          </div>
+        </>
+      ) : (
+        <div className="t-body-sm" style={{ color: "var(--primary)", marginTop: 8, fontWeight: 600 }}>상권 선택</div>
+      )}
+    </button>
+  );
+
+  return (
+    <div
+      style={{
+        position: "sticky", top: 0, zIndex: 30,
+        display: "flex", alignItems: "stretch", gap: 12, flexWrap: "wrap",
+        padding: "14px 16px", marginBottom: 18,
+        background: "var(--surface-container-low)",
+        border: "1px solid var(--hairline)", borderRadius: "var(--radius-lg)",
+        boxShadow: "var(--elev-1)",
+      }}
+    >
+      <Slot cell={left} rank={leftRank} role="기준 상권" onEdit={onEditLeft} />
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, flex: "0 0 auto" }}>
+        <span className="t-caption" style={{ color: "var(--ink-faint)", fontWeight: 700 }}>VS</span>
+        {left && right && (
+          <button
+            type="button"
+            onClick={onSwap}
+            aria-label="기준과 비교 상권 바꾸기"
+            style={{ border: "none", background: "transparent", cursor: "pointer", color: "var(--ink-muted)", padding: 2 }}
+          >
+            <span className="material-symbols-outlined" style={{ fontSize: 18 }}>swap_horiz</span>
+          </button>
+        )}
+      </div>
+      <Slot cell={right} rank={rightRank} role="비교 상권" onEdit={onEditRight} />
+      {onCsv && (
+        <button className="btn-utility" onClick={onCsv} style={{ flex: "0 0 auto", alignSelf: "center" }}>
+          CSV
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** 결론 한 장.
+ *
+ *  예전에는 이 문장이 3,300px 지점에 83px짜리 카드로 있었다. 담당자가 알고 싶은 건 이
+ *  한 줄인데 네 번 스크롤해야 나왔다. 근거보다 먼저 놓는다.
+ */
+/** 받침에 따라 조사를 고른다. "동탄8동이 / 기배동이", "새솔동가"가 아니라 "새솔동이".
+ *  공문서 투의 "이(가)"보다 읽기 낫고, 읍면동 이름은 숫자로 끝나는 경우까지만 보면 된다. */
+const DIGIT_HAS_FINAL = { 0: true, 1: true, 3: true, 6: true, 7: true, 8: true };
+function hasFinalConsonant(word) {
+  const last = (word ?? "").trim().slice(-1);
+  if (/[0-9]/.test(last)) return Boolean(DIGIT_HAS_FINAL[Number(last)]);
+  const code = last.charCodeAt(0);
+  if (Number.isNaN(code) || code < 0xac00 || code > 0xd7a3) return false;
+  return (code - 0xac00) % 28 !== 0;
+}
+const subject = (word) => `${word}${hasFinalConsonant(word) ? "이" : "가"}`;
+
+function VerdictHeadline({ data }) {
+  const l = data.left, r = data.right;
+  const lr = l.cumulative_closure_rate_pct, rr = r.cumulative_closure_rate_pct;
+  const rateDiff = data.diffs?.find((d) => d.metric === "cumulative_closure_rate_pct");
+  const comparable = Boolean(rateDiff?.comparable);
+  const delta = comparable && lr != null && rr != null ? rr - lr : null;
+  const ratio = comparable && lr > 0 && rr != null ? rr / lr : null;
+
+  // 두 구간이 겹치지 않으면 우연으로 보기 어렵다. 겹치면 "차이가 있다"고 말하지 않는다.
+  const li = l.interval, ri = r.interval;
+  const separated = li && ri ? !(li.upper_pct >= ri.lower_pct && ri.upper_pct >= li.lower_pct) : null;
+  const higher = delta == null ? null : delta > 0 ? r : l;
+
+  return (
+    <div
+      className="card"
+      style={{ padding: "22px 24px", marginBottom: 18, borderLeft: "3px solid var(--primary)" }}
+    >
+      <div className="t-eyebrow" style={{ color: "var(--ink-faint)" }}>비교 결과</div>
+      {comparable && delta != null ? (
+        <div className="t-h2" style={{ margin: "8px 0 0", lineHeight: 1.4 }}>
+          {subject(higher.area_name)} {higher === r ? l.area_name : r.area_name}보다 폐업률이{" "}
+          <span style={{ color: "var(--error)" }}>{fmt(Math.abs(delta), 1)}%p</span> 높습니다
+          {ratio != null && ratio > 0 && (
+            <span className="t-body" style={{ color: "var(--ink-muted)", fontWeight: 500 }}>
+              {" "}({fmt(ratio >= 1 ? ratio : 1 / ratio, 1)}배)
+            </span>
+          )}
+        </div>
+      ) : (
+        <div className="t-h2" style={{ margin: "8px 0 0", lineHeight: 1.4 }}>
+          두 상권의 폐업률은 비율로 견주지 않습니다
+        </div>
+      )}
+
+      {separated != null && comparable && (
+        <p className="t-body-sm" style={{ margin: "10px 0 0", color: "var(--ink-secondary)", lineHeight: 1.7 }}>
+          {separated
+            ? "95% 구간이 겹치지 않습니다. 표본 크기를 감안해도 남는 차이입니다."
+            : "다만 95% 구간이 겹칩니다. 표본 크기를 감안하면 우연일 수 있어 단정하기 어렵습니다."}
+        </p>
+      )}
+
+      {data.verdict && (
+        <p className="t-body" style={{ margin: "14px 0 0", color: "var(--on-surface)", lineHeight: 1.75 }}>
+          {data.verdict}
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** 접이식 근거 구획. 기본은 닫힘 — 결론을 읽고 궁금한 것만 편다. */
+function Section({ title, caption, defaultOpen = false, children }) {
+  if (!children) return null;
+  return (
+    <details open={defaultOpen} style={{ marginBottom: 12 }}>
+      <summary
+        style={{
+          cursor: "pointer", listStyle: "none", display: "flex", alignItems: "baseline", gap: 10,
+          padding: "12px 16px", background: "var(--surface-container-low)",
+          border: "1px solid var(--hairline)", borderRadius: "var(--radius-md)",
+        }}
+      >
+        <span className="t-title" style={{ color: "var(--on-surface)" }}>{title}</span>
+        {caption && <span className="t-caption" style={{ color: "var(--ink-faint)" }}>{caption}</span>}
+        <span className="material-symbols-outlined" style={{ marginLeft: "auto", fontSize: 20, color: "var(--ink-muted)" }}>
+          expand_more
+        </span>
+      </summary>
+      <div style={{ marginTop: 12 }}>{children}</div>
+    </details>
+  );
+}
+
+/** 상권 고르는 창. 팀원 제안대로 드롭다운을 화면에서 걷어내고 팝업 안으로 넣었다. */
+function PickerModal({ open, title, options, value, onPick, onClose, extra }) {
+  if (!open) return null;
+  return (
+    <div
+      onClick={onClose}
+      style={{
+        position: "fixed", inset: 0, zIndex: 200, background: "rgba(15,23,42,0.45)",
+        display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+      }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        className="card"
+        style={{ width: "min(560px, 100%)", maxHeight: "82vh", overflowY: "auto", padding: 22 }}
+      >
+        <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
+          <h3 className="t-h3" style={{ margin: 0 }}>{title}</h3>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="닫기"
+            style={{ marginLeft: "auto", border: "none", background: "transparent", cursor: "pointer", color: "var(--ink-muted)", display: "flex" }}
+          >
+            <span className="material-symbols-outlined">close</span>
+          </button>
+        </div>
+        <CellPicker
+          options={options}
+          areaId={value?.areaId}
+          industryId={value?.industryId}
+          onChange={(a, i) => { onPick(a, i); onClose(); }}
+        />
+        {extra}
       </div>
     </div>
   );
@@ -445,6 +681,7 @@ export default function ComparePage() {
   const [base, setBase] = useState(null);       // 기준 상권 {areaId, industryId}
   const [target, setTarget] = useState(null);   // 비교 상권
   const [manual, setManual] = useState(false);  // 비교 대상을 직접 고르는 모드
+  const [picker, setPicker] = useState(null);   // "base" | "target" | null — 열려 있는 선택 창
   const [context, setContext] = useState(null);
   const [data, setData] = useState(null);
   const [thresholds, setThresholds] = useState(null);
@@ -534,89 +771,145 @@ export default function ComparePage() {
     ? `${context.industry_name} ${context.industry_eligible_cells}곳 중 ${context.industry_rank}위`
     : null;
 
+  // 순위는 아래 순위표와 같은 모수를 써야 한다.
+  //
+  // data.left.industry_rank는 전체 읍면동(29곳) 기준이고, 아래 「같은 업종 안에서의 위치」는
+  // 표본 기준을 넘은 셀(18곳) 기준이다. 한 화면에 "29곳 중 19위"와 "18곳 중 17위"가 같이
+  // 뜨면 담당자는 둘 중 무엇이 맞는지 알 수 없다. 화면에서는 순위표 쪽으로 통일한다.
+  const rankLabelFor = (cell) => {
+    const rows = context?.distribution ?? [];
+    const total = context?.industry_eligible_cells ?? rows.length;
+    if (!cell || !total) return null;
+    const row = rows.find((r) => r.area_id === cell.area_id);
+    return row ? `${total}곳 중 ${row.rank}위` : null;
+  };
+
+  const explainHits = data?.diffs?.filter((d) => d.explains) ?? [];
+
   return (
+    /* 3층 구조 (2026-08-29 재편).
+     *
+     *  예전 배치는 [선택] → [순위표 880px] → [지표 대비 1,085px] → … → [판단 83px] 순서로
+     *  전체 3,400px였다. 담당자가 알고 싶은 결론이 제일 아래에 제일 작게 있었고, 비교
+     *  페이지인데 비교 결과가 두 번째였다. 스크롤하면 무엇과 무엇을 견주는 중인지도 사라졌다.
+     *
+     *  지금은 세 층이다.
+     *    1층  화면 위에 붙는 비교 바 — 무엇과 무엇인지 항상 보인다. 고르는 건 팝업.
+     *    2층  결론 — 몇 %p 차이인지, 그 차이를 믿어도 되는지.
+     *    3층  근거 — 전부 접어 둔다. 궁금한 것만 편다.
+     */
     <div className="official-page official-compare-page">
-      <h1 className="t-h1" style={{ margin: 0 }}>상권 비교</h1>
-      <p className="t-body" style={{ color: "var(--ink-muted)", margin: "8px 0 0" }}>
-        기준 상권을 고르면 같은 업종 안에서의 위치와 비교할 만한 상권을 함께 제시합니다.
-      </p>
+      <CompareBar
+        left={data?.left ?? (context ? { area_name: context.area_name, industry_name: context.industry_name, cumulative_closure_rate_pct: context.cumulative_closure_rate_pct } : null)}
+        right={data?.right}
+        leftRank={data ? rankLabelFor(data.left) : rankLabel}
+        rightRank={data ? rankLabelFor(data.right) : null}
+        onEditLeft={() => setPicker("base")}
+        onEditRight={() => { setManual(true); setPicker("target"); }}
+        onSwap={() => {
+          if (!data) return;
+          const nextBase = { areaId: data.right.area_id, industryId: data.right.industry_id };
+          const nextTarget = { areaId: data.left.area_id, industryId: data.left.industry_id };
+          setManual(true);
+          setBase(nextBase);
+          setTarget(nextTarget);
+        }}
+        onCsv={data ? exportCsv : null}
+      />
 
-      <div className="card" style={{ padding: 18, marginTop: 18, display: "flex", gap: 16, flexWrap: "wrap", alignItems: "flex-end" }}>
-        <CellPicker label="기준 상권" options={options} areaId={base?.areaId} industryId={base?.industryId} onChange={pick(setBase, base)} />
-        <div style={{ flex: "1 1 240px", minWidth: 0 }}>
-          <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 6, display: "flex", gap: 8 }}>
-            <span>비교 상권</span>
-            <button
-              onClick={() => setManual((v) => !v)}
-              className="t-caption"
-              style={{ marginLeft: "auto", border: "none", background: "none", cursor: "pointer", color: "var(--primary)", fontWeight: 600, padding: 0 }}
-            >
-              {manual ? "추천으로" : "직접 선택"}
-            </button>
-          </div>
-          {manual ? (
-            <CellPicker options={options} areaId={target?.areaId} industryId={target?.industryId} onChange={pick(setTarget, target)} />
-          ) : (
-            <div className="t-body-sm" style={{ color: "var(--ink-muted)", padding: "8px 0" }}>
-              {data ? `${data.right.area_name} · ${data.right.industry_name}` : "아래 후보에서 선택"}
-            </div>
-          )}
+      {error && <div className="t-body-sm" style={{ color: "var(--error)", marginBottom: 14 }}>{error}</div>}
+      {loading && <div className="t-body-sm" style={{ color: "var(--ink-muted)", marginBottom: 14 }}>불러오는 중…</div>}
+
+      {!loading && data && <VerdictHeadline data={data} />}
+
+      {!loading && !data && context && (
+        <div className="card" style={{ padding: "22px 24px", marginBottom: 18 }}>
+          <div className="t-title">비교할 상권을 고르면 결과가 나옵니다</div>
+          <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "8px 0 0", lineHeight: 1.7 }}>
+            {context.contrast || context.similar
+              ? "위 비교 상권 칸을 누르거나, 아래 「비교 후보」에서 추천 상권을 고르시면 됩니다."
+              : "이 상권은 점포 규모가 비슷한 후보가 없어 추천을 내지 못했습니다. 아래 목록에서 직접 고르시면 됩니다."}
+          </p>
         </div>
-      </div>
+      )}
 
-      {/* 오류는 --error. --accent-orange는 "주의" 등급 색이라 의미가 겹친다. */}
-      {error && <div className="t-body-sm" style={{ color: "var(--error)" }}>{error}</div>}
+      {/* ── 3층: 근거 ───────────────────────────────────────────────── */}
 
-      {context && (
-        <section style={{ marginTop: 30 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <h2 className="t-title" style={{ margin: 0 }}>같은 업종 상권 순위</h2>
-            {rankLabel && (
-              <span className="t-caption" style={{ fontWeight: 600, color: "var(--ink-muted)", background: "var(--surface-container)", borderRadius: "var(--radius-full)", padding: "2px 10px" }}>
-                {rankLabel}
-              </span>
+      {data && (
+        <Section title="무엇이 다른가" caption="지표별 차이와 유의성" defaultOpen>
+          <div className="card" style={{ padding: 22 }}>
+            <DiffRows data={data} />
+            {data.industry_cells && (
+              <div className="t-body-sm" style={{ marginTop: 16, color: "var(--ink-secondary)", lineHeight: 1.8 }}>
+                {explainHits.length > 0 ? (
+                  <>
+                    <span style={{ color: "var(--accent-orange)" }}>●</span>{" "}
+                    <b>{explainHits.map((d) => d.label).join(" · ")}</b>
+                    {" "}— 이 업종({data.industry_cells}곳)에서 폐업률과 함께 움직였고 두 상권의 차이도 큽니다.
+                    현장에서 먼저 확인할 후보입니다.
+                  </>
+                ) : (
+                  <>이 업종({data.industry_cells}곳)에서는 폐업률과 뚜렷하게 함께 움직인 지표가 없습니다. 차이의 원인을 지표로 좁히기 어렵습니다.</>
+                )}
+              </div>
             )}
-          </div>
-          <div className="card" style={{ padding: "20px 24px" }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 10, flexWrap: "wrap" }}>
-              <span className="t-h3">{context.area_name}</span>
-              <span className="t-caption" style={{ color: "var(--ink-muted)" }}>
-                {context.industry_name} · 점포 {num(context.store_count)}곳
-              </span>
-              <span style={{ marginLeft: "auto", textAlign: "right" }}>
-                <span className="t-metric" style={{ fontSize: 26 }}>
-                  {fmt(context.cumulative_closure_rate_pct, 2)}%
-                </span>
-                <span className="t-caption" style={{ display: "block", color: "var(--ink-muted)", marginTop: 2 }}>
-                  최근 1년 누적 폐업률
-                </span>
-              </span>
-            </div>
-            {context.sample_insufficient ? (
-              <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "14px 0 0" }}>
-                표본 기준 미달로 업종 내 순위를 내지 않습니다.
-              </p>
-            ) : (
-              <div style={{ marginTop: 16 }}>
-                <IndustryRanking
-                  context={context}
-                  targetAreaId={data?.right?.area_id}
-                  onPick={(row) => setTarget({ areaId: row.area_id, industryId: context.industry_id })}
-                />
+            {data.diffs.find((d) => !d.comparable)?.note && (
+              <div
+                className="t-caption"
+                style={{
+                  color: "var(--ink-secondary)", background: "var(--surface-container-low)",
+                  padding: "10px 14px", borderRadius: "var(--radius-md)", marginTop: 16, lineHeight: 1.6,
+                }}
+              >
+                {data.diffs.find((d) => !d.comparable).note}
               </div>
             )}
           </div>
-        </section>
+        </Section>
       )}
 
-      {context && !manual && (context.contrast || context.similar) && (
-        <section style={{ marginTop: 30 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-            <h2 className="t-title" style={{ margin: 0 }}>비교 후보</h2>
-            <span className="t-caption" style={{ color: "var(--ink-faint)" }}>
-              점포 {num(context.peer_store_min)}~{num(context.peer_store_max)}곳 · {context.peers.length}곳
-            </span>
+      {data?.trend?.length > 2 && (
+        <Section title="분기별 추이" caption="원래 높았나, 최근 높아졌나">
+          <div className="card" style={{ padding: 22 }}>
+            <p className="t-body-sm" style={{ margin: "0 0 14px", color: "var(--ink-muted)" }}>
+              최신 분기만으로는 원래 높았던 상권과 최근 높아진 상권이 구분되지 않습니다.
+            </p>
+            <TrendOverlay trend={data.trend} leftName={data.left.area_name} rightName={data.right.area_name} />
           </div>
+        </Section>
+      )}
+
+      {data && (
+        <Section title="배후 여건과 상권 유형" caption="인구·업력·유형">
+          <ConditionCard data={data} />
+          <PrescriptionCard data={data} />
+        </Section>
+      )}
+
+      {context && !context.sample_insufficient && (
+        <Section
+          title="같은 업종 안에서의 위치"
+          caption={rankLabel ?? undefined}
+          /* 비교 상대가 아직 없으면 펼쳐 둔다. 접어 두면 첫 화면에 고를 것이 하나도
+             없어서 "비교할 상권을 고르세요"라는 안내만 남는다. */
+          defaultOpen={!data}
+        >
+          <div className="card" style={{ padding: "20px 24px" }}>
+            <IndustryRanking
+              context={context}
+              targetAreaId={data?.right?.area_id}
+              onPick={(row) => setTarget({ areaId: row.area_id, industryId: context.industry_id })}
+            />
+          </div>
+        </Section>
+      )}
+
+      {context && (context.contrast || context.similar) && (
+        <Section
+          title="비교 후보"
+          caption={`점포 ${num(context.peer_store_min)}~${num(context.peer_store_max)}곳 · ${context.peers.length}곳`}
+          defaultOpen={!data}
+        >
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <PeerCard
               peer={context.contrast}
@@ -633,144 +926,62 @@ export default function ComparePage() {
               onPick={(p) => setTarget({ areaId: p.area_id, industryId: p.industry_id })}
             />
           </div>
-
-          {context.peers.length > 2 && (
-            <details style={{ marginTop: 12 }}>
-              <summary className="t-caption" style={{ cursor: "pointer", color: "var(--ink-muted)", padding: "6px 0" }}>
-                후보 {context.peers.length}곳 전체
-              </summary>
-              <div className="card" style={{ marginTop: 8, padding: 0, overflowX: "auto" }}>
-                <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 460 }}>
-                  <thead>
-                    <tr style={{ borderBottom: "1px solid var(--hairline)" }}>
-                      {["읍면동", "점포", "폐업률", "기준 대비", ""].map((h, i) => (
-                        <th key={h || i} className="t-eyebrow" style={{ textAlign: i === 0 ? "left" : "right", padding: "10px 14px", color: "var(--ink-faint)", fontWeight: 500 }}>{h}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {context.peers.map((p) => (
-                      <tr key={p.area_id} style={{ borderBottom: "1px solid var(--hairline)" }}>
-                        <td className="t-body-sm" style={{ padding: "12px 14px" }}>
-                          {p.area_name}
-                          {p.significant && <span className="badge badge-neutral" style={{ marginLeft: 8 }}>구분됨</span>}
-                        </td>
-                        <td className="t-body-sm" style={{ padding: "12px 14px", textAlign: "right", color: "var(--ink-muted)", fontVariantNumeric: "tabular-nums" }}>{num(p.store_count)}</td>
-                        <td className="t-body-sm" style={{ padding: "12px 14px", textAlign: "right", fontVariantNumeric: "tabular-nums" }}>{fmt(p.cumulative_closure_rate_pct, 2)}%</td>
-                        <td className="t-body-sm" style={{ padding: "12px 14px", textAlign: "right", color: "var(--ink-muted)", fontVariantNumeric: "tabular-nums" }}>
-                          {p.delta_pp > 0 ? "+" : ""}{fmt(p.delta_pp, 2)}%p
-                        </td>
-                        <td style={{ padding: "10px 14px", textAlign: "right" }}>
-                          <button
-                            className="t-caption"
-                            style={{ border: "none", background: "none", cursor: "pointer", color: "var(--primary)", fontWeight: 600, padding: 0 }}
-                            onClick={() => setTarget({ areaId: p.area_id, industryId: p.industry_id })}
-                          >
-                            비교
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </details>
-          )}
-        </section>
+        </Section>
       )}
 
-      {loading && <div className="t-body-sm" style={{ color: "var(--ink-muted)", marginTop: 24 }}>불러오는 중…</div>}
-
-      {!loading && data && (
-        <section style={{ marginTop: 30 }}>
-          <div className="card" style={{ padding: 22 }}>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr auto 1fr", gap: 16, alignItems: "start" }}>
-              {[["left", "left"], ["", ""], ["right", "right"]].map(([key, align], i) =>
-                key === "" ? (
-                  <div key="vs" className="t-caption" style={{ color: "var(--ink-faint)", paddingTop: 4 }}>vs</div>
-                ) : (
-                  <div key={key} style={{ textAlign: align }}>
-                    <Link
-                      to={`/cells/${data[key].area_id}/${data[key].industry_id}`}
-                      className="t-title"
-                      style={{ color: "var(--on-surface)", textDecoration: "none" }}
-                    >
-                      {data[key].area_name} · {data[key].industry_name}
-                    </Link>
-                    <div style={{ display: "flex", gap: 6, marginTop: 8, justifyContent: align === "right" ? "flex-end" : "flex-start", flexWrap: "wrap" }}>
-                      <GradeBadge grade={data[key].risk_grade} />
-                      <TypeBadge type={data[key].cell_type} />
-                    </div>
-                    {data[key].interval && (
-                      <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 8, fontVariantNumeric: "tabular-nums" }}>
-                        95% 구간 {fmt(data[key].interval.lower_pct, 2)}~{fmt(data[key].interval.upper_pct, 2)}%
-                        {data[key].interval.approximate && " (근사)"}
-                      </div>
-                    )}
-                  </div>
-                ),
-              )}
-            </div>
-
-            <div style={{ display: "flex", alignItems: "center", marginTop: 22, marginBottom: 4 }}>
-              <h3 className="t-eyebrow" style={{ margin: 0, color: "var(--ink-faint)" }}>무엇이 다른가</h3>
-              <button className="btn-utility" style={{ marginLeft: "auto" }} onClick={exportCsv}>CSV 내려받기</button>
-            </div>
-            <div style={{ marginTop: 10 }}>
-              <DiffRows data={data} />
-            </div>
-
-            {(() => {
-              const hits = data.diffs.filter((d) => d.explains);
-              if (!data.industry_cells) return null;
-              return (
-                <div className="t-body-sm" style={{ marginTop: 16, color: "var(--ink-secondary)", lineHeight: 1.8 }}>
-                  {hits.length > 0 ? (
-                    <>
-                      <span style={{ color: "var(--accent-orange)" }}>●</span>{" "}
-                      <b>{hits.map((d) => d.label).join(" · ")}</b>
-                      {" "}— 이 업종({data.industry_cells}곳)에서 폐업률과 함께 움직였고 두 상권의 차이도 큽니다.
-                      현장에서 먼저 확인할 후보입니다.
-                    </>
-                  ) : (
-                    <>이 업종({data.industry_cells}곳)에서는 폐업률과 뚜렷하게 함께 움직인 지표가 없습니다. 차이의 원인을 지표로 좁히기 어렵습니다.</>
-                  )}
-                </div>
-              );
-            })()}
-
-            {data.diffs.find((d) => !d.comparable)?.note && (
-              <div
-                className="t-caption"
-                style={{
-                  color: "var(--ink-secondary)", background: "var(--surface-container-low)",
-                  padding: "10px 14px", borderRadius: "var(--radius-md)", marginTop: 16, lineHeight: 1.6,
-                }}
-              >
-                {data.diffs.find((d) => !d.comparable).note}
-              </div>
-            )}
-          </div>
-
-          {data.trend?.length > 2 && (
-            <div className="card" style={{ padding: 22, marginTop: 14 }}>
-              <h3 className="t-eyebrow" style={{ margin: "0 0 4px", color: "var(--ink-faint)" }}>분기별 누적 폐업률</h3>
-              <p className="t-body-sm" style={{ margin: "0 0 14px", color: "var(--ink-muted)" }}>
-                최신 분기만으로는 원래 높았던 상권과 최근 높아진 상권이 구분되지 않습니다.
-              </p>
-              <TrendOverlay trend={data.trend} leftName={data.left.area_name} rightName={data.right.area_name} />
-            </div>
-          )}
-
-          <ConditionCard data={data} />
-          <PrescriptionCard data={data} />
-
-          <div className="card" style={{ padding: "16px 20px", marginTop: 14, borderLeft: "3px solid var(--primary)" }}>
-            <div className="t-eyebrow" style={{ color: "var(--ink-faint)" }}>판단</div>
-            <p className="t-body" style={{ margin: "6px 0 0", color: "var(--on-surface)", lineHeight: 1.7 }}>{data.verdict}</p>
-          </div>
-        </section>
+      {context?.sample_insufficient && (
+        <div className="t-body-sm" style={{ color: "var(--ink-muted)", marginBottom: 14 }}>
+          기준 상권이 표본 기준에 미달해 업종 내 순위를 내지 않습니다.
+        </div>
       )}
+
+      <PickerModal
+        open={picker === "base"}
+        title="기준 상권 선택"
+        options={options}
+        value={base}
+        onPick={(a, i) => pick(setBase, base)(a, i)}
+        onClose={() => setPicker(null)}
+      />
+      <PickerModal
+        open={picker === "target"}
+        title="비교 상권 선택"
+        options={options}
+        value={target}
+        onPick={(a, i) => pick(setTarget, target)(a, i)}
+        onClose={() => setPicker(null)}
+        extra={
+          context?.peers?.length ? (
+            <div style={{ marginTop: 18 }}>
+              <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 8 }}>추천 후보</div>
+              <div style={{ display: "grid", gap: 6 }}>
+                {context.peers.slice(0, 6).map((peer) => (
+                  <button
+                    key={peer.area_id}
+                    type="button"
+                    onClick={() => {
+                      setTarget({ areaId: peer.area_id, industryId: peer.industry_id });
+                      setPicker(null);
+                    }}
+                    style={{
+                      display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
+                      padding: "10px 12px", cursor: "pointer",
+                      border: "1px solid var(--hairline)", borderRadius: "var(--radius-sm)",
+                      background: "var(--surface-container-lowest)",
+                    }}
+                  >
+                    <span className="t-body-sm" style={{ fontWeight: 600 }}>{peer.area_name}</span>
+                    <span className="t-caption" style={{ color: "var(--ink-muted)" }}>점포 {num(peer.store_count)}곳</span>
+                    <span className="t-body-sm" style={{ marginLeft: "auto", fontVariantNumeric: "tabular-nums" }}>
+                      {fmt(peer.cumulative_closure_rate_pct, 1)}%
+                    </span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          ) : null
+        }
+      />
 
       <MethodNote basis={data?.basis} notice={data?.notice} context={context} />
     </div>
