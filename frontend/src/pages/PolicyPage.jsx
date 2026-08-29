@@ -51,7 +51,7 @@ const QUADRANT_META = {
 
 function PageHeader({ title, desc }) {
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div className="official-page-header" style={{ marginBottom: 24 }}>
       <h1 className="t-h1" style={{ margin: 0 }}>{title}</h1>
       <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>{desc}</p>
     </div>
@@ -215,7 +215,7 @@ export default function PolicyPage() {
   const topQ1 = [...data.Q1].sort((a, b) => b.actual_closure_rate_pct - a.actual_closure_rate_pct)[0];
 
   return (
-    <div>
+    <div className="official-page official-policy-page">
       <PageHeader
         title="현장 확인 우선순위"
         desc="최근 1년 누적 폐업률(4분기 합산 관측치) × 영향 점포 수 기준 확인 순서입니다. 지원 대상 결정이 아닙니다."

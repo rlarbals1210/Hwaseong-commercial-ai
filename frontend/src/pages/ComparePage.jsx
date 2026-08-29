@@ -535,7 +535,7 @@ export default function ComparePage() {
     : null;
 
   return (
-    <div>
+    <div className="official-page official-compare-page">
       <h1 className="t-h1" style={{ margin: 0 }}>상권 비교</h1>
       <p className="t-body" style={{ color: "var(--ink-muted)", margin: "8px 0 0" }}>
         기준 상권을 고르면 같은 업종 안에서의 위치와 비교할 만한 상권을 함께 제시합니다.

@@ -467,7 +467,7 @@ export default function BlindspotPage() {
   const highlights = band === "all" ? data?.items ?? [] : [];
 
   return (
-    <div>
+    <div className="official-page official-blindspot-page">
       <h1 className="t-h1" style={{ margin: 0 }}>사각지대</h1>
       <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>
         점포 {sampleMin}곳 미만으로 통계 판단을 보류한 상권입니다. 등급을 부여하지 않으며 폐업 건수 순으로 표시합니다.

@@ -328,7 +328,7 @@ export default function CellDetailPage() {
   const sampleThin = Boolean(cell.sample_insufficient);
 
   return (
-    <div style={{ maxWidth: 760 }}>
+    <div className="official-page official-detail-page" style={{ maxWidth: 820 }}>
       <Link to="/dashboard" className="t-caption" style={{ color: "var(--primary)", textDecoration: "none" }}>
         ← 조기경보
       </Link>

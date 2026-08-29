@@ -32,7 +32,7 @@ const fmtPct = (v, digits = 1) => {
 
 function PageHeader({ title, desc }) {
   return (
-    <div style={{ marginBottom: 24 }}>
+    <div className="official-page-header" style={{ marginBottom: 24 }}>
       <h1 className="t-h1" style={{ margin: 0 }}>{title}</h1>
       <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>{desc}</p>
     </div>
@@ -212,7 +212,7 @@ export default function DashboardPage() {
   const topReviewItems = data.slice(0, 2);
 
   return (
-    <div>
+    <div className="official-page official-dashboard-page">
       <PageHeader
         title="폐업 위험 조기경보"
         desc="AI가 2분기 뒤 폐업 확률을 상대 순위로 예측한 상권입니다."

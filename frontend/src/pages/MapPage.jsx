@@ -490,8 +490,8 @@ export default function MapPage() {
   }, [tab]);
 
   return (
-    <div>
-      <div style={{ marginBottom: 24 }}>
+    <div className="official-page official-map-page">
+      <div className="official-page-header" style={{ marginBottom: 24 }}>
         <h1 className="t-h1" style={{ margin: 0 }}>상권 위험 지도</h1>
         <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>
           읍면동별 위험 업종 비율 — 최근 1년 누적 폐업률 기준(4분기 합산, 보정 없음). 읍면동을 클릭하면 상세 지표가 표시됩니다.
@@ -535,7 +535,7 @@ export default function MapPage() {
                 display: "flex",
                 alignItems: "center",
                 gap: 8,
-                background: "rgba(255,255,255,0.96)",
+                background: "var(--surface-container-lowest)",
                 border: "1px solid var(--error)",
                 borderRadius: "var(--radius-lg)",
                 padding: "12px 14px",
