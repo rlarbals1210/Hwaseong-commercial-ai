@@ -158,10 +158,10 @@ SELECT (SELECT count(*) FROM commercial_quarters)                        AS 상�
 |---|---|
 | 상권셀 | 35,513 |
 | 예측 | 1,810 |
-| 순위보유 | **231** |
-| 기여도 | **693** |
+| 순위보유 | **382** |
+| 기여도 | **1,146** |
 | 동요약 | 29 |
-| 표본기준 | **50** |
+| 표본기준 | **30** |
 
 유령 행이 없는지도 확인한다(0이어야 정상).
 
@@ -185,8 +185,8 @@ cd frontend && npm install && npm run dev          # 터미널 2
 
 화면 확인 포인트:
 
-- 조기경보 대시보드 1순위가 **새솔동 · 한식 (실제 4.17%)**
-- 업종 필터가 **33개**, 안내 문구가 "점포 수 50개 이상"
+- 조기경보 대시보드의 전체 분석 대상이 **382개**
+- 업종 필터가 **46개**, 안내 문구가 "점포 수 30개 이상"
 - 사이드바에 **현장점검 우선순위** (구 "정책자금 우선순위")
 
 ---
@@ -198,7 +198,7 @@ cd frontend && npm install && npm run dev          # 터미널 2
 | `command not found: python` | 가상환경 미활성화 → `source .venv/bin/activate` |
 | `JWT_SECRET_KEY 환경변수가 설정되지 않았습니다` | `.env`의 `JWT_SECRET_KEY`가 빔 → `openssl rand -hex 32`로 생성 |
 | 로그인은 되는데 API가 401 | 보안 수정 이전 토큰이 남음 → **로그아웃 후 재로그인** |
-| `ranked_predictions`가 382 | `risk_thresholds.json`이 옛 버전(`sample_min: 30`) → `git pull` 다시 |
+| `ranked_predictions`가 231 | DB가 옛 기준(`sample_min: 50`) → `git pull` 후 `python ai/import_normalized_db.py` 재실행 |
 | 지도가 "인증 실패" | `frontend/.env`의 NCP 키 없음/미등록 → README의 네이버 지도 절 참고 |
 | 테이블이 안 생김 | `alembic upgrade head` 누락, 또는 `.env`의 DB 이름 확인 |
 | 엉뚱한 DB에 테이블 생성 | `.env`가 `hwaseong_db`를 가리키는지 확인. 같은 서버의 `commercial_db`는 **구 서울 프로젝트**다 |

@@ -184,7 +184,7 @@ class RiskThresholdSet(Base):
     danger_threshold_pct = Column(Float, nullable=False)
     area_ratio_avg_pct = Column(Float, nullable=False)
     area_ratio_danger_pct = Column(Float, nullable=False)
-    sample_min = Column(Integer, nullable=False, default=50)
+    sample_min = Column(Integer, nullable=False, default=30)
     # 상위 30% 경계(주의 등급). danger_threshold_pct는 상위 10% 경계다.
     caution_threshold_pct = Column(Float, nullable=True)
     window_quarters = Column(Integer, nullable=True, default=4)

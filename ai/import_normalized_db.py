@@ -63,7 +63,7 @@ SCORES_REQUIRED = {
     "행정동명", "통합카테고리", "기준_년분기_코드", "성장확률", "등급",
     "업종내_순위", "업종내_전체동수", "상위_퍼센트",
 }
-SAMPLE_MIN = 50  # 기본값. 실제로는 risk_thresholds.json의 sample_min을 우선 사용한다.
+SAMPLE_MIN = 30  # 기본값. 실제로는 risk_thresholds.json의 sample_min을 우선 사용한다.
 STORE_CLUSTER_GRID_DEGREES = 0.002
 
 # 동 단위 등급의 최소 분모. backend/services/risk.py의 AREA_MIN_SUFFICIENT_CELLS와

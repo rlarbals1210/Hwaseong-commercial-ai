@@ -18,6 +18,7 @@ from backend.routers.recommend import (
     store_clusters,
 )
 from backend.services.recommend import AXES, WEIGHT_PRESETS, Candidate, score_candidates
+from backend.services.risk import SAMPLE_MIN
 
 
 def test_public_presets_match_user_decisions_and_keep_saturation_internal():
@@ -49,14 +50,22 @@ def test_balanced_preset_scores_and_narrow_spread():
 
 def test_small_samples_are_ranked_after_neutral_shrinkage():
     candidates = [
-        Candidate(1, "표본충분동", 1, "한식", 80.0, 50, 0.3, 2.0, 2, 3.0, 20.0, None),
-        Candidate(2, "표본충분2동", 1, "한식", 90.0, 60, 0.2, 2.0, 2, 3.0, 20.0, None),
         Candidate(
-            3, "표본보통동", 1, "한식", 100.0, 40, 0.1, 1.0, 1, 2.0, 10.0, None,
+            1, "표본충분동", 1, "한식", 80.0, SAMPLE_MIN + 20,
+            0.3, 2.0, 2, 3.0, 20.0, None,
+        ),
+        Candidate(
+            2, "표본충분2동", 1, "한식", 90.0, SAMPLE_MIN + 30,
+            0.2, 2.0, 2, 3.0, 20.0, None,
+        ),
+        Candidate(
+            3, "표본보통동", 1, "한식", 100.0, int(SAMPLE_MIN * 0.8),
+            0.1, 1.0, 1, 2.0, 10.0, None,
             sample_insufficient=True,
         ),
         Candidate(
-            4, "표본부족동", 1, "한식", 100.0, 10, 0.0, 0.0, 0, 1.0, 5.0, None,
+            4, "표본부족동", 1, "한식", 100.0, int(SAMPLE_MIN * 0.2),
+            0.0, 0.0, 0, 1.0, 5.0, None,
             sample_insufficient=True,
         ),
         Candidate(
@@ -155,7 +164,7 @@ def test_public_recommendation_never_returns_absolute_prediction():
             area_id=area.id,
             industry_id=industry.id,
             quarter_code=20254,
-            store_count=20 if small_sample else 50 + index * 10,
+            store_count=int(SAMPLE_MIN * 0.2) if small_sample else SAMPLE_MIN + index * 10,
             saturation_rate=0.1 * index,
             closure_rate_cum4=0.01 * index,
             closure_count_cum4=index,
@@ -192,6 +201,7 @@ def test_public_recommendation_never_returns_absolute_prediction():
     assert payload["sufficient_count"] == 3
     assert payload["limited_count"] == 1
     assert payload["unobserved_count"] == 1
+    assert f"점포 {SAMPLE_MIN}곳 미만" in payload["relative_notice"]
     low_sample = next(row for row in payload["results"] if row["area_name"] == "테스트4동")
     assert low_sample["evidence_key"] == "low"
     assert low_sample["score_adjusted"] is True

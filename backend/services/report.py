@@ -3,6 +3,8 @@ from __future__ import annotations
 
 from urllib.parse import quote
 
+from .risk import SAMPLE_MIN
+
 
 REPORT_VERSION = "rules-v1"
 AI_DISCLOSURE = (
@@ -38,7 +40,7 @@ def build_report(score: dict, observed: dict) -> dict:
     cautions = score.get("cons") or ["상대점수에서 40점 미만인 두드러진 축이 없습니다."]
     if observed.get("sample_insufficient"):
         cautions = [
-            "점포가 50곳 미만이라 비율·순위·등급을 판단하지 않습니다.",
+            f"점포가 {SAMPLE_MIN}곳 미만이라 비율·순위·등급을 판단하지 않습니다.",
             *cautions,
         ]
 

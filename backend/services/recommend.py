@@ -61,6 +61,7 @@ from __future__ import annotations
 
 import csv
 import json
+import math
 from dataclasses import dataclass, field
 from functools import lru_cache
 from pathlib import Path
@@ -125,8 +126,9 @@ AXIS_DESCRIPTIONS = {
 GROWTH_SPREAD_MIN = 3.0
 
 # 모든 관측 지역을 비교하되 작은 셀이 순위를 과도하게 흔들지 않게 한다.
-# 30은 셀 단위 모델의 학습 최소 점포 수이고, 50은 기존 통계 판정 기준이다.
-EVIDENCE_MEDIUM_MIN = 30
+# 근거 보통의 하한은 표본충분 기준의 60%다. 표본 기준이 50이던 때의 30~49 구간을
+# 같은 비율로 유지하므로, 현재 SAMPLE_MIN=30에서는 18~29개가 근거 보통이다.
+EVIDENCE_MEDIUM_MIN = math.ceil(SAMPLE_MIN * 0.6)
 NEUTRAL_SCORE = 50.0
 PROCESSED_DATA_DIR = Path(__file__).resolve().parents[2] / "data" / "processed"
 DEMAND_SCORES_PATH = PROCESSED_DATA_DIR / "demand_scores.csv"

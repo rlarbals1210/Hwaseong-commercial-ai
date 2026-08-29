@@ -40,7 +40,7 @@ from sqlalchemy.orm import Session
 
 from ..database import get_db
 from ..models import AdminArea, CommercialQuarter, IndustryCategory
-from ..services.risk import WINDOW_QUARTERS, pct, quarter_label
+from ..services.risk import SAMPLE_MIN, WINDOW_QUARTERS, pct, quarter_label
 
 try:
     sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent / "ai"))
@@ -341,7 +341,7 @@ def industry_map(industry_id: int = Query(...), db: Session = Depends(get_db)):
             else:
                 label = f"{low:.1f} ~ {high:.1f}%"
             legend.append({"label": label, "color": color})
-    legend.append({"label": "판단보류 (점포 50곳 미만)", "color": MAP_HOLD_COLOR})
+    legend.append({"label": f"판단보류 (점포 {SAMPLE_MIN}곳 미만)", "color": MAP_HOLD_COLOR})
 
     city_avg = (
         db.query(func.avg(CommercialQuarter.closure_rate_cum4))
@@ -378,7 +378,7 @@ def industry_map(industry_id: int = Query(...), db: Session = Depends(get_db)):
 # 사이드바의 2단 선택과 트렌드 화면의 토글이 이 엔드포인트를 쓴다.
 #
 # 셀 수가 아니라 **판단 가능한 읍면동 수**를 함께 내린다. 74개 중분류 중 41개는
-# 화성시 어느 읍면동에서도 점포가 50곳을 넘지 않아 비율로 판단할 수 없다.
+# 화성시 어느 읍면동에서도 점포가 표본 기준을 넘지 않아 비율로 판단할 수 없다.
 # 고르기 전에 그 사실을 알려주지 않으면 지도가 통째로 회색이 된 뒤에야 알게 된다.
 @router.get("/industry-tree")
 def industry_tree(db: Session = Depends(get_db)):

@@ -11,6 +11,7 @@ from backend.routers.trends import (
     industry_trends,
     overview,
 )
+from backend.services.risk import SAMPLE_MIN
 
 
 def test_six_trend_views_use_corrected_opening_rate():
@@ -64,6 +65,7 @@ def test_six_trend_views_use_corrected_opening_rate():
 
     assert city["series"][-1]["opening_rate_pct"] == 4.0
     assert city["series"][-1]["opening_rate_pct"] != 99.0
+    assert f"점포 {SAMPLE_MIN}곳 이상" in city["method_notice"]
     assert len(by_area["results"]) == 2
     assert len(by_industry["results"]) == 2
     assert cell["series"][-1]["opening_rate_pct"] == 3.0

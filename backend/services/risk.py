@@ -17,13 +17,16 @@ _THRESHOLDS_PATH = _PROJECT_ROOT / _PROCESSED_DIR / "risk_thresholds.json"
 # danger = 상위 10% 경계, caution = 상위 30% 경계. 절대 임계가 아니라 화성시 내 상대 순위이며,
 # 화면에 그 점을 명시해야 한다. 산출 근거는 ai/cumulative.py 주석 참조.
 _DEFAULT_THRESHOLDS = {
-    "avg_closure_rate_pct": 5.9,
-    "danger_threshold_pct": 10.35,
-    "caution_threshold_pct": 7.26,
-    "dong_ratio_avg_pct": 12.5,
-    "dong_ratio_danger_pct": 34.6,
-    "sample_min": 50,
+    "avg_closure_rate_pct": 5.56,
+    "danger_threshold_pct": 9.71,
+    "caution_threshold_pct": 6.9,
+    "dong_ratio_avg_pct": 10.84,
+    "dong_ratio_danger_pct": 25.46,
+    "sample_min": 30,
     "window_quarters": 4,
+    "eligible_cells": 382,
+    "cell_type_open_cut_pct": 1.91,
+    "cell_type_close_cut_pct": 5.16,
 }
 
 

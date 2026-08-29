@@ -21,7 +21,7 @@ from ..schemas import (
     TrendAreaRankResponse,
     TrendIndustryRankResponse,
 )
-from ..services.risk import quarter_label
+from ..services.risk import SAMPLE_MIN, quarter_label
 
 
 router = APIRouter(prefix="/api/trends", tags=["trends"])
@@ -131,7 +131,7 @@ def overview(db: Session = Depends(get_db)):
         "latest_quarter": _latest(db),
         "series": _series(rows, quarters),
         "method_notice": (
-            "점포 50곳 이상인 읍면동 x 업종 셀을 점포 수로 가중한 관측 추이입니다. "
+            f"점포 {SAMPLE_MIN}곳 이상인 읍면동 x 업종 셀을 점포 수로 가중한 관측 추이입니다. "
             "폐업률은 최근 4분기 누적, 개업률은 수록 지연을 보정한 4분기 이동평균입니다."
         ),
     }
