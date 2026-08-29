@@ -582,75 +582,34 @@ export default function MapPage() {
 
   return (
     <div className="official-page official-map-page">
-      <div className="official-page-header" style={{ marginBottom: 24 }}>
-        <h1 className="t-h1" style={{ margin: 0 }}>상권 위험 지도</h1>
-        <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>
-          읍면동별 위험 업종 비율 — 최근 1년 누적 폐업률 기준(4분기 합산, 보정 없음). 읍면동을 클릭하면 상세 지표가 표시됩니다.
-        </p>
-      </div>
+      <div className={`official-map-workspace${tab === "ranking" ? " is-ranking" : ""}`}>
+        {/* 지도와 순위표는 같은 작업 공간 안에서 전환한다. 지도에서는 조작부가 지도 위에
+            떠 있고, 순위표에서는 첫 카드와 겹치지 않도록 상단 여백을 확보한다. */}
+        <div className="official-map-view-switch">
+          <TabStrip
+            tabs={[
+              { key: "map", label: "지도" },
+              { key: "ranking", label: `순위표${ranking.length ? ` (${ranking.length})` : ""}` },
+            ]}
+            value={tab}
+            onChange={(next) => {
+              setTooltip(null);
+              setTab(next);
+            }}
+            ariaLabel="상권 위험 지도 보기 선택"
+          />
+        </div>
 
-      {/* 순위표가 지도(620px) 아래라 첫 화면에서 잘렸다. 접기로는 시작 위치가 안 바뀌어
-          탭으로 나눈다 — 둘 다 같은 높이에서 시작한다. 라벨에 건수를 붙여 표가 숨은 게
-          아니라는 걸 보이게 한다(시연 중 순위표를 지나칠 수 있다). */}
-      <div style={{ maxWidth: 320, marginBottom: 16 }}>
-        <TabStrip
-          tabs={[
-            { key: "map", label: "지도" },
-            { key: "ranking", label: `순위표${ranking.length ? ` (${ranking.length})` : ""}` },
-          ]}
-          value={tab}
-          onChange={(next) => {
-            setTooltip(null);
-            setTab(next);
-          }}
-          ariaLabel="상권 위험 지도 보기 선택"
-        />
-      </div>
-
-      {/* 지도를 옆 패널과 나눠 쓰면 폭이 851px에 묶이는데, 화성시 경계가 그 폭에서
-          zoom 10으로만 맞는다(zoom 11은 920px가 필요). 정수 줌만 되는 지도라
-          한 단계 차이가 곧 2배 차이여서 화성시가 화면의 절반만 차지했다.
-          지도를 본문 전체 폭으로 빼면 zoom 11이 들어가고, 상세 패널은 아래로 내린다. */}
-      <div style={{ display: tab === "map" ? "block" : "none" }}>
-        <div style={{ display: "flex", gap: 16, alignItems: "flex-start", flexWrap: "wrap" }}>
-        <div style={{ position: "relative", flex: "1 1 620px", minWidth: 0 }}>
+        <div className="official-map-stage" style={{ display: tab === "map" ? "block" : "none" }}>
           {mapError && (
-            <div
-              role="alert"
-              style={{
-                position: "absolute",
-                top: 16,
-                left: 16,
-                right: 16,
-                zIndex: 20,
-                display: "flex",
-                alignItems: "center",
-                gap: 8,
-                background: "var(--surface-container-lowest)",
-                border: "1px solid var(--error)",
-                borderRadius: "var(--radius-lg)",
-                padding: "12px 14px",
-                boxShadow: "var(--elev-1)",
-              }}
-            >
+            <div role="alert" className="official-map-error">
               <span className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--error)" }}>error</span>
               <span className="t-body-sm" style={{ color: "var(--on-surface)" }}>{mapError}</span>
             </div>
           )}
           <div
             ref={mapRef}
-            /* 화성시 경계는 가로 약 56km x 세로 약 33km(1.7:1)인데 지도 칸이 거의 정사각형이라
-               fitBounds가 가로에 맞추느라 위아래로 남의 동네가 잔뜩 들어왔다. 칸 비율을
-               데이터 비율에 맞추면 같은 폭에서 화성시가 훨씬 크게 보인다.
-               좁은 화면에서 너무 납작해지지 않게 최소 높이를 둔다. */
-            style={{
-              aspectRatio: "1.7 / 1",
-              minHeight: 360,
-              maxHeight: 620,
-              borderRadius: "var(--radius-lg)",
-              overflow: "hidden",
-              border: "1px solid var(--hairline)",
-            }}
+            className="official-map-canvas"
           >
             {!NAVER_CLIENT_ID && (
               <div style={{ height: "100%", display: "flex", alignItems: "center", justifyContent: "center", color: "var(--outline)", flexDirection: "column", gap: 8 }}>
@@ -660,26 +619,11 @@ export default function MapPage() {
             )}
           </div>
 
-          {/* 범례를 지도 위에 띄우면 좌하단 읍면동을 가린다. 안내 문구가 길어 세로로 커지는
-              구조라 더 그렇다. 지도 아래로 빼고 가로로 눕혔다 — 가리는 것도 없고
-              좁은 화면에서 접히기만 한다. */}
-          <div
-            style={{
-              display: "flex",
-              alignItems: "baseline",
-              gap: 16,
-              flexWrap: "wrap",
-              marginTop: 10,
-              padding: "10px 14px",
-              background: "var(--surface-container-low)",
-              border: "1px solid var(--hairline)",
-              borderRadius: "var(--radius-md)",
-            }}
-          >
-            <span className="t-eyebrow" style={{ color: "var(--ink-muted)", textTransform: "uppercase", flexShrink: 0 }}>
+          <div className="official-map-legend">
+            <span className="t-eyebrow official-map-legend-title">
               위험 업종 비율
             </span>
-            <div style={{ display: "flex", gap: 14, flexWrap: "wrap" }}>
+            <div className="official-map-legend-items">
               {LEGEND.map(({ label, color }) => (
                 <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
                   <span style={{ width: 10, height: 10, borderRadius: "var(--radius-full)", background: color, display: "inline-block", flexShrink: 0 }} />
@@ -687,48 +631,45 @@ export default function MapPage() {
                 </span>
               ))}
             </div>
-            <span className="t-caption" style={{ color: "var(--ink-faint)", lineHeight: 1.6, flex: "1 1 260px", minWidth: 0 }}>
+            <span className="t-caption official-map-legend-note">
               {OPACITY_NOTE}
             </span>
           </div>
+
+          {selected && (
+            <div className="official-map-detail-panel">
+              <AreaPanel
+                selected={selected}
+                detail={detail}
+                loading={detailLoading}
+                onClose={() => setSelected(null)}
+              />
+            </div>
+          )}
         </div>
 
-        {/* 아무것도 안 고른 상태에서는 패널을 그리지 않는다. 지도가 본문 전체 폭을 쓰고,
-            "읍면동을 클릭하면 상세 지표가 표시됩니다" 안내는 화면 설명에 이미 있다. */}
-        {selected && (
-          <div style={{ flex: "0 0 340px", maxWidth: "100%", position: "sticky", top: 16 }}>
-            <AreaPanel
-              selected={selected}
-              detail={detail}
-              loading={detailLoading}
-              onClose={() => setSelected(null)}
-            />
-          </div>
-        )}
+        <div className="official-map-ranking" style={{ display: tab === "ranking" ? "block" : "none" }}>
+          <RankingTable
+            rows={ranking}
+            loading={rankingLoading}
+            error={rankingError}
+            category={category}
+            categories={categories}
+            categoryError={categoryError}
+            onCategoryChange={(next) => {
+              setRankingLoading(true);
+              setRankingError("");
+              setCategory(next);
+            }}
+            sort={rankSort}
+            onSortChange={(next) => {
+              if (next === rankSort) return;
+              setRankingLoading(true);
+              setRankingError("");
+              setRankSort(next);
+            }}
+          />
         </div>
-      </div>
-
-      <div style={{ display: tab === "ranking" ? "block" : "none" }}>
-        <RankingTable
-          rows={ranking}
-          loading={rankingLoading}
-          error={rankingError}
-          category={category}
-          categories={categories}
-          categoryError={categoryError}
-          onCategoryChange={(next) => {
-            setRankingLoading(true);
-            setRankingError("");
-            setCategory(next);
-          }}
-          sort={rankSort}
-          onSortChange={(next) => {
-            if (next === rankSort) return;
-            setRankingLoading(true);
-            setRankingError("");
-            setRankSort(next);
-          }}
-        />
       </div>
 
       {tooltip && (
