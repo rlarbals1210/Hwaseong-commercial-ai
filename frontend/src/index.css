@@ -2601,7 +2601,9 @@ a { color: var(--primary); }
   bottom: 96px;
   left: 16px;
   z-index: 40;
-  max-height: calc(100% - 190px);
+  /* 지도가 주인공이라 서랍은 절반을 넘지 않는다. 예전 값(calc(100% - 190px))은
+     680px 무대에서 490px까지 커져서 지도가 위쪽 190px만 남았다. */
+  max-height: min(46%, 420px);
   overflow-y: auto;
   border-radius: var(--radius-lg);
   box-shadow: 0 18px 50px rgba(15, 23, 42, 0.22);
