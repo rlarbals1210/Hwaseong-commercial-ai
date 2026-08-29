@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { OFFICIAL_ROUTES } from "../lib/officialRoutes";
 import { useAuth } from "../context/auth-context";
 
 // 공개 진입 화면. 두 트랙(공무원 / 예비 창업자)의 공통 현관이다.
@@ -20,37 +19,87 @@ const REVIEW_ACCOUNT = { username: "", password: "" };
 
 // 파이프라인 산출값이 아니라 방법론 상수·행정구역 사실이다. 재실행해도 변하지 않는다.
 const HERO_FACTS = [
-  { value: "29", label: "화성시 행정동 전체" },
+  { value: "29", label: "화성시 읍면동 전체" },
   { value: "4분기", label: "누적 관측 기준" },
   { value: "2분기", label: "앞서 보는 예측 시점" },
 ];
 
-// 화면 나열이 아니라 담당자가 실제로 밟는 순서다. 발표 서사와 같은 문구를 쓴다 —
-// 화면과 대본이 다른 표현이면 심사위원이 같은 것을 두 번 배워야 한다.
-const STEPS = [
+const AUDIENCES = [
   {
-    label: "발견",
-    screen: "상권 위험 지도",
-    desc: "읍면동별로 위험 업종이 얼마나 몰려 있는지 한눈에 봅니다.",
+    key: "official",
+    eyebrow: "담당 공무원",
+    icon: "admin_panel_settings",
+    title: "확인해야 할 상권부터 좁힙니다",
+    desc: "모든 상권을 일일이 찾는 대신 AI 경보와 관측 근거로 어디부터 확인할지 정합니다.",
+    points: [
+      "2분기 뒤 위험 상권을 상대 순위로 확인",
+      "지도와 사각지대로 지역별 상황 파악",
+      "관측 폐업률과 영향 점포 수로 현장 확인 순서 결정",
+    ],
   },
   {
-    label: "분석",
+    key: "citizen",
+    eyebrow: "창업 준비 시민",
+    icon: "storefront",
+    title: "나에게 맞는 후보 상권을 비교합니다",
+    desc: "업종과 가장 걱정되는 조건을 고르면 수요·공급과 폐업 부담을 함께 살펴볼 지역을 제시합니다.",
+    points: [
+      "준비 중인 업종과 상권 고민 선택",
+      "조건에 맞는 후보 상권 3곳 확인",
+      "후보 간 지표와 현장 확인사항 비교",
+    ],
+  },
+];
+
+// 화면 나열이 아니라 사용자가 실제로 밟는 순서다. 발표 서사와 같은 문구를 쓴다 —
+// 화면과 대본이 다른 표현이면 심사위원이 같은 것을 두 번 배워야 한다.
+const OFFICIAL_STEPS = [
+  {
+    label: "경보 확인",
     screen: "조기경보",
     desc: "모델이 2분기 뒤 위험으로 본 상권을 순위로 세웁니다.",
   },
   {
-    label: "확인",
+    label: "지역 파악",
+    screen: "상권 위험 지도",
+    desc: "읍면동별로 위험 업종이 얼마나 몰려 있는지 한눈에 봅니다.",
+  },
+  {
+    label: "순서 결정",
     screen: "현장 확인 우선순위",
     desc: "관측된 폐업률과 영향 점포 수로 어디부터 갈지 정합니다.",
   },
   {
-    label: "조치",
-    screen: "셀 상세",
-    desc: "확인된 위험 신호, 상권 유형별 처방, 연결 가능한 지원사업을 모아 봅니다.",
+    label: "근거 확인",
+    screen: "상세·비교",
+    desc: "확인된 신호와 비교 상권, 후속 조치 검토안을 함께 확인합니다.",
   },
 ];
 
-// 할 수 있는 것보다 하지 않는 것을 먼저 밝힌다. 행정 도구는 한계가 분명할수록 쓰인다.
+const CITIZEN_STEPS = [
+  {
+    label: "업종 선택",
+    screen: "상권 둘러보기",
+    desc: "준비 중인 업종을 골라 화성시 전체 후보를 불러옵니다.",
+  },
+  {
+    label: "고민 선택",
+    screen: "맞춤 조건",
+    desc: "수요, 폐업 부담, 경쟁 중 가장 걱정되는 조건을 고릅니다.",
+  },
+  {
+    label: "후보 확인",
+    screen: "추천 3곳",
+    desc: "조건 적합도와 추천 이유, 확인할 점을 함께 살펴봅니다.",
+  },
+  {
+    label: "비교",
+    screen: "상권 상세",
+    desc: "후보 두 곳의 관측 지표를 비교하고 현장 확인사항을 정리합니다.",
+  },
+];
+
+// 서비스 개요 뒤에서 해석 원칙을 밝힌다. 행정 도구는 한계가 분명할수록 쓰인다.
 const PRINCIPLES = [
   {
     tone: "blue",
@@ -155,7 +204,7 @@ const CSS = `
     color: #fff;
   }
   .lp-hero-title .accent { color: #38bdf8; }
-  .lp-hero-sub { font-size: 17px; color: #94a3b8; line-height: 1.8; margin: 0 0 40px; max-width: 560px; word-break: keep-all; }
+  .lp-hero-sub { font-size: 17px; color: #94a3b8; line-height: 1.8; margin: 0 0 34px; max-width: 700px; word-break: keep-all; }
   .lp-actions { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
   .lp-btn-primary {
     background: linear-gradient(135deg,#0ea5e9,#0284c7); color: #fff; text-decoration: none;
@@ -182,6 +231,42 @@ const CSS = `
   .lp-section-title { font-size: clamp(26px, 2.8vw, 40px); font-weight: 700; line-height: 1.25; letter-spacing: -.02em; margin: 0 0 14px; word-break: keep-all; color: #fff; }
   .lp-section-desc { font-size: 16px; color: #94a3b8; line-height: 1.75; margin: 0; max-width: 560px; word-break: keep-all; }
 
+  /* ── 이용 대상 ──────────────────────────────────────────────────── */
+  .lp-audiences { background: #060e1e; }
+  .lp-audience-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 52px; }
+  .lp-audience-card {
+    min-height: 430px; display: flex; flex-direction: column; position: relative; overflow: hidden;
+    padding: 38px; border-radius: 20px; background: linear-gradient(145deg,#0d2040,#0a172b);
+    border: 1px solid rgba(56,189,248,.14);
+  }
+  .lp-audience-card::after {
+    content: ''; position: absolute; width: 320px; height: 320px; right: -130px; top: -150px;
+    border-radius: 50%; background: rgba(56,189,248,.08); pointer-events: none;
+  }
+  .lp-audience-card.citizen { border-color: rgba(45,212,191,.18); }
+  .lp-audience-card.citizen::after { background: rgba(45,212,191,.08); }
+  .lp-audience-top { display: flex; align-items: center; gap: 14px; margin-bottom: 24px; position: relative; z-index: 1; }
+  .lp-audience-icon {
+    width: 52px; height: 52px; border-radius: 15px; display: inline-flex; align-items: center; justify-content: center;
+    color: #7dd3fc; background: rgba(56,189,248,.1); border: 1px solid rgba(56,189,248,.2);
+  }
+  .lp-audience-card.citizen .lp-audience-icon { color: #5eead4; background: rgba(45,212,191,.1); border-color: rgba(45,212,191,.2); }
+  .lp-audience-eyebrow { font-size: 12px; color: #7dd3fc; font-weight: 700; letter-spacing: .08em; margin: 0 0 4px; }
+  .lp-audience-card.citizen .lp-audience-eyebrow { color: #5eead4; }
+  .lp-audience-type { font-size: 14px; color: #94a3b8; margin: 0; }
+  .lp-audience-title { font-size: 25px; color: #fff; line-height: 1.35; letter-spacing: -.02em; margin: 0 0 12px; word-break: keep-all; }
+  .lp-audience-desc { font-size: 15px; color: #94a3b8; line-height: 1.75; margin: 0 0 24px; word-break: keep-all; }
+  .lp-audience-points { list-style: none; padding: 0; margin: 0 0 30px; display: grid; gap: 13px; }
+  .lp-audience-points li { display: flex; gap: 10px; align-items: flex-start; color: #cbd5e1; font-size: 14px; line-height: 1.6; word-break: keep-all; }
+  .lp-audience-points .material-symbols-outlined { color: #38bdf8; margin-top: 2px; }
+  .lp-audience-card.citizen .lp-audience-points .material-symbols-outlined { color: #2dd4bf; }
+  .lp-audience-link {
+    margin-top: auto; align-self: flex-start; display: inline-flex; align-items: center; gap: 7px;
+    color: #7dd3fc; text-decoration: none; font-size: 14px; font-weight: 700;
+  }
+  .lp-audience-card.citizen .lp-audience-link { color: #5eead4; }
+  .lp-audience-link:hover { text-decoration: underline; text-underline-offset: 4px; }
+
   /* ── 단계 ───────────────────────────────────────────────────────── */
   .lp-flow { background: #0a1628; }
   .lp-flow::before {
@@ -189,10 +274,20 @@ const CSS = `
     width: 820px; height: 820px; pointer-events: none;
     background: radial-gradient(circle, rgba(56,189,248,.05) 0%, transparent 60%);
   }
-  .lp-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin-top: 56px; }
+  .lp-flow-lanes { display: grid; gap: 18px; margin-top: 52px; }
+  .lp-flow-lane { background: rgba(6,14,30,.48); border: 1px solid rgba(255,255,255,.06); border-radius: 20px; padding: 28px; }
+  .lp-flow-lane-head { display: flex; gap: 13px; align-items: center; }
+  .lp-flow-lane-icon {
+    width: 42px; height: 42px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center;
+    color: #7dd3fc; background: rgba(56,189,248,.1); border: 1px solid rgba(56,189,248,.18);
+  }
+  .lp-flow-lane.citizen .lp-flow-lane-icon { color: #5eead4; background: rgba(45,212,191,.1); border-color: rgba(45,212,191,.18); }
+  .lp-flow-lane-title { font-size: 18px; color: #fff; font-weight: 700; margin: 0 0 3px; }
+  .lp-flow-lane-desc { font-size: 13px; color: #94a3b8; margin: 0; }
+  .lp-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
   .lp-step {
-    background: #0d2040; border: 1px solid rgba(56,189,248,.1); border-radius: 16px;
-    padding: 30px 26px; position: relative; display: flex; flex-direction: column;
+    background: #0d2040; border: 1px solid rgba(56,189,248,.09); border-radius: 14px;
+    padding: 24px 20px; position: relative; display: flex; flex-direction: column;
   }
   .lp-step-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px; }
   .lp-step-num { font-size: 22px; font-weight: 700; color: rgba(56,189,248,.3); line-height: 1; }
@@ -236,6 +331,7 @@ const CSS = `
   }
   .lp-cta .lp-section-desc { margin: 0 auto 40px; }
   .lp-cta .lp-actions { justify-content: center; }
+  .lp-cta-note { font-size: 13px; color: #64748b; line-height: 1.7; margin: 22px auto 0; max-width: 720px; word-break: keep-all; }
 
   .lp-account {
     max-width: 620px; margin: 44px auto 0; text-align: left;
@@ -267,6 +363,11 @@ const CSS = `
   }
   @media (max-width: 1000px) {
     .lp-nav-links { display: none; }
+    .lp-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  }
+  @media (max-width: 780px) {
+    .lp-audience-grid { grid-template-columns: 1fr; }
+    .lp-audience-card { min-height: auto; }
   }
   @media (max-width: 640px) {
     .lp-root .lp-nav { padding: 0 20px; }
@@ -274,6 +375,9 @@ const CSS = `
     .lp-hero { padding: 112px 20px 64px; }
     .lp-section { padding: 68px 20px; }
     .lp-facts { gap: 30px; margin-top: 8px; }
+    .lp-audience-card { padding: 28px 24px; }
+    .lp-flow-lane { padding: 22px 18px; }
+    .lp-steps { grid-template-columns: 1fr; }
     .lp-principle { padding: 28px 24px; }
   }
 `;
@@ -326,16 +430,14 @@ export default function LandingPage() {
         <div className="lp-nav-inner">
           <Link to="/" className="lp-nav-brand">
             <span className="lp-nav-mark">RN</span>
-            <span className="lp-nav-name">화성시 소상공인 조기경보</span>
+            <span className="lp-nav-name">리버스 노다지</span>
           </Link>
 
-          {/* 담당자 화면 바로가기. 로그인 상태면 ?next= 가 즉시 통과해 바로가기처럼 동작한다. */}
           <ul className="lp-nav-links">
-            {OFFICIAL_ROUTES.map((route) => (
-              <li key={route.path}>
-                <Link to={`/login/official?next=${encodeURIComponent(route.path)}`}>{route.label}</Link>
-              </li>
-            ))}
+            <li><a href="#overview">서비스 개요</a></li>
+            <li><a href="#audiences">이용 대상</a></li>
+            <li><a href="#flows">이용 흐름</a></li>
+            <li><a href="#principles">이용 원칙</a></li>
           </ul>
 
           <div className="lp-nav-right">
@@ -345,22 +447,33 @@ export default function LandingPage() {
         </div>
       </nav>
 
-      <section className="lp-hero">
+      <section id="overview" className="lp-hero">
         <div className="lp-hero-inner">
           <span className="lp-badge lp-reveal">
             <span className="lp-badge-dot" />
-            제1회 화성 AI·DATA 기반 솔루션 경진대회
+            화성시 상권 의사결정 지원 서비스
           </span>
 
           <h1 className="lp-hero-title lp-reveal lp-d1">
-            소상공인 폐업 위험을<br />
-            <span className="accent">행정이 먼저 발견합니다</span>
+            위험 상권은 먼저 발견하고<br />
+            <span className="accent">창업 후보는 근거로 비교합니다</span>
           </h1>
 
           <p className="lp-hero-sub lp-reveal lp-d2">
-            읍면동 × 업종 단위로 폐업 위험을 예측하고, 담당 공무원이 어디부터 확인할지 좁혀 줍니다.
-            시민이 행정을 찾아오게 하는 대신, 행정이 먼저 찾아가게 만드는 도구입니다.
+            리버스 노다지는 담당 공무원에게 폐업 위험 조기경보와 현장 확인 근거를,
+            창업 준비 시민에게 수요·공급 기반의 맞춤 상권 탐색을 제공합니다.
           </p>
+
+          <div className="lp-actions lp-reveal lp-d3">
+            <Link to={enterHref} className="lp-btn-primary">
+              <Icon name={isOfficial ? "dashboard" : "admin_panel_settings"} size={19} />
+              {isOfficial ? "공무원 업무 시작" : "공무원 로그인"}
+            </Link>
+            <Link to="/browse" className="lp-btn-secondary">
+              <Icon name="storefront" size={19} />
+              나에게 맞는 상권 찾기
+            </Link>
+          </div>
 
           <div className="lp-facts lp-reveal lp-d4">
             {HERO_FACTS.map((fact) => (
@@ -373,37 +486,91 @@ export default function LandingPage() {
         </div>
       </section>
 
-      <section className="lp-section lp-flow" aria-labelledby="flow-heading">
+      <section id="audiences" className="lp-section lp-audiences" aria-labelledby="audiences-heading">
         <div className="lp-section-inner">
-          <p className="lp-eyebrow lp-reveal">HOW IT WORKS</p>
-          <h2 id="flow-heading" className="lp-section-title lp-reveal lp-d1">어떻게 작동하나요</h2>
+          <p className="lp-eyebrow lp-reveal">WHO IT HELPS</p>
+          <h2 id="audiences-heading" className="lp-section-title lp-reveal lp-d1">두 사용자, 두 가지 이용 방식</h2>
           <p className="lp-section-desc lp-reveal lp-d2">
-            담당자가 분기마다 밟는 네 단계입니다. 각 단계가 하나의 화면에 대응합니다.
+            기존 소상공인의 위험은 행정이 먼저 살피고, 창업 준비 시민은 필요한 상권 정보를 직접 탐색합니다.
           </p>
 
-          <div className="lp-steps">
-            {STEPS.map((step, i) => (
-              <div key={step.label} className={`lp-step lp-reveal lp-d${i + 1}`}>
-                <div className="lp-step-head">
-                  <span className="lp-step-num lp-num">0{i + 1}</span>
-                  <span className="lp-step-label">{step.label}</span>
+          <div className="lp-audience-grid">
+            {AUDIENCES.map((audience, i) => {
+              const href = audience.key === "official" ? enterHref : "/browse";
+              const linkLabel = audience.key === "official" ? "공무원 화면으로 이동" : "맞춤 상권 찾기";
+              return (
+                <article key={audience.key} className={`lp-audience-card ${audience.key} lp-reveal lp-d${i + 1}`}>
+                  <div className="lp-audience-top">
+                    <span className="lp-audience-icon"><Icon name={audience.icon} size={27} /></span>
+                    <div>
+                      <p className="lp-audience-eyebrow">{audience.eyebrow}</p>
+                      <p className="lp-audience-type">{audience.key === "official" ? "폐업 조기경보" : "창업 상권 탐색"}</p>
+                    </div>
+                  </div>
+                  <h3 className="lp-audience-title">{audience.title}</h3>
+                  <p className="lp-audience-desc">{audience.desc}</p>
+                  <ul className="lp-audience-points">
+                    {audience.points.map((point) => (
+                      <li key={point}><Icon name="check_circle" size={18} /> <span>{point}</span></li>
+                    ))}
+                  </ul>
+                  <Link to={href} className="lp-audience-link">
+                    {linkLabel} <Icon name="arrow_forward" size={18} />
+                  </Link>
+                </article>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+
+      <section id="flows" className="lp-section lp-flow" aria-labelledby="flow-heading">
+        <div className="lp-section-inner">
+          <p className="lp-eyebrow lp-reveal">HOW TO USE</p>
+          <h2 id="flow-heading" className="lp-section-title lp-reveal lp-d1">목적에 따라 이렇게 사용합니다</h2>
+          <p className="lp-section-desc lp-reveal lp-d2">
+            각 단계는 실제 서비스 화면과 연결됩니다. 필요한 결과까지 네 단계 안에서 도달할 수 있습니다.
+          </p>
+
+          <div className="lp-flow-lanes">
+            {[
+              { key: "official", title: "담당 공무원 흐름", desc: "위험 발견에서 현장 확인 근거까지", icon: "admin_panel_settings", steps: OFFICIAL_STEPS },
+              { key: "citizen", title: "창업 준비 시민 흐름", desc: "업종 선택에서 후보 상권 비교까지", icon: "storefront", steps: CITIZEN_STEPS },
+            ].map((flow) => (
+              <div key={flow.key} className={`lp-flow-lane ${flow.key} lp-reveal`}>
+                <div className="lp-flow-lane-head">
+                  <span className="lp-flow-lane-icon"><Icon name={flow.icon} size={22} /></span>
+                  <div>
+                    <p className="lp-flow-lane-title">{flow.title}</p>
+                    <p className="lp-flow-lane-desc">{flow.desc}</p>
+                  </div>
                 </div>
-                <div className="lp-step-screen">{step.screen}</div>
-                <p className="lp-step-desc">{step.desc}</p>
+                <div className="lp-steps">
+                  {flow.steps.map((step, i) => (
+                    <div key={step.label} className="lp-step">
+                      <div className="lp-step-head">
+                        <span className="lp-step-num lp-num">0{i + 1}</span>
+                        <span className="lp-step-label">{step.label}</span>
+                      </div>
+                      <div className="lp-step-screen">{step.screen}</div>
+                      <p className="lp-step-desc">{step.desc}</p>
+                    </div>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
         </div>
       </section>
 
-      {/* 할 수 있는 것만 늘어놓는 대신 한계를 먼저 밝힌다. Q&A에서 반드시 나오는
-          질문("AI가 지원 대상을 정하나", "개인정보는")을 화면이 미리 답해둔다. */}
-      <section className="lp-section lp-principles" aria-labelledby="principles-heading">
+      {/* Q&A에서 반드시 나오는 질문("AI가 지원 대상을 정하나", "개인정보는")을
+          사용 원칙으로 미리 답해둔다. */}
+      <section id="principles" className="lp-section lp-principles" aria-labelledby="principles-heading">
         <div className="lp-section-inner">
           <p className="lp-eyebrow lp-reveal">PRINCIPLES</p>
-          <h2 id="principles-heading" className="lp-section-title lp-reveal lp-d1">이 서비스가 하지 않는 것</h2>
+          <h2 id="principles-heading" className="lp-section-title lp-reveal lp-d1">결과를 해석할 때 지키는 원칙</h2>
           <p className="lp-section-desc lp-reveal lp-d2">
-            행정에서 실제로 쓰이려면, 무엇을 할 수 있는지보다 무엇을 하지 않는지가 분명해야 합니다.
+            AI는 판단을 대신하지 않습니다. 관측 근거와 한계를 함께 보여주고 최종 결정은 사용자에게 남깁니다.
           </p>
 
           <div className="lp-principle-grid">
@@ -424,22 +591,26 @@ export default function LandingPage() {
       <section className="lp-section lp-cta">
         <div className="lp-section-inner">
           <h2 className="lp-section-title lp-reveal">
-            위험해지면 <span style={{ color: "#38bdf8" }}>행정이 먼저 찾아옵니다</span>
+            목적에 맞는 화면에서 <span style={{ color: "#38bdf8" }}>바로 시작하세요</span>
           </h2>
           <p className="lp-section-desc lp-reveal lp-d1">
-            소상공인은 아무것도 하지 않아도 됩니다. 그것이 이 설계의 목표입니다.
+            공무원은 위험 상권을 먼저 확인하고, 창업 준비 시민은 나에게 맞는 후보 지역을 찾아볼 수 있습니다.
           </p>
 
           <div className="lp-actions lp-reveal lp-d2">
             <Link to={enterHref} className="lp-btn-primary">
-              <Icon name={isOfficial ? "dashboard" : "login"} size={19} />
-              {enterLabel}
+              <Icon name={isOfficial ? "dashboard" : "admin_panel_settings"} size={19} />
+              {isOfficial ? "공무원 업무 시작" : "공무원 로그인"}
             </Link>
             <Link to="/browse" className="lp-btn-secondary">
-              <Icon name="map_search" size={19} />
-              상권 둘러보기
+              <Icon name="storefront" size={19} />
+              나에게 맞는 상권 찾기
             </Link>
           </div>
+
+          <p className="lp-cta-note lp-reveal lp-d3">
+            모든 결과는 읍면동 × 업종 단위의 상대 비교입니다. 특정 점포의 폐업이나 창업 성공을 단정하지 않습니다.
+          </p>
 
           {showAccount && (
             <div className="lp-account lp-reveal lp-d3">
@@ -460,7 +631,7 @@ export default function LandingPage() {
 
       <footer className="lp-footer">
         <p>제1회 화성 AI·DATA 기반 솔루션 경진대회 출품작 · 데이터 출처: 소상공인시장진흥공단 상가(상권)정보</p>
-        <p>모든 출력은 읍면동 × 업종 집계 단위입니다. AI는 확인 범위를 좁혀 줄 뿐, 최종 판단은 담당자가 합니다.</p>
+        <p>공무원에게는 폐업 조기경보를, 창업 준비 시민에게는 수요·공급 기반 상권 탐색을 제공합니다.</p>
       </footer>
     </div>
   );
