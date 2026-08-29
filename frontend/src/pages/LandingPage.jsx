@@ -314,19 +314,41 @@ const CSS = `
     background: radial-gradient(circle, rgba(56,189,248,.05) 0%, transparent 60%);
   }
   .lp-flow-lanes { display: grid; gap: 18px; margin-top: 52px; }
-  .lp-flow-lane { background: rgba(6,14,30,.48); border: 1px solid rgba(255,255,255,.06); border-radius: 20px; padding: 28px; }
+  .lp-flow-lane {
+    --flow-color: #38bdf8; --flow-rgb: 56,189,248;
+    position: relative; overflow: hidden; padding: 32px; border-radius: 22px;
+    background: linear-gradient(135deg,rgba(10,31,58,.92),rgba(6,20,40,.88));
+    border: 1px solid rgba(var(--flow-rgb),.2);
+  }
+  .lp-flow-lane::before {
+    content: ''; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: linear-gradient(90deg,var(--flow-color),rgba(var(--flow-rgb),.12));
+  }
+  .lp-flow-lane.citizen {
+    --flow-color: #2dd4bf; --flow-rgb: 45,212,191;
+    background: linear-gradient(135deg,rgba(7,38,48,.9),rgba(6,25,38,.88));
+  }
   .lp-flow-lane-head { display: flex; gap: 13px; align-items: center; }
   .lp-flow-lane-icon {
     width: 42px; height: 42px; border-radius: 12px; display: inline-flex; align-items: center; justify-content: center;
-    color: #7dd3fc; background: rgba(56,189,248,.1); border: 1px solid rgba(56,189,248,.18);
+    flex-shrink: 0; color: var(--flow-color); background: rgba(var(--flow-rgb),.1); border: 1px solid rgba(var(--flow-rgb),.22);
   }
-  .lp-flow-lane.citizen .lp-flow-lane-icon { color: #5eead4; background: rgba(45,212,191,.1); border-color: rgba(45,212,191,.18); }
   .lp-flow-lane-title { font-size: 18px; color: #fff; font-weight: 700; margin: 0 0 3px; }
   .lp-flow-lane-desc { font-size: 13px; color: #94a3b8; margin: 0; }
-  .lp-steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-top: 24px; }
+  .lp-flow-direction {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 7px;
+    color: var(--flow-color); font-size: 11px; font-weight: 700; letter-spacing: .08em;
+  }
+  .lp-steps {
+    display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 26px;
+    position: relative; margin-top: 30px;
+  }
+  .lp-steps::before {
+    content: ''; position: absolute; top: 25px; left: 6%; right: 6%; height: 2px;
+    background: linear-gradient(90deg,rgba(var(--flow-rgb),.28),var(--flow-color));
+  }
   .lp-step {
-    background: #0d2040; border: 1px solid rgba(56,189,248,.09); border-radius: 14px;
-    padding: 24px 20px; position: relative; display: flex; flex-direction: column;
+    position: relative; z-index: 1; display: flex; flex-direction: column;
     opacity: 0; transform: translateX(24px);
     transition: opacity .5s ease, transform .65s cubic-bezier(.22,1,.36,1);
   }
@@ -334,11 +356,28 @@ const CSS = `
   .lp-flow-lane.visible .lp-step:nth-child(2) { transition-delay: .1s; }
   .lp-flow-lane.visible .lp-step:nth-child(3) { transition-delay: .2s; }
   .lp-flow-lane.visible .lp-step:nth-child(4) { transition-delay: .3s; }
-  .lp-step-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px; }
-  .lp-step-num { font-size: 22px; font-weight: 700; color: rgba(56,189,248,.3); line-height: 1; }
-  .lp-step-label { font-size: 21px; font-weight: 700; color: #fff; line-height: 1; }
-  .lp-step-screen { font-size: 13px; font-weight: 600; color: #7dd3fc; margin-bottom: 9px; }
+  .lp-step-marker {
+    width: 52px; height: 52px; margin: 0 auto 18px; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    background: #0a1628; border: 2px solid rgba(var(--flow-rgb),.5);
+    color: var(--flow-color); font-size: 13px; font-weight: 800;
+    box-shadow: 0 0 0 6px rgba(var(--flow-rgb),.07);
+  }
+  .lp-step:first-child .lp-step-marker { box-shadow: 0 0 0 7px rgba(var(--flow-rgb),.12),0 0 24px rgba(var(--flow-rgb),.16); }
+  .lp-step:last-child .lp-step-marker { background: var(--flow-color); border-color: var(--flow-color); color: #061221; }
+  .lp-step-body {
+    flex: 1; min-height: 164px; padding: 21px 19px; border-radius: 15px;
+    background: rgba(13,32,64,.78); border: 1px solid rgba(var(--flow-rgb),.14);
+    box-shadow: 0 12px 30px rgba(0,0,0,.12);
+  }
+  .lp-flow-lane.citizen .lp-step-body { background: rgba(8,42,51,.72); }
+  .lp-step-label { display: block; font-size: 19px; font-weight: 700; color: #fff; line-height: 1.25; margin-bottom: 12px; }
+  .lp-step-screen { font-size: 13px; font-weight: 700; color: var(--flow-color); margin-bottom: 8px; }
   .lp-step-desc { font-size: 14px; color: #94a3b8; line-height: 1.7; margin: 0; word-break: keep-all; }
+  .lp-step-arrow {
+    position: absolute; z-index: 2; top: 17px; right: -22px;
+    display: inline-flex; color: var(--flow-color); filter: drop-shadow(0 0 6px rgba(var(--flow-rgb),.35));
+  }
 
   /* ── 원칙 ───────────────────────────────────────────────────────── */
   .lp-principles { background: #060e1e; }
@@ -410,8 +449,18 @@ const CSS = `
   }
   @media (max-width: 1000px) {
     .lp-nav-links { display: none; }
-    .lp-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     .lp-audience-story-grid { grid-template-columns: minmax(230px,.75fr) minmax(420px,1.25fr); gap: 30px; }
+    .lp-flow-lane { padding: 30px 28px; }
+    .lp-steps { grid-template-columns: 1fr; gap: 0; }
+    .lp-steps::before {
+      top: 26px; bottom: 26px; left: 25px; right: auto; width: 2px; height: auto;
+      background: linear-gradient(180deg,rgba(var(--flow-rgb),.28),var(--flow-color));
+    }
+    .lp-step { display: grid; grid-template-columns: 52px minmax(0,1fr); gap: 18px; padding-bottom: 24px; }
+    .lp-step:last-child { padding-bottom: 0; }
+    .lp-step-marker { margin: 0; }
+    .lp-step-body { min-height: 0; padding: 20px 22px; }
+    .lp-step-arrow { top: auto; right: auto; left: 17px; bottom: 1px; transform: rotate(90deg); }
   }
   @media (max-width: 780px) {
     .lp-audiences { min-height: 220vh; }
@@ -431,7 +480,12 @@ const CSS = `
     .lp-facts { gap: 30px; margin-top: 8px; }
     .lp-audience-card { padding: 28px 24px; }
     .lp-flow-lane { padding: 22px 18px; }
-    .lp-steps { grid-template-columns: 1fr; }
+    .lp-flow-direction { display: none; }
+    .lp-step { grid-template-columns: 46px minmax(0,1fr); gap: 14px; }
+    .lp-step-marker { width: 46px; height: 46px; }
+    .lp-steps::before { left: 22px; }
+    .lp-step-arrow { left: 14px; }
+    .lp-step-body { padding: 18px; }
     .lp-principle { padding: 28px 24px; }
   }
 `;
@@ -574,7 +628,7 @@ export default function LandingPage() {
               <p className="lp-eyebrow lp-reveal">WHO IT HELPS</p>
               <h2 id="audiences-heading" className="lp-section-title lp-reveal lp-d1">두 사용자, 두 가지 이용 방식</h2>
               <p className="lp-section-desc lp-reveal lp-d2">
-                스크롤을 내리면 담당 공무원에서 창업 준비 시민으로 이용 흐름이 자연스럽게 이어집니다.
+                담당 공무원은 위험 신호와 현장 확인 근거를 확인하고, 창업 준비 시민은 수요·공급을 바탕으로 후보 상권을 비교합니다.
               </p>
 
               <div className="lp-audience-progress lp-reveal lp-d3" aria-label="이용자 흐름 선택">
@@ -635,7 +689,7 @@ export default function LandingPage() {
           <p className="lp-eyebrow lp-reveal">HOW TO USE</p>
           <h2 id="flow-heading" className="lp-section-title lp-reveal lp-d1">목적에 따라 이렇게 사용합니다</h2>
           <p className="lp-section-desc lp-reveal lp-d2">
-            각 단계는 실제 서비스 화면과 연결됩니다. 필요한 결과까지 네 단계 안에서 도달할 수 있습니다.
+            공무원은 위험 신호에서 현장 확인 순서까지, 시민은 업종 선택에서 후보 상권 비교까지 이어집니다.
           </p>
 
           <div className="lp-flow-lanes">
@@ -650,16 +704,22 @@ export default function LandingPage() {
                     <p className="lp-flow-lane-title">{flow.title}</p>
                     <p className="lp-flow-lane-desc">{flow.desc}</p>
                   </div>
+                  <span className="lp-flow-direction" aria-hidden="true">
+                    시작 <Icon name="arrow_forward" size={16} /> 결과
+                  </span>
                 </div>
                 <div className="lp-steps">
                   {flow.steps.map((step, i) => (
                     <div key={step.label} className="lp-step">
-                      <div className="lp-step-head">
-                        <span className="lp-step-num lp-num">0{i + 1}</span>
+                      <div className="lp-step-marker lp-num">0{i + 1}</div>
+                      <div className="lp-step-body">
                         <span className="lp-step-label">{step.label}</span>
+                        <div className="lp-step-screen">{step.screen}</div>
+                        <p className="lp-step-desc">{step.desc}</p>
                       </div>
-                      <div className="lp-step-screen">{step.screen}</div>
-                      <p className="lp-step-desc">{step.desc}</p>
+                      {i < flow.steps.length - 1 && (
+                        <span className="lp-step-arrow" aria-hidden="true"><Icon name="arrow_forward" size={18} /></span>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -697,10 +757,11 @@ export default function LandingPage() {
       <section className="lp-section lp-cta">
         <div className="lp-section-inner">
           <h2 className="lp-section-title lp-reveal">
-            목적에 맞는 화면에서 <span style={{ color: "#38bdf8" }}>바로 시작하세요</span>
+            공무원은 위험 상권을,<br />
+            <span style={{ color: "#38bdf8" }}>시민은 창업 후보를 확인하세요</span>
           </h2>
           <p className="lp-section-desc lp-reveal lp-d1">
-            공무원은 위험 상권을 먼저 확인하고, 창업 준비 시민은 나에게 맞는 후보 지역을 찾아볼 수 있습니다.
+            폐업 위험 조기경보와 수요·공급 기반 맞춤 상권 탐색을 각 화면에서 바로 확인할 수 있습니다.
           </p>
 
           <div className="lp-actions lp-reveal lp-d2">
