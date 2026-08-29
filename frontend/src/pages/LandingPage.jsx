@@ -1,10 +1,10 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../context/auth-context";
 
 // 공개 진입 화면. 두 트랙(공무원 / 예비 창업자)의 공통 현관이다.
 //
-// 디자인은 노다지(서울 졸업작품) 랜딩의 언어를 가져왔다 — 다크 네이비 바탕, 스카이블루
+// 디자인은 기존 서울 졸업작품 랜딩의 언어를 가져왔다 — 다크 네이비 바탕, 스카이블루
 // 강조, 그리드 오버레이, 스크롤 리빌. 앱 본문은 밝은 토큰 시스템이라 톤이 크게 다른데,
 // 랜딩은 앱 셸 밖에서 전체화면으로 렌더되는 독립 화면이라 의도적으로 분리했다.
 // 스타일은 .lp-root 아래로만 스코프해 index.css의 토큰 시스템을 오염시키지 않는다.
@@ -134,7 +134,7 @@ const CSS = `
     background: #060e1e;
     color: #ffffff;
     min-height: 100vh;
-    overflow-x: hidden;
+    overflow-x: clip;
     -webkit-font-smoothing: antialiased;
   }
   .lp-num { font-family: 'Inter', 'Noto Sans KR', sans-serif; font-variant-numeric: tabular-nums; }
@@ -232,12 +232,51 @@ const CSS = `
   .lp-section-desc { font-size: 16px; color: #94a3b8; line-height: 1.75; margin: 0; max-width: 560px; word-break: keep-all; }
 
   /* ── 이용 대상 ──────────────────────────────────────────────────── */
-  .lp-audiences { background: #060e1e; }
-  .lp-audience-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; margin-top: 52px; }
+  .lp-audiences {
+    min-height: 210vh; padding-top: 0; padding-bottom: 0;
+    background: #060e1e; overflow: visible;
+  }
+  .lp-audience-story {
+    min-height: calc(100vh - 72px); position: sticky; top: 72px;
+    display: flex; align-items: center; padding: 56px 0;
+  }
+  .lp-audience-story-grid {
+    width: 100%; display: grid; grid-template-columns: minmax(280px,.82fr) minmax(480px,1.18fr);
+    gap: clamp(36px,5vw,76px); align-items: center;
+  }
+  .lp-audience-copy .lp-section-desc { max-width: 460px; }
+  .lp-audience-progress { display: grid; gap: 8px; margin-top: 32px; max-width: 390px; }
+  .lp-audience-progress-btn {
+    appearance: none; width: 100%; display: grid; grid-template-columns: 36px 1fr auto;
+    align-items: center; gap: 12px; padding: 13px 14px; border: 0; border-radius: 12px;
+    background: transparent; color: #64748b; text-align: left; cursor: pointer;
+    font: inherit; transition: color .35s, background .35s, transform .35s;
+  }
+  .lp-audience-progress-btn:hover { color: #cbd5e1; background: rgba(255,255,255,.035); }
+  .lp-audience-progress-btn.active { color: #f8fafc; background: rgba(56,189,248,.08); transform: translateX(6px); }
+  .lp-audience-progress-num { font-size: 12px; font-weight: 700; color: #475569; letter-spacing: .08em; }
+  .lp-audience-progress-btn.active .lp-audience-progress-num { color: #38bdf8; }
+  .lp-audience-progress-label { font-size: 14px; font-weight: 700; }
+  .lp-audience-progress-line {
+    width: 34px; height: 2px; border-radius: 2px; background: rgba(148,163,184,.18);
+    overflow: hidden;
+  }
+  .lp-audience-progress-line::after {
+    content: ''; display: block; width: 100%; height: 100%; background: #38bdf8;
+    transform: scaleX(0); transform-origin: left; transition: transform .55s ease;
+  }
+  .lp-audience-progress-btn.active .lp-audience-progress-line::after { transform: scaleX(1); }
+  .lp-audience-stage { min-height: 500px; position: relative; perspective: 1000px; }
   .lp-audience-card {
-    min-height: 430px; display: flex; flex-direction: column; position: relative; overflow: hidden;
+    position: absolute; inset: 0; min-height: 500px; display: flex; flex-direction: column; overflow: hidden;
     padding: 38px; border-radius: 20px; background: linear-gradient(145deg,#0d2040,#0a172b);
     border: 1px solid rgba(56,189,248,.14);
+    opacity: 0; transform: translate3d(0,-42px,0) scale(.965) rotateX(2deg);
+    pointer-events: none; transition: opacity .55s ease, transform .75s cubic-bezier(.22,1,.36,1), border-color .4s;
+  }
+  .lp-audience-card.citizen { transform: translate3d(0,42px,0) scale(.965) rotateX(-2deg); }
+  .lp-audience-card.active {
+    opacity: 1; transform: translate3d(0,0,0) scale(1) rotateX(0); pointer-events: auto;
   }
   .lp-audience-card::after {
     content: ''; position: absolute; width: 320px; height: 320px; right: -130px; top: -150px;
@@ -288,7 +327,13 @@ const CSS = `
   .lp-step {
     background: #0d2040; border: 1px solid rgba(56,189,248,.09); border-radius: 14px;
     padding: 24px 20px; position: relative; display: flex; flex-direction: column;
+    opacity: 0; transform: translateX(24px);
+    transition: opacity .5s ease, transform .65s cubic-bezier(.22,1,.36,1);
   }
+  .lp-flow-lane.visible .lp-step { opacity: 1; transform: none; }
+  .lp-flow-lane.visible .lp-step:nth-child(2) { transition-delay: .1s; }
+  .lp-flow-lane.visible .lp-step:nth-child(3) { transition-delay: .2s; }
+  .lp-flow-lane.visible .lp-step:nth-child(4) { transition-delay: .3s; }
   .lp-step-head { display: flex; align-items: baseline; gap: 10px; margin-bottom: 16px; }
   .lp-step-num { font-size: 22px; font-weight: 700; color: rgba(56,189,248,.3); line-height: 1; }
   .lp-step-label { font-size: 21px; font-weight: 700; color: #fff; line-height: 1; }
@@ -360,14 +405,23 @@ const CSS = `
   @media (prefers-reduced-motion: reduce) {
     .lp-reveal { opacity: 1; transform: none; transition: none; }
     .lp-badge-dot { animation: none; }
+    .lp-audience-card, .lp-audience-progress-btn, .lp-audience-progress-line::after,
+    .lp-step { transition: none; }
   }
   @media (max-width: 1000px) {
     .lp-nav-links { display: none; }
     .lp-steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .lp-audience-story-grid { grid-template-columns: minmax(230px,.75fr) minmax(420px,1.25fr); gap: 30px; }
   }
   @media (max-width: 780px) {
-    .lp-audience-grid { grid-template-columns: 1fr; }
-    .lp-audience-card { min-height: auto; }
+    .lp-audiences { min-height: 220vh; }
+    .lp-audience-story { padding: 34px 0 30px; }
+    .lp-audience-story-grid { grid-template-columns: 1fr; gap: 24px; }
+    .lp-audience-copy .lp-section-desc { max-width: none; }
+    .lp-audience-progress { grid-template-columns: repeat(2,minmax(0,1fr)); max-width: none; margin-top: 20px; }
+    .lp-audience-progress-btn { grid-template-columns: 30px 1fr; }
+    .lp-audience-progress-line { display: none; }
+    .lp-audience-stage, .lp-audience-card { min-height: 390px; }
   }
   @media (max-width: 640px) {
     .lp-root .lp-nav { padding: 0 20px; }
@@ -392,6 +446,7 @@ function Icon({ name, size = 22 }) {
 
 export default function LandingPage() {
   const showAccount = Boolean(REVIEW_ACCOUNT.username && REVIEW_ACCOUNT.password);
+  const [activeAudience, setActiveAudience] = useState("official");
   // 로그인한 담당자도 로고를 눌러 여기로 돌아온다. 그 사람에게 "공무원 로그인" 버튼을
   // 내밀면 이미 한 일을 또 하라는 말이 된다.
   const { isAuthenticated, role } = useAuth();
@@ -422,6 +477,43 @@ export default function LandingPage() {
     return () => observer.disconnect();
   }, []);
 
+  useEffect(() => {
+    const section = document.getElementById("audiences");
+    if (!section) return undefined;
+
+    let frameId = 0;
+    const updateAudience = () => {
+      const rect = section.getBoundingClientRect();
+      const travel = Math.max(1, section.offsetHeight - window.innerHeight);
+      const progress = Math.min(1, Math.max(0, -rect.top / travel));
+      const nextAudience = progress >= 0.5 ? "citizen" : "official";
+      setActiveAudience((current) => current === nextAudience ? current : nextAudience);
+    };
+    const requestUpdate = () => {
+      window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(updateAudience);
+    };
+
+    updateAudience();
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+    };
+  }, []);
+
+  const scrollToAudience = (audienceKey) => {
+    const section = document.getElementById("audiences");
+    if (!section) return;
+
+    const sectionTop = window.scrollY + section.getBoundingClientRect().top;
+    const travel = Math.max(1, section.offsetHeight - window.innerHeight);
+    const targetProgress = audienceKey === "citizen" ? 0.72 : 0.18;
+    window.scrollTo({ top: sectionTop + travel * targetProgress, behavior: "smooth" });
+  };
+
   return (
     <div className="lp-root">
       <style>{CSS}</style>
@@ -429,8 +521,8 @@ export default function LandingPage() {
       <nav className="lp-nav" aria-label="주요 메뉴">
         <div className="lp-nav-inner">
           <Link to="/" className="lp-nav-brand">
-            <span className="lp-nav-mark">RN</span>
-            <span className="lp-nav-name">리버스 노다지</span>
+            <span className="lp-nav-mark">HS</span>
+            <span className="lp-nav-name">화성시 상권 지원</span>
           </Link>
 
           <ul className="lp-nav-links">
@@ -460,22 +552,11 @@ export default function LandingPage() {
           </h1>
 
           <p className="lp-hero-sub lp-reveal lp-d2">
-            리버스 노다지는 담당 공무원에게 폐업 위험 조기경보와 현장 확인 근거를,
+            담당 공무원에게 폐업 위험 조기경보와 현장 확인 근거를,
             창업 준비 시민에게 수요·공급 기반의 맞춤 상권 탐색을 제공합니다.
           </p>
 
-          <div className="lp-actions lp-reveal lp-d3">
-            <Link to={enterHref} className="lp-btn-primary">
-              <Icon name={isOfficial ? "dashboard" : "admin_panel_settings"} size={19} />
-              {isOfficial ? "공무원 업무 시작" : "공무원 로그인"}
-            </Link>
-            <Link to="/browse" className="lp-btn-secondary">
-              <Icon name="storefront" size={19} />
-              나에게 맞는 상권 찾기
-            </Link>
-          </div>
-
-          <div className="lp-facts lp-reveal lp-d4">
+          <div className="lp-facts lp-reveal lp-d3">
             {HERO_FACTS.map((fact) => (
               <div key={fact.label}>
                 <div className="lp-fact-value lp-num">{fact.value}</div>
@@ -487,39 +568,64 @@ export default function LandingPage() {
       </section>
 
       <section id="audiences" className="lp-section lp-audiences" aria-labelledby="audiences-heading">
-        <div className="lp-section-inner">
-          <p className="lp-eyebrow lp-reveal">WHO IT HELPS</p>
-          <h2 id="audiences-heading" className="lp-section-title lp-reveal lp-d1">두 사용자, 두 가지 이용 방식</h2>
-          <p className="lp-section-desc lp-reveal lp-d2">
-            기존 소상공인의 위험은 행정이 먼저 살피고, 창업 준비 시민은 필요한 상권 정보를 직접 탐색합니다.
-          </p>
+        <div className="lp-section-inner lp-audience-story">
+          <div className="lp-audience-story-grid">
+            <div className="lp-audience-copy">
+              <p className="lp-eyebrow lp-reveal">WHO IT HELPS</p>
+              <h2 id="audiences-heading" className="lp-section-title lp-reveal lp-d1">두 사용자, 두 가지 이용 방식</h2>
+              <p className="lp-section-desc lp-reveal lp-d2">
+                스크롤을 내리면 담당 공무원에서 창업 준비 시민으로 이용 흐름이 자연스럽게 이어집니다.
+              </p>
 
-          <div className="lp-audience-grid">
-            {AUDIENCES.map((audience, i) => {
-              const href = audience.key === "official" ? enterHref : "/browse";
-              const linkLabel = audience.key === "official" ? "공무원 화면으로 이동" : "맞춤 상권 찾기";
-              return (
-                <article key={audience.key} className={`lp-audience-card ${audience.key} lp-reveal lp-d${i + 1}`}>
-                  <div className="lp-audience-top">
-                    <span className="lp-audience-icon"><Icon name={audience.icon} size={27} /></span>
-                    <div>
-                      <p className="lp-audience-eyebrow">{audience.eyebrow}</p>
-                      <p className="lp-audience-type">{audience.key === "official" ? "폐업 조기경보" : "창업 상권 탐색"}</p>
+              <div className="lp-audience-progress lp-reveal lp-d3" aria-label="이용자 흐름 선택">
+                {AUDIENCES.map((audience, i) => (
+                  <button
+                    key={audience.key}
+                    type="button"
+                    className={`lp-audience-progress-btn ${activeAudience === audience.key ? "active" : ""}`}
+                    aria-pressed={activeAudience === audience.key}
+                    onClick={() => scrollToAudience(audience.key)}
+                  >
+                    <span className="lp-audience-progress-num lp-num">0{i + 1}</span>
+                    <span className="lp-audience-progress-label">{audience.eyebrow}</span>
+                    <span className="lp-audience-progress-line" aria-hidden="true" />
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            <div className="lp-audience-stage">
+              {AUDIENCES.map((audience) => {
+                const href = audience.key === "official" ? enterHref : "/browse";
+                const linkLabel = audience.key === "official" ? "공무원 화면으로 이동" : "맞춤 상권 찾기";
+                const isActive = activeAudience === audience.key;
+                return (
+                  <article
+                    key={audience.key}
+                    className={`lp-audience-card ${audience.key} ${isActive ? "active" : ""}`}
+                    aria-hidden={!isActive}
+                  >
+                    <div className="lp-audience-top">
+                      <span className="lp-audience-icon"><Icon name={audience.icon} size={27} /></span>
+                      <div>
+                        <p className="lp-audience-eyebrow">{audience.eyebrow}</p>
+                        <p className="lp-audience-type">{audience.key === "official" ? "폐업 조기경보" : "창업 상권 탐색"}</p>
+                      </div>
                     </div>
-                  </div>
-                  <h3 className="lp-audience-title">{audience.title}</h3>
-                  <p className="lp-audience-desc">{audience.desc}</p>
-                  <ul className="lp-audience-points">
-                    {audience.points.map((point) => (
-                      <li key={point}><Icon name="check_circle" size={18} /> <span>{point}</span></li>
-                    ))}
-                  </ul>
-                  <Link to={href} className="lp-audience-link">
-                    {linkLabel} <Icon name="arrow_forward" size={18} />
-                  </Link>
-                </article>
-              );
-            })}
+                    <h3 className="lp-audience-title">{audience.title}</h3>
+                    <p className="lp-audience-desc">{audience.desc}</p>
+                    <ul className="lp-audience-points">
+                      {audience.points.map((point) => (
+                        <li key={point}><Icon name="check_circle" size={18} /> <span>{point}</span></li>
+                      ))}
+                    </ul>
+                    <Link to={href} className="lp-audience-link" tabIndex={isActive ? 0 : -1}>
+                      {linkLabel} <Icon name="arrow_forward" size={18} />
+                    </Link>
+                  </article>
+                );
+              })}
+            </div>
           </div>
         </div>
       </section>

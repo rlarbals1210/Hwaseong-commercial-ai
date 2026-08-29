@@ -1,7 +1,7 @@
-# 리버스 노다지 Claude 작업 인계서
+# 화성시 소상공인 AI 정책지원 플랫폼 Claude 작업 인계서
 
 - 작성일: 2026-08-18
-- 프로젝트: 화성시 소상공인 AI 정책지원 플랫폼 — 리버스 노다지
+- 프로젝트: 화성시 소상공인 AI 정책지원 플랫폼
 - 프로젝트 경로: `/Users/gimgyumin/Developer/화성시-AI공모전/hwaseong-commercial-ai`
 - 현재 Alembic revision: `20260818_0002 (head)`
 
@@ -813,4 +813,3 @@ docs/claude_handoff_2026-08-18.md
 contribution_value_internal을 API에 노출하지 마. 승인 없이 대규모 구조 변경이나 레거시 테이블
 삭제를 하지 마.
 ```
-

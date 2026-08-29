@@ -4,7 +4,7 @@ import FitScorePanel from "../components/FitScorePanel";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { NAVER_CLIENT_ID, loadNaverMap, featureName, featurePaths } from "../lib/naverMap";
 
-// 서울 노다지 MapPage의 핵심 구조를 이식한 공개 상권 탐색 화면.
+// 기존 서울 프로젝트 MapPage의 핵심 구조를 이식한 공개 상권 탐색 화면.
 // 전체화면 지도 + 52px 상단 바 + 좌측 부유 카드를 유지하되, 서울 격자나 개별 점포
 // 행위는 가져오지 않는다. 이 프로젝트의 모든 출력은 읍면동 x 업종 집계 단위다.
 
@@ -32,18 +32,16 @@ function recall(key) {
   }
 }
 
-function NodajiLogo() {
+function ServiceLogo() {
   return (
-    <svg viewBox="0 0 108 32" aria-hidden="true" className="nodaji-logo">
-      <text x="0" y="24" fontFamily="Arial Black, Helvetica Neue, Arial, sans-serif" fontWeight="900" fontSize="21" letterSpacing="1.1" fill="#cde0f0">
-        NODAJI
+    <svg viewBox="0 0 166 32" aria-hidden="true" className="service-logo">
+      <rect x="0" y="2" width="28" height="28" rx="8" fill="#0ea5e9" />
+      <text x="14" y="21" textAnchor="middle" fontFamily="Inter, Arial, sans-serif" fontWeight="800" fontSize="10" fill="#ffffff">
+        HS
       </text>
-      <g transform="translate(98,5) rotate(35)">
-        <circle cx="0" cy="0" r="5.5" fill="none" stroke="#8ab0cc" strokeWidth="0.5" />
-        <polygon points="0,-4.5 0.85,0 0,0.9 -0.85,0" fill="#d94e30" />
-        <polygon points="0,4.5 0.85,0 0,-0.9 -0.85,0" fill="#b8d0e8" />
-        <circle cx="0" cy="0" r="0.7" fill="#1a2440" />
-      </g>
+      <text x="38" y="21" fontFamily="Noto Sans KR, Inter, Arial, sans-serif" fontWeight="700" fontSize="14" fill="#cde0f0">
+        화성시 상권 지원
+      </text>
     </svg>
   );
 }
@@ -57,7 +55,7 @@ function NodajiMapNav() {
       </svg>
       {/* 로고는 홈으로. 자기 자신(/browse)을 가리키면 눌러도 아무 일이 없다. */}
       <Link to="/" className="nodaji-brand" aria-label="서비스 소개로 이동">
-        <NodajiLogo />
+        <ServiceLogo />
       </Link>
       <nav aria-label="공개 상권 메뉴" className="nodaji-map-menu">
         <Link to="/browse" className="active">상권 둘러보기</Link>

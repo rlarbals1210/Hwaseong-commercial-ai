@@ -854,8 +854,8 @@ a { color: var(--primary); }
   text-decoration: none;
 }
 
-.nodaji-logo {
-  width: 122px;
+.service-logo {
+  width: 166px;
   height: 36px;
   overflow: visible;
 }
@@ -2063,7 +2063,7 @@ a { color: var(--primary); }
     font-size: 12px;
   }
 
-  .nodaji-logo {
+  .service-logo {
     width: 103px;
   }
 
@@ -2079,7 +2079,7 @@ a { color: var(--primary); }
     padding: 0 12px;
   }
 
-  .nodaji-logo {
+  .service-logo {
     width: 85px;
   }
 
