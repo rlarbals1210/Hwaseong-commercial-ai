@@ -8,6 +8,7 @@ from ..auth.dependencies import get_current_official
 from ..database import get_db
 from ..models import AdminArea, CommercialQuarter, IndustryCategory
 from ..schemas import PolicyPriorityItem
+from ..services.risk import DANGER_THRESHOLD_PCT
 
 router = APIRouter(prefix="/api/policy", tags=["policy"], dependencies=[Depends(get_current_official)])
 
@@ -29,7 +30,13 @@ def get_inspection_priority(
     """
     latest = db.query(func.max(CommercialQuarter.quarter_code)).scalar()
     if not latest:
-        return {"Q1": [], "Q2": [], "Q3": [], "Q4": []}
+        return {
+            "Q1": [], "Q2": [], "Q3": [], "Q4": [],
+            "meta": {
+                "danger_threshold_pct": DANGER_THRESHOLD_PCT,
+                "median_store_count": None,
+            },
+        }
 
     # 표본부족 셀은 소표본 노이즈로 사분면 배정을 왜곡하므로 제외 (alerts.py와 동일 원칙)
     q = (
@@ -48,7 +55,13 @@ def get_inspection_priority(
         q = q.filter(IndustryCategory.industry_name == category)
     risks = q.all()
     if not risks:
-        return {"Q1": [], "Q2": [], "Q3": [], "Q4": []}
+        return {
+            "Q1": [], "Q2": [], "Q3": [], "Q4": [],
+            "meta": {
+                "danger_threshold_pct": DANGER_THRESHOLD_PCT,
+                "median_store_count": None,
+            },
+        }
 
     # y축 = 영향 점포 수(파급 규모). 성장확률을 재사용하면 x축(위험도)과 자기모순적 음의 상관관계가
     # 생기므로, 결과셋 내 점포수 중위값 기준 상/하위 분류로 대체함.
@@ -81,7 +94,9 @@ def get_inspection_priority(
                 industry_id=commercial.industry_id,
                 dong=dong,
                 category=industry,
-                actual_closure_rate_pct=round(risk, 1),
+                # 좌표형 사분면은 이 값을 실제 x좌표로 쓴다. 한 자리로 반올림하면 9.72%가
+                # 9.7%가 되어 위험 기준선(9.71%) 왼쪽에 그려지는 모순이 생긴다.
+                actual_closure_rate_pct=round(risk, 2),
                 # 아래 세 개를 넘기지 않으면 스키마 기본값("안정" / None / 0)이 그대로 응답에
                 # 실린다. 화면 배지가 안 뜨는 데서 그치지 않고, 내려받는 CSV의 등급 열이
                 # 위험·주의 셀까지 전부 "안정"으로 찍혀 나갔다(2026-08-25 감사).
@@ -97,4 +112,12 @@ def get_inspection_priority(
     for key in result:
         result[key] = sorted(result[key], key=lambda x: x.actual_closure_rate_pct, reverse=True)
 
-    return result
+    return {
+        **result,
+        # 화면의 실제 좌표선이 서버의 판정선과 반드시 같아야 한다. 프론트에서 배열을 보고
+        # 경계를 다시 추정하면 필터·동률 처리에 따라 점과 사분면 배경이 어긋난다.
+        "meta": {
+            "danger_threshold_pct": DANGER_THRESHOLD_PCT,
+            "median_store_count": median_stores,
+        },
+    }
