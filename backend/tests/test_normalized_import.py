@@ -14,12 +14,12 @@ def test_quarter_add_rolls_over_year():
     assert _quarter_add(20254, 2) == 20262
 
 
-def test_risk_grades_use_stored_threshold_semantics():
-    assert _cell_risk_grade(0.07, False, 3.22, 6.44) == "위험"
-    assert _cell_risk_grade(0.04, False, 3.22, 6.44) == "주의"
-    assert _cell_risk_grade(0.01, False, 3.22, 6.44) == "안정"
-    assert _cell_risk_grade(0.20, True, 3.22, 6.44) == "표본부족"
-    assert _cell_risk_grade(None, False, 3.22, 6.44) is None
+def test_risk_grades_use_cumulative_percentage_thresholds():
+    assert _cell_risk_grade(10.35, False, 7.26, 10.35) == "위험"
+    assert _cell_risk_grade(7.26, False, 7.26, 10.35) == "주의"
+    assert _cell_risk_grade(7.25, False, 7.26, 10.35) == "안정"
+    assert _cell_risk_grade(20.0, True, 7.26, 10.35) == "표본부족"
+    assert _cell_risk_grade(None, False, 7.26, 10.35) is None
     assert _area_risk_grade(25.0, 11.62, 23.24) == "위험"
 
 
