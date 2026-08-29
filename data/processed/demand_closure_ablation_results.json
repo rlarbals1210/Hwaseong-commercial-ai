@@ -1,0 +1,234 @@
+{
+  "method_version": "demand-closure-ablation-v1",
+  "research_only": true,
+  "production_model_changed": false,
+  "production_ready": false,
+  "target": "관측 시점 기준 2분기 내 셀 폐업률",
+  "matched_sample": {
+    "minimum_stores": 30,
+    "rows": 2585,
+    "areas": 29,
+    "industries": 47,
+    "quarters": [
+      20221,
+      20222,
+      20224,
+      20231,
+      20232,
+      20251,
+      20252
+    ],
+    "rows_by_split_quarter": [
+      {
+        "split": "test",
+        "quarter": 20251,
+        "rows": 397
+      },
+      {
+        "split": "test",
+        "quarter": 20252,
+        "rows": 400
+      },
+      {
+        "split": "train",
+        "quarter": 20221,
+        "rows": 348
+      },
+      {
+        "split": "train",
+        "quarter": 20222,
+        "rows": 354
+      },
+      {
+        "split": "train",
+        "quarter": 20224,
+        "rows": 365
+      },
+      {
+        "split": "train",
+        "quarter": 20231,
+        "rows": 358
+      },
+      {
+        "split": "validation",
+        "quarter": 20232,
+        "rows": 363
+      }
+    ]
+  },
+  "split": {
+    "train": [
+      20221,
+      20222,
+      20224,
+      20231
+    ],
+    "validation": [
+      20232
+    ],
+    "test": [
+      20251,
+      20252
+    ],
+    "rule": "chronological, no random row split"
+  },
+  "baseline": {
+    "features": [
+      "행정동명",
+      "상권업종중분류명",
+      "평균업력_분기수",
+      "점포수"
+    ],
+    "best_iteration": 205,
+    "validation": {
+      "n": 363,
+      "mean_closure_rate": 0.06518422827248319,
+      "mae": 0.033474270936871886,
+      "spearman": 0.6809408800095521,
+      "lift_top10pct": 2.0632448261301,
+      "top10_n": 37
+    },
+    "test": {
+      "n": 797,
+      "mean_closure_rate": 0.11578506392617118,
+      "mae": 0.06557375773504039,
+      "spearman": 0.271714158394384,
+      "lift_top10pct": 1.1570340605299523,
+      "top10_n": 80
+    }
+  },
+  "demand_augmented": {
+    "features": [
+      "행정동명",
+      "상권업종중분류명",
+      "평균업력_분기수",
+      "점포수",
+      "수요공급격차_log",
+      "수요모멘텀_3개월"
+    ],
+    "best_iteration": 131,
+    "validation": {
+      "n": 363,
+      "mean_closure_rate": 0.06518422827248319,
+      "mae": 0.03354315482770729,
+      "spearman": 0.6471993919202579,
+      "lift_top10pct": 2.021330453214157,
+      "top10_n": 37
+    },
+    "test": {
+      "n": 797,
+      "mean_closure_rate": 0.11578506392617118,
+      "mae": 0.06496213513888456,
+      "spearman": 0.25814558428695134,
+      "lift_top10pct": 1.168923020422539,
+      "top10_n": 80
+    }
+  },
+  "test_delta": {
+    "spearman": -0.013568574107432674,
+    "lift_top10pct": 0.011888959892586648,
+    "mae": -0.0006116225961558253
+  },
+  "test_by_quarter": [
+    {
+      "quarter": 20251,
+      "baseline": {
+        "n": 397,
+        "mean_closure_rate": 0.12004295975312469,
+        "mae": 0.06395747528023267,
+        "spearman": 0.30383309162240246,
+        "lift_top10pct": 1.2342572235091893,
+        "top10_n": 40
+      },
+      "demand_augmented": {
+        "n": 397,
+        "mean_closure_rate": 0.12004295975312469,
+        "mae": 0.06365487961678658,
+        "spearman": 0.2931687164553272,
+        "lift_top10pct": 1.2265095555593082,
+        "top10_n": 40
+      },
+      "delta": {
+        "spearman": -0.010664375167075246,
+        "lift_top10pct": -0.007747667949881132,
+        "mae": -0.00030259566344609246
+      }
+    },
+    {
+      "quarter": 20252,
+      "baseline": {
+        "n": 400,
+        "mean_closure_rate": 0.11155910231791982,
+        "mae": 0.06717791807143703,
+        "spearman": 0.24254712204784637,
+        "lift_top10pct": 1.1053162624278283,
+        "top10_n": 40
+      },
+      "demand_augmented": {
+        "n": 400,
+        "mean_closure_rate": 0.11155910231791982,
+        "mae": 0.0662595862445668,
+        "spearman": 0.22667601251424668,
+        "lift_top10pct": 1.1133802671733175,
+        "top10_n": 40
+      },
+      "delta": {
+        "spearman": -0.015871109533599687,
+        "lift_top10pct": 0.008064004745489184,
+        "mae": -0.0009183318268702195
+      }
+    }
+  ],
+  "clustered_bootstrap": {
+    "cluster": "행정동명",
+    "samples_requested": 1000,
+    "samples_valid": 1000,
+    "delta_definition": "demand_augmented - baseline",
+    "metrics": {
+      "spearman": {
+        "ci95": [
+          -0.04892991231469037,
+          0.022482641610998746
+        ],
+        "median": -0.014071309478862981,
+        "probability_positive": 0.233
+      },
+      "lift_top10pct": {
+        "ci95": [
+          -0.06161252301037257,
+          0.13875146620417694
+        ],
+        "median": 0.02443250311291645,
+        "probability_positive": 0.694
+      },
+      "mae": {
+        "ci95": [
+          -0.0019450188343822822,
+          0.000899873747104959
+        ],
+        "median": -0.000609350014001437,
+        "probability_positive": 0.192
+      }
+    }
+  },
+  "directional_signal_passed": false,
+  "directional_signal_gate": {
+    "overall_spearman_delta_positive": false,
+    "overall_lift_delta_positive": true,
+    "spearman_ci95_lower_positive": false,
+    "lift_ci95_lower_positive": false,
+    "spearman_delta_positive_in_both_test_quarters": false
+  },
+  "limitations": [
+    "수요 피처가 있는 분기가 7개뿐이며 validation은 2023Q2 한 개 분기다.",
+    "2023Q2와 test 시작인 2025Q1 사이에 카드매출 결측으로 긴 시간 공백이 있다.",
+    "카드 업종과 소진공 업종은 공식 일대일 대응표가 아닌 수기 프록시 매핑이다.",
+    "행정동 클러스터 부트스트랩은 29개 동만 재표집하므로 시간축 불확실성을 해소하지 못한다.",
+    "이 실험은 기존 운영 모델의 공식 성능 수치와 직접 비교할 수 없는 축소 표본 결과다."
+  ],
+  "next_gate": [
+    "연속 과거 분기 12개 이상 확보",
+    "기존 운영 validation 구간에 수요 피처 2개 분기 이상 확보",
+    "동일한 운영 시간 분할에서 기준 모델 대비 Spearman과 Top 10 lift 재검증"
+  ]
+}
