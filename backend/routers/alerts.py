@@ -76,8 +76,12 @@ router = APIRouter(prefix="/api/alerts", tags=["alerts"], dependencies=[Depends(
 
 @router.get("/closure-risk", response_model=list[ClosureRiskItem])
 def get_closure_risk(
-    limit: int = Query(10, ge=1, le=50),
+    # 상한을 50에서 500으로 올렸다(2026-08-29). 담당자가 "10개 말고 더" 요구했고, 판정 셀이
+    # 382개라 50으로는 전체를 못 받는다. CSV 다운로드도 화면에 뜬 만큼만 나가고 있었다.
+    limit: int = Query(10, ge=1, le=500),
     category: Optional[str] = Query(None),
+    # 읍면동 필터 — 봉담읍 담당자는 봉담읍만 본다. 목록을 늘리는 것보다 이쪽이 실사용에 가깝다.
+    dong: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """조기경보(예측) — AI 예측 폐업률로 셀 순위만 매긴다. 예측 절대값은 응답에 없음
@@ -113,6 +117,8 @@ def get_closure_risk(
     )
     if category:
         q = q.filter(IndustryCategory.industry_name == category)
+    if dong:
+        q = q.filter(AdminArea.area_name == dong)
     rows = q.order_by(RiskPrediction.predicted_rank.asc()).limit(limit).all()
 
     result = []
@@ -153,9 +159,11 @@ def get_closure_risk(
 def get_closure_rate_ranking(
     limit: int = Query(10, ge=1, le=50),
     category: Optional[str] = Query(None),
+    # rate = 절대 폐업률 순(기본), excess = 업종 평균 대비 초과폭 순.
+    sort: str = Query("rate", pattern="^(rate|excess)$"),
     db: Session = Depends(get_db),
 ):
-    """상권 순위표(현황) — 4분기 누적 관측 폐업률로만 정렬. 보정·예측 관여 없음.
+    """상권 순위표(현황) — 4분기 누적 관측 폐업률. 보정·예측 관여 없음.
 
     정렬 기준을 표시값과 일치시킨다. 신뢰하한으로 정렬하는 안도 검증했으나 4분기 누적에서는
     상위 10개가 동일하게 나왔다(누적 분모가 이미 충분히 커서 소표본 보정이 순서를 바꾸지 않음).
@@ -164,6 +172,18 @@ def get_closure_rate_ranking(
 
     업종 내 순위를 병기한다 — 전체 순위만 두면 목록이 한 업종으로 덮인다(실측: 위험 24개 중
     18개가 교육 계열).
+
+    sort=excess (2026-08-29 추가) — 병기만으로는 부족했다. 표본 기준을 30으로 내린 뒤에도
+    절대 폐업률 상위 20개 중 13개가 교육 계열이었고, 매번 같은 목록이면 담당자가 두 번째부터
+    열어볼 이유가 없다. 편중은 데이터 결함이 아니라 실제 현상이므로(학원가가 점포의 14.9%인데
+    폐업의 28.8%) 값을 건드리지 않고 정렬 축을 하나 더 준다.
+
+    초과폭 = 셀 누적폐업률 - 그 업종의 화성시 전체 누적폐업률. 이 축에서는 상위 20개 중
+    교육이 2개로 줄고, 대신 "종합소매는 시 평균 4.99%인데 동탄2동만 10.49%(2.1배)" 같은
+    줄이 올라온다. 현장 확인을 나갈 이유로는 후자가 명확하다.
+
+    기준선은 표본부족 셀까지 포함한 업종 전체에서 낸다. 우리가 판정한 셀만으로 기준을 만들면
+    "판정 가능한 셀들의 평균 대비 판정 가능한 셀"이라는 순환이 된다.
     """
     latest = db.query(func.max(CommercialQuarter.quarter_code)).scalar()
     if not latest:
@@ -191,13 +211,53 @@ def get_closure_rate_ranking(
         for position, cell in enumerate(cells, 1):
             industry_rank[cell.id] = (position, len(cells))
 
+    # 업종별 기준선 — 표본부족 셀까지 포함한다(위 docstring 참조).
+    industry_totals: dict[str, list[float]] = {}
+    for commercial, industry in (
+        db.query(CommercialQuarter, IndustryCategory.industry_name)
+        .join(IndustryCategory, CommercialQuarter.industry_id == IndustryCategory.id)
+        .filter(CommercialQuarter.quarter_code == latest)
+        .all()
+    ):
+        denominator, _approximate = cumulative_denominator(commercial)
+        if not denominator:
+            continue
+        acc = industry_totals.setdefault(industry, [0.0, 0.0])
+        acc[0] += commercial.closure_count_cum4 or 0
+        acc[1] += denominator
+    industry_avg: dict[str, float] = {
+        name: round(closures / denominator * 100, 2)
+        for name, (closures, denominator) in industry_totals.items()
+        if denominator > 0
+    }
+
     q = base
     if category:
         q = q.filter(IndustryCategory.industry_name == category)
-    rows = q.order_by(CommercialQuarter.closure_rate_cum4.desc()).limit(limit).all()
+
+    # 초과폭은 저장 컬럼이 아니라 파생값이라 DB에서 정렬할 수 없다. 판정 셀이 400개 미만이므로
+    # 전부 가져와 파이썬에서 정렬한 뒤 자른다.
+    scored = []
+    for commercial, dong, industry in q.all():
+        rate = _pct(commercial.closure_rate_cum4)
+        average = industry_avg.get(industry)
+        excess = round(rate - average, 2) if rate is not None and average is not None else None
+        ratio = (
+            round(rate / average, 2)
+            if rate is not None and average not in (None, 0)
+            else None
+        )
+        scored.append((commercial, dong, industry, rate, average, excess, ratio))
+
+    if sort == "excess":
+        # 기준선이 없는 셀(분모 복원 실패)은 뒤로 보낸다. 0으로 채우면 "평균과 같음"으로 읽힌다.
+        scored.sort(key=lambda x: (x[5] is not None, x[5] or 0.0), reverse=True)
+    else:
+        scored.sort(key=lambda x: x[3] or 0.0, reverse=True)
+    scored = scored[:limit]
 
     result = []
-    for i, (commercial, dong, industry) in enumerate(rows, 1):
+    for i, (commercial, dong, industry, rate, average, excess, ratio) in enumerate(scored, 1):
         rank_in_industry, industry_total = industry_rank.get(commercial.id, (None, None))
         result.append(ClosureRateRankingItem(
             rank=i,
@@ -205,11 +265,14 @@ def get_closure_rate_ranking(
             industry_id=commercial.industry_id,
             dong=dong,
             category=industry,
-            closure_rate_pct=_pct(commercial.closure_rate_cum4),
+            closure_rate_pct=rate,
             cumulative_closure_count=commercial.closure_count_cum4 or 0,
             confidence_lower_pct=_pct(commercial.closure_rate_lower4),
             store_count=commercial.store_count,
             risk_grade=commercial.risk_grade or "안정",
+            industry_avg_pct=average,
+            excess_pp=excess,
+            excess_ratio=ratio,
             industry_rank=rank_in_industry,
             industry_total=industry_total,
         ))
@@ -217,7 +280,7 @@ def get_closure_rate_ranking(
 
 
 @router.get("/grade-notice")
-def get_grade_notice():
+def get_grade_notice(db: Session = Depends(get_db)):
     """등급 기준선과 고지 문구.
 
     프론트가 화성시 평균을 상수로 박아두면 파이프라인을 다시 돌릴 때마다 값이 어긋난다
@@ -236,6 +299,41 @@ def get_grade_notice():
         "latest_quarter": LATEST_QUARTER,
         "latest_quarter_label": quarter_label(LATEST_QUARTER),
         "provisional_notice": PROVISIONAL_NOTICE,
+        # 조기경보 순위를 어디까지 믿을 수 있는가 (2026-08-29 추가).
+        #
+        # 검증된 것은 "상위 10%의 리프트 1.29배"이지 순위 전체가 아니다. 스피어만 0.349는
+        # 약한 양의 상관이라는 뜻이지, 47위가 51위보다 위험하다는 뜻이 아니다. 10개만
+        # 보여줄 때는 이 구분이 드러나지 않았는데, 목록을 전부 펼치면 담당자가 47위를
+        # 근거로 예산을 배정할 수 있게 된다 — 우리가 검증하지 않은 사용법이다.
+        # 그래서 경계를 서버가 내려주고 화면이 그 자리에 선을 긋는다.
+        #
+        # 경계는 필터와 무관하게 시 전체 순위 기준이다. 봉담읍만 걸러낸 목록의 "상위 10%"는
+        # 우리가 검증한 대상이 아니다. 그래서 순위(predicted_rank) 절대값으로 자른다.
+        **_ranking_confidence(db),
+    }
+
+
+VALIDATED_TOP_Q = 0.10   # ai/validate_ranking.py의 TOP_PCT와 같은 값이어야 한다
+
+
+def _ranking_confidence(db: Session) -> dict:
+    """조기경보 순위의 검증 구간. validate_ranking.py가 실제로 잰 범위를 화면에 옮긴다."""
+    ranked = (
+        db.query(func.count(RiskPrediction.id))
+        .join(ModelRun, RiskPrediction.model_run_id == ModelRun.id)
+        .join(CommercialQuarter, RiskPrediction.commercial_quarter_id == CommercialQuarter.id)
+        .filter(
+            ModelRun.is_active.is_(True),
+            CommercialQuarter.sample_insufficient.is_(False),
+            RiskPrediction.predicted_rank.isnot(None),
+        )
+        .scalar()
+    ) or 0
+    return {
+        "ranked_cells": ranked,
+        "validated_top_pct": int(VALIDATED_TOP_Q * 100),
+        "validated_top_rank": max(1, round(ranked * VALIDATED_TOP_Q)) if ranked else None,
+        "validated_lift": 1.29,   # ai/validate_ranking.py 재현값(표본 기준 30, 384셀)
     }
 
 

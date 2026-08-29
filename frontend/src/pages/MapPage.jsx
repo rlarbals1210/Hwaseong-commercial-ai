@@ -29,18 +29,74 @@ const OPACITY_NOTE = "흐리게 칠해진 읍면동은 표본이 충분한 업�
 // 다른 6개 화면이 같은 처리를 못 갖고 있어서, 토큰이 만료되면 그 화면들은
 // "불러오지 못했습니다"만 반복하고 재로그인하라는 안내가 없었다.
 
-function RankingTable({ rows, loading, error, category, categories, categoryError, onCategoryChange }) {
+/** 업종 평균 대비 위치를 한 줄로 보여주는 막대.
+ *
+ *  "10.49%"만 있으면 그게 높은지 낮은지 알 수 없다. 업종마다 정상 수준이 다르기 때문이다
+ *  (일반교육 11.57% vs 부동산서비스 2.95%). 기준선을 눈금으로 찍고 셀을 그 옆에 놓는다.
+ *  축 최대는 업종 평균의 2.5배로 고정한다 — 행마다 축이 달라지면 막대 길이를 세로로
+ *  비교할 수 없고, 그게 이 표에서 눈이 제일 먼저 하는 일이다.
+ */
+function ExcessBar({ rate, average }) {
+  if (rate == null || average == null || average <= 0) return null;
+  const max = average * 2.5;
+  const pos = Math.min(rate / max, 1) * 100;
+  const basePos = Math.min(average / max, 1) * 100;
+  const over = rate > average;
+  return (
+    <div style={{ position: "relative", height: 6, background: "var(--surface-sunken, #eee)", borderRadius: 3, marginTop: 5 }}>
+      <div
+        style={{
+          position: "absolute", left: 0, top: 0, bottom: 0, width: `${pos}%`,
+          background: over ? "var(--error)" : "var(--ink-faint)", borderRadius: 3, opacity: over ? 0.85 : 0.45,
+        }}
+      />
+      {/* 업종 평균 눈금. 막대 위에 그려야 가려지지 않는다. */}
+      <div
+        style={{
+          position: "absolute", left: `${basePos}%`, top: -2, bottom: -2, width: 2,
+          background: "var(--on-surface)", opacity: 0.55, transform: "translateX(-1px)",
+        }}
+      />
+    </div>
+  );
+}
+
+function RankingTable({ rows, loading, error, category, categories, categoryError, onCategoryChange, sort, onSortChange }) {
   const { sampleMin } = useGradeNotice();
   // 한 업종으로 좁히면 표시 순위와 업종 내 순위가 같은 키로 정렬돼 숫자가 똑같아진다.
   // 같은 값 두 열을 나란히 두는 대신 열을 접고, 모집단 크기는 아래 설명으로 옮긴다.
   const filtered = Boolean(category);
   const industryTotal = filtered ? rows.find((r) => r.industry_total)?.industry_total : null;
+  const byExcess = sort === "excess";
 
   return (
     <div className="card">
       <div style={{ display: "flex", gap: 16, alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap" }}>
-        <h3 className="t-h3" style={{ margin: 0 }}>상권 순위표 — 최근 1년 누적 폐업률</h3>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <h3 className="t-h3" style={{ margin: 0 }}>
+          상권 순위표 — {byExcess ? "업종 평균 대비 초과폭" : "최근 1년 누적 폐업률"}
+        </h3>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          {/* 정렬 축 전환. 같은 데이터를 다른 질문으로 읽는 것이라 필터가 아니라 탭에 가깝다. */}
+          <div style={{ display: "flex", border: "1px solid var(--hairline)", borderRadius: 6, overflow: "hidden" }}>
+            {[
+              { key: "rate", label: "폐업률 높은 순" },
+              { key: "excess", label: "업종 평균 대비" },
+            ].map((option) => (
+              <button
+                key={option.key}
+                type="button"
+                onClick={() => onSortChange(option.key)}
+                className="t-caption"
+                style={{
+                  border: "none", cursor: "pointer", padding: "6px 12px", fontWeight: 600,
+                  background: sort === option.key ? "var(--on-surface)" : "transparent",
+                  color: sort === option.key ? "var(--surface, #fff)" : "var(--ink-secondary)",
+                }}
+              >
+                {option.label}
+              </button>
+            ))}
+          </div>
           <label className="t-caption" style={{ color: "var(--ink-secondary)", fontWeight: 600 }}>업종</label>
           <select value={category} onChange={(e) => onCategoryChange(e.target.value)} style={{ minWidth: 180 }}>
             <option value="">전체 업종</option>
@@ -52,7 +108,18 @@ function RankingTable({ rows, loading, error, category, categories, categoryErro
       </div>
       <p style={{ margin: "6px 0 16px", fontSize: 12, color: "var(--outline)" }}>
         순수 관측치 정렬, 보정·예측 없음(표본 {sampleMin}개 이상 업종만 집계).
-        단일 분기는 폐업 1~2건 차이로 값이 크게 튀어 4분기 누적으로 봅니다.
+        {byExcess ? (
+          <>
+            {" "}<b style={{ color: "var(--ink-secondary)" }}>
+              업종마다 정상 폐업률이 달라(일반교육 11.6% · 부동산서비스 3.0%) 절대값만으로는 비교가 안 됩니다.
+            </b>{" "}
+            그 업종의 화성시 전체 평균을 기준선으로 두고, 얼마나 벗어났는지로 줄을 세웠습니다.
+          </>
+        ) : (
+          <>
+            {" "}단일 분기는 폐업 1~2건 차이로 값이 크게 튀어 4분기 누적으로 봅니다.
+          </>
+        )}
         {/* 위 지도는 동x분기 집계라 업종 축이 없다. 필터가 지도까지 걸린 것으로 읽히면 안 된다. */}
         {" "}<b style={{ color: "var(--ink-secondary)" }}>업종 선택은 이 표에만 적용되며, 위 지도는 전체 업종 기준입니다.</b>
         {categoryError && (
@@ -83,6 +150,7 @@ function RankingTable({ rows, loading, error, category, categories, categoryErro
               <th style={{ fontWeight: 600 }}>읍면동</th>
               <th style={{ fontWeight: 600 }}>업종</th>
               <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>최근 1년 누적 폐업률</th>
+              {byExcess && <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>업종 평균 대비</th>}
               <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>폐업</th>
               <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>점포수</th>
               {!filtered && <th style={{ padding: "8px 4px", fontWeight: 600, textAlign: "right" }}>업종 내</th>}
@@ -103,7 +171,28 @@ function RankingTable({ rows, loading, error, category, categories, categoryErro
                   </Link>
                 </td>
                 <td style={{ color: "var(--ink-muted)" }}>{r.category}</td>
-                <td className="t-metric" style={{ textAlign: "right", color: "var(--error)" }}>{fmt(r.closure_rate_pct)}%</td>
+                <td className="t-metric" style={{ textAlign: "right", color: "var(--error)" }}>
+                  {fmt(r.closure_rate_pct)}%
+                  {/* 기준선 대비 위치. 절대값 옆에 붙여야 "이게 높은 건가"에 같은 자리에서 답한다. */}
+                  {byExcess && <ExcessBar rate={r.closure_rate_pct} average={r.industry_avg_pct} />}
+                </td>
+                {byExcess && (
+                  <td className="t-metric" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                    {r.excess_pp == null ? (
+                      <span style={{ color: "var(--ink-faint)", fontWeight: 400 }}>—</span>
+                    ) : (
+                      <>
+                        <span style={{ color: r.excess_pp > 0 ? "var(--error)" : "var(--ink-muted)", fontWeight: 700 }}>
+                          {r.excess_pp > 0 ? "+" : ""}{fmt(r.excess_pp, 2)}pp
+                        </span>
+                        <div className="t-caption" style={{ color: "var(--ink-faint)", fontWeight: 400, marginTop: 2 }}>
+                          평균 {fmt(r.industry_avg_pct, 2)}%
+                          {r.excess_ratio != null && ` · ${fmt(r.excess_ratio, 2)}배`}
+                        </div>
+                      </>
+                    )}
+                  </td>
+                )}
                 <td className="t-metric" style={{ textAlign: "right", fontWeight: 400, color: "var(--ink-muted)" }}>{r.cumulative_closure_count ?? "—"}곳</td>
                 <td className="t-metric" style={{ textAlign: "right", fontWeight: 400, color: "var(--ink-muted)" }}>{r.store_count}</td>
                 {!filtered && (
@@ -329,6 +418,8 @@ export default function MapPage() {
   const [ranking, setRanking] = useState([]);
   const [rankingLoading, setRankingLoading] = useState(true);
   const [category, setCategory] = useState("");
+  // 순위표 정렬 축. "폐업률 높은 순"이 기본 — 처음 여는 사람에게는 절대값이 자연스럽다.
+  const [rankSort, setRankSort] = useState("rate");
   const [tab, setTab] = useState("map");
   // 순위표와 같은 집합(최신 분기·표본충분)을 좁히는 purpose를 쓴다.
   const { categories, error: categoryError } = useCategories("policy");
@@ -353,7 +444,7 @@ export default function MapPage() {
   // 순위표만 업종 필터에 반응한다. 지도 fetch와 한 effect에 두면 업종을 바꿀 때마다
   // riskData가 새 배열이 되어 폴리곤 29개가 통째로 다시 그려진다.
   useEffect(() => {
-    const params = new URLSearchParams({ limit: 10 });
+    const params = new URLSearchParams({ limit: 10, sort: rankSort });
     if (category) params.set("category", category);
     apiFetchJson(`/api/alerts/closure-rate-ranking?${params}`)
       .then((d) => {
@@ -365,7 +456,7 @@ export default function MapPage() {
         setRankingError(describeApiError(err));
       })
       .finally(() => setRankingLoading(false));
-  }, [category]);
+  }, [category, rankSort]);
 
   const drawPolygons = useCallback((map, geojson, riskMap) => {
     polygonsRef.current.forEach((p) => p.setMap(null));
@@ -629,6 +720,13 @@ export default function MapPage() {
             setRankingLoading(true);
             setRankingError("");
             setCategory(next);
+          }}
+          sort={rankSort}
+          onSortChange={(next) => {
+            if (next === rankSort) return;
+            setRankingLoading(true);
+            setRankingError("");
+            setRankSort(next);
           }}
         />
       </div>

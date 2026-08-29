@@ -72,6 +72,14 @@ class ClosureRateRankingItem(BaseModel):
     confidence_lower_pct: float | None = None
     store_count: int
     risk_grade: str
+    # 업종 평균 대비 (2026-08-29). 절대 폐업률로만 줄을 세우면 목록이 매번 교육 계열로
+    # 덮여, 담당자가 두 번째 열어볼 이유가 없어진다(상위 20개 중 13개가 교육이었다).
+    # 업종별 시 전체 기준선을 함께 주고 초과폭으로도 정렬할 수 있게 한다.
+    # 기준선은 표본부족 셀까지 포함한 업종 전체의 건수합/분모합이다 — 업종의 실제 모습이
+    # 기준이어야지, 우리가 판정한 셀만 모은 값이 기준이 되면 순환 논리가 된다.
+    industry_avg_pct: float | None = None   # 그 업종의 화성시 전체 누적 폐업률
+    excess_pp: float | None = None          # 셀 폐업률 - 업종 평균 (%p)
+    excess_ratio: float | None = None       # 셀 폐업률 / 업종 평균 (배)
     industry_rank: int | None = None      # 같은 업종 안에서의 순위
     industry_total: int | None = None     # 같은 업종의 표본충분 셀 수
 
