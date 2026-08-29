@@ -1,16 +1,16 @@
 {
-  "avg_closure_rate_pct": 5.9,
-  "danger_threshold_pct": 10.35,
-  "dong_ratio_avg_pct": 12.49,
-  "dong_ratio_danger_pct": 34.64,
-  "sample_min": 50,
+  "avg_closure_rate_pct": 5.56,
+  "danger_threshold_pct": 9.71,
+  "dong_ratio_avg_pct": 10.84,
+  "dong_ratio_danger_pct": 25.46,
+  "sample_min": 30,
   "quarter": 20254,
-  "caution_threshold_pct": 7.26,
+  "caution_threshold_pct": 6.9,
   "window_quarters": 4,
   "method": "cumulative_quantile",
   "danger_quantile": 0.9,
   "caution_quantile": 0.7,
-  "eligible_cells": 231,
-  "cell_type_open_cut_pct": 2.0,
-  "cell_type_close_cut_pct": 5.65
+  "eligible_cells": 382,
+  "cell_type_open_cut_pct": 1.91,
+  "cell_type_close_cut_pct": 5.16
 }
