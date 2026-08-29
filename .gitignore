@@ -37,6 +37,8 @@ data/processed/*
 !data/processed/demand_scores.csv
 !data/processed/demand_model_results.json
 !data/processed/demand_model.pkl
+!data/processed/demand_features_historical.csv
+!data/processed/demand_features_historical_audit.json
 # 업종 계층(대분류 10 x 중분류 74). 점포 패널에서 뽑은 이름 쌍뿐이라 점포 식별과 무관하다.
 !data/processed/industry_hierarchy.csv
 

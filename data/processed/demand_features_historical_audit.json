@@ -1,0 +1,367 @@
+{
+  "method_version": "historical-demand-features-v1",
+  "research_only": true,
+  "production_ready": false,
+  "target_definition": "분기 말 다음 달 카드 업종별 화성시 매출 중 행정동 점유율",
+  "leakage_controls": [
+    "각 분기 말까지 공개된 카드매출만 사용",
+    "혼합비 선택은 예측기준월까지 정답이 확인된 과거 target month만 사용",
+    "공급은 예측기준월과 같은 분기의 점포수만 사용",
+    "결측 2024-02~2024-12는 보간하지 않음"
+  ],
+  "source_files": {
+    "working_card_sales": "card_sales_hwaseong.csv",
+    "working_card_sales_sha256": "f07f9006ef42cb5aa4d52c14583109c1e81fd9d0d40ea1fc5eda841e3a601c5f",
+    "official_card_code_table": "공개_수요예측_원본_20260829/업종_중분류코드.xlsx",
+    "official_card_code_table_sha256": "53a726f515a538e03926c5b7c49a3d1b39d7e63249f76f988558bb9b6ba37a03",
+    "fresh_official_download": {
+      "source_page": "https://data.gg.go.kr/portal/data/service/selectServicePage.do?infId=H92OOSWZXICJM0UO4IHH38259217&infSeq=1",
+      "downloaded_zip": "공개_수요예측_원본_20260829/카드매출_행정동_집계_20250918/카드매출_행정동_집계.zip",
+      "downloaded_zip_sha256": "17d36ae4823d0b85e2c3ddfc0c4c19762b0fa2c11b8a0949aaf9b21a1f3a58be",
+      "downloaded_csv": "공개_수요예측_원본_20260829/카드매출_행정동_집계_20250918/extracted/카드매출_행정동_집계.csv",
+      "fresh_file_available": true,
+      "page_data_basis_date": "2025-09-18",
+      "page_update_date": "2025-10-14",
+      "statewide_rows": 1750297,
+      "hwaseong_rows": 89386,
+      "hwaseong_first_month": "201801",
+      "hwaseong_last_month": "202506",
+      "hwaseong_area_codes": 29,
+      "hwaseong_card_codes": 125,
+      "hwaseong_missing_months": [
+        "202402",
+        "202403",
+        "202404",
+        "202405",
+        "202406",
+        "202407",
+        "202408",
+        "202409",
+        "202410",
+        "202411",
+        "202412"
+      ],
+      "working_file_comparison": {
+        "working_rows": 89386,
+        "fresh_hwaseong_rows": 89386,
+        "keys_identical": true,
+        "working_only_keys": 0,
+        "fresh_only_keys": 0,
+        "max_absolute_sales_delta": 2146.900001525879,
+        "relative_total_absolute_sales_delta": 2.2148682333320395e-08
+      }
+    }
+  },
+  "panel_audit": {
+    "raw_rows": 89386,
+    "active_rows": 42979
+  },
+  "usable_months": [
+    "202201",
+    "202202",
+    "202203",
+    "202204",
+    "202205",
+    "202206",
+    "202208",
+    "202210",
+    "202211",
+    "202212",
+    "202301",
+    "202302",
+    "202303",
+    "202304",
+    "202305",
+    "202306",
+    "202307",
+    "202401",
+    "202501",
+    "202502",
+    "202503",
+    "202504",
+    "202505",
+    "202506"
+  ],
+  "missing_months": [
+    "202402",
+    "202403",
+    "202404",
+    "202405",
+    "202406",
+    "202407",
+    "202408",
+    "202409",
+    "202410",
+    "202411",
+    "202412"
+  ],
+  "eligible_source_months": [
+    "202203",
+    "202206",
+    "202212",
+    "202303",
+    "202306",
+    "202503",
+    "202506"
+  ],
+  "eligible_quarters": [
+    20221,
+    20222,
+    20224,
+    20231,
+    20232,
+    20251,
+    20252
+  ],
+  "closure_model_split_quarters": {
+    "train": [
+      20221,
+      20222,
+      20224,
+      20231,
+      20232
+    ],
+    "validation": [],
+    "test_or_later": [
+      20251,
+      20252
+    ]
+  },
+  "asof_choices": [
+    {
+      "source_month": "202203",
+      "quarter": 20221,
+      "method": "persistence_fallback",
+      "rolling_blend": 0.0,
+      "validation_mae": null,
+      "history_target_months": [
+        "202202",
+        "202203"
+      ],
+      "output_rows": 1765
+    },
+    {
+      "source_month": "202206",
+      "quarter": 20222,
+      "method": "expanding_rolling_mean_blend",
+      "rolling_blend": 0.5,
+      "validation_mae": 0.007558434414474054,
+      "history_target_months": [
+        "202202",
+        "202203",
+        "202204",
+        "202205",
+        "202206"
+      ],
+      "output_rows": 1774
+    },
+    {
+      "source_month": "202212",
+      "quarter": 20224,
+      "method": "expanding_rolling_mean_blend",
+      "rolling_blend": 0.5,
+      "validation_mae": 0.0077459950919021095,
+      "history_target_months": [
+        "202202",
+        "202203",
+        "202204",
+        "202205",
+        "202206",
+        "202211",
+        "202212"
+      ],
+      "output_rows": 1780
+    },
+    {
+      "source_month": "202303",
+      "quarter": 20231,
+      "method": "expanding_rolling_mean_blend",
+      "rolling_blend": 0.55,
+      "validation_mae": 0.007688522765591869,
+      "history_target_months": [
+        "202202",
+        "202203",
+        "202204",
+        "202205",
+        "202206",
+        "202211",
+        "202212",
+        "202301",
+        "202302",
+        "202303"
+      ],
+      "output_rows": 1767
+    },
+    {
+      "source_month": "202306",
+      "quarter": 20232,
+      "method": "expanding_rolling_mean_blend",
+      "rolling_blend": 0.55,
+      "validation_mae": 0.0074118203996817065,
+      "history_target_months": [
+        "202202",
+        "202203",
+        "202204",
+        "202205",
+        "202206",
+        "202211",
+        "202212",
+        "202301",
+        "202302",
+        "202303",
+        "202304",
+        "202305",
+        "202306"
+      ],
+      "output_rows": 1782
+    },
+    {
+      "source_month": "202503",
+      "quarter": 20251,
+      "method": "expanding_rolling_mean_blend",
+      "rolling_blend": 0.55,
+      "validation_mae": 0.007532934248416391,
+      "history_target_months": [
+        "202202",
+        "202203",
+        "202204",
+        "202205",
+        "202206",
+        "202211",
+        "202212",
+        "202301",
+        "202302",
+        "202303",
+        "202304",
+        "202305",
+        "202306",
+        "202307",
+        "202502",
+        "202503"
+      ],
+      "output_rows": 1801
+    },
+    {
+      "source_month": "202506",
+      "quarter": 20252,
+      "method": "expanding_rolling_mean_blend",
+      "rolling_blend": 0.55,
+      "validation_mae": 0.007584510895324364,
+      "history_target_months": [
+        "202202",
+        "202203",
+        "202204",
+        "202205",
+        "202206",
+        "202211",
+        "202212",
+        "202301",
+        "202302",
+        "202303",
+        "202304",
+        "202305",
+        "202306",
+        "202307",
+        "202502",
+        "202503",
+        "202504",
+        "202505",
+        "202506"
+      ],
+      "output_rows": 1804
+    }
+  ],
+  "quarter_summary": [
+    {
+      "quarter": 20221,
+      "rows": 1765,
+      "supply_rows": 1765,
+      "join_coverage_pct": 100.0,
+      "sample_ge_30_rows": 348,
+      "sample_ge_50_rows": 209,
+      "previous_supply_missing_rows": 11,
+      "direct_mapping_industries": 74
+    },
+    {
+      "quarter": 20222,
+      "rows": 1774,
+      "supply_rows": 1774,
+      "join_coverage_pct": 100.0,
+      "sample_ge_30_rows": 354,
+      "sample_ge_50_rows": 214,
+      "previous_supply_missing_rows": 13,
+      "direct_mapping_industries": 74
+    },
+    {
+      "quarter": 20224,
+      "rows": 1780,
+      "supply_rows": 1780,
+      "join_coverage_pct": 100.0,
+      "sample_ge_30_rows": 365,
+      "sample_ge_50_rows": 220,
+      "previous_supply_missing_rows": 6,
+      "direct_mapping_industries": 74
+    },
+    {
+      "quarter": 20231,
+      "rows": 1767,
+      "supply_rows": 1767,
+      "join_coverage_pct": 100.0,
+      "sample_ge_30_rows": 358,
+      "sample_ge_50_rows": 212,
+      "previous_supply_missing_rows": 9,
+      "direct_mapping_industries": 74
+    },
+    {
+      "quarter": 20232,
+      "rows": 1782,
+      "supply_rows": 1782,
+      "join_coverage_pct": 100.0,
+      "sample_ge_30_rows": 363,
+      "sample_ge_50_rows": 218,
+      "previous_supply_missing_rows": 19,
+      "direct_mapping_industries": 74
+    },
+    {
+      "quarter": 20251,
+      "rows": 1801,
+      "supply_rows": 1801,
+      "join_coverage_pct": 100.0,
+      "sample_ge_30_rows": 397,
+      "sample_ge_50_rows": 243,
+      "previous_supply_missing_rows": 34,
+      "direct_mapping_industries": 74
+    },
+    {
+      "quarter": 20252,
+      "rows": 1804,
+      "supply_rows": 1804,
+      "join_coverage_pct": 100.0,
+      "sample_ge_30_rows": 400,
+      "sample_ge_50_rows": 246,
+      "previous_supply_missing_rows": 6,
+      "direct_mapping_industries": 74
+    }
+  ],
+  "output": {
+    "path": "data/processed/demand_features_historical.csv",
+    "rows": 12473,
+    "unique_areas": 29,
+    "unique_industries": 74,
+    "duplicate_keys": 0,
+    "research_only_all_true": true
+  },
+  "deployment_gate": {
+    "minimum_eligible_quarters": 12,
+    "minimum_validation_quarters": 2,
+    "require_no_missing_months": true,
+    "require_industry_mapping_review": true,
+    "industry_mapping_reviewed": false
+  },
+  "blockers": [
+    "연속 3개월로 생성 가능한 분기가 7개뿐임(최소 12개 필요)",
+    "기존 폐업모델 validation(2023Q3~2024Q2)에 수요 피처 분기가 없음",
+    "카드매출 원본 결측 월 11개 존재",
+    "카드 업종과 소진공 업종의 공식 일대일 매핑표가 없어 수기 프록시 매핑 사용"
+  ]
+}
