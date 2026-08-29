@@ -50,7 +50,7 @@ MODEL_PKL = ROOT / "data" / "processed" / "lgbm_model_cell.pkl"
 CELL_TABLE = ROOT / "data" / "processed" / "cell_train_table.csv"
 
 KEY = ["행정동명", "상권업종중분류명"]
-SAMPLE_MIN = 50          # 조회 기준과 동일
+SAMPLE_MIN = 30          # 조회 기준(build_risk_index.SAMPLE_MIN)과 동일
 TOP_PCT = 0.10           # 리프트를 재는 상위 비율
 ORIGINS = [20243, 20244]  # 모델 검증 종료(2024Q2) 이후 & 미래 4분기가 확보되는 분기
 
