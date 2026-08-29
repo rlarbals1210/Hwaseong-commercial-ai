@@ -5,6 +5,7 @@ import { GradeBadge } from "../components/Badge";
 import TabStrip from "../components/TabStrip";
 import { NAVER_CLIENT_ID, loadNaverMap, fitBoundsTight } from "../lib/naverMap";
 import useCategories from "../hooks/useCategories";
+import useGradeNotice from "../hooks/useGradeNotice";
 
 // 다른 화면과 같은 정의. 이 파일에만 사본이 없어 백엔드 raw 값(2자리)이 그대로 찍혔다 —
 // 같은 상권이 대시보드에서 7.1%, 여기서 7.14%로 보였다.
@@ -29,6 +30,7 @@ const OPACITY_NOTE = "흐리게 칠해진 읍면동은 표본이 충분한 업�
 // "불러오지 못했습니다"만 반복하고 재로그인하라는 안내가 없었다.
 
 function RankingTable({ rows, loading, error, category, categories, categoryError, onCategoryChange }) {
+  const { sampleMin } = useGradeNotice();
   // 한 업종으로 좁히면 표시 순위와 업종 내 순위가 같은 키로 정렬돼 숫자가 똑같아진다.
   // 같은 값 두 열을 나란히 두는 대신 열을 접고, 모집단 크기는 아래 설명으로 옮긴다.
   const filtered = Boolean(category);
@@ -49,7 +51,7 @@ function RankingTable({ rows, loading, error, category, categories, categoryErro
         </div>
       </div>
       <p style={{ margin: "6px 0 16px", fontSize: 12, color: "var(--outline)" }}>
-        순수 관측치 정렬, 보정·예측 없음(표본 50개 이상 업종만 집계).
+        순수 관측치 정렬, 보정·예측 없음(표본 {sampleMin}개 이상 업종만 집계).
         단일 분기는 폐업 1~2건 차이로 값이 크게 튀어 4분기 누적으로 봅니다.
         {/* 위 지도는 동x분기 집계라 업종 축이 없다. 필터가 지도까지 걸린 것으로 읽히면 안 된다. */}
         {" "}<b style={{ color: "var(--ink-secondary)" }}>업종 선택은 이 표에만 적용되며, 위 지도는 전체 업종 기준입니다.</b>
@@ -145,6 +147,7 @@ function Row({ label, children, hint }) {
 }
 
 function AreaPanel({ selected, detail, loading, onClose }) {
+  const { sampleMin } = useGradeNotice();
   if (!selected) return null;
   const judged = selected.risk_ratio != null;
   const industries = detail?.industries ?? [];
@@ -233,7 +236,7 @@ function AreaPanel({ selected, detail, loading, onClose }) {
             hint={
               selected.evidence_thin
                 ? `표본 충족률 ${detail.coverage_pct}% · 업종 10개 미만이라 읍면동 등급의 근거가 얕습니다`
-                : `표본 충족률 ${detail.coverage_pct}% · 점포 50곳 이상 기준`
+                : `표본 충족률 ${detail.coverage_pct}% · 점포 ${sampleMin}곳 이상 기준`
             }
           >
             {detail.sample_sufficient_cells}/{detail.total_cells}개

@@ -4,6 +4,7 @@ import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge, TypeBadge } from "../components/Badge";
 import { downloadCsv, csvNum } from "../lib/csv";
 import useCategories from "../hooks/useCategories";
+import useGradeNotice from "../hooks/useGradeNotice";
 
 const EMPTY_DATA = { Q1: [], Q2: [], Q3: [], Q4: [] };
 
@@ -189,13 +190,7 @@ export default function PolicyPage() {
   const [error, setError] = useState("");
   const { categories, error: categoryError } = useCategories("policy");
   // CSV 머리말에 붙일 기준선·고지 문구. 화면의 ProvisionalNotice와 같은 출처를 쓴다.
-  const [gradeMeta, setGradeMeta] = useState(null);
-
-  useEffect(() => {
-    apiFetchJson("/api/alerts/grade-notice")
-      .then(setGradeMeta)
-      .catch(() => setGradeMeta(null));
-  }, []);
+  const { meta: gradeMeta, sampleMin } = useGradeNotice();
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -275,7 +270,7 @@ export default function PolicyPage() {
           <div className="t-caption" style={{ marginTop: 7, color: categoryError ? "var(--error)" : "var(--ink-faint)" }}>
             {categoryError
               ? "업종 목록을 불러오지 못했습니다."
-              : `최신 분기 점포 수 50개 이상인 ${categories.length}개 업종`}
+              : `최신 분기 점포 수 ${sampleMin}개 이상인 ${categories.length}개 업종`}
           </div>
         </div>
 
@@ -303,7 +298,7 @@ export default function PolicyPage() {
           <EmptyState
             icon="filter_alt_off"
             title="선택한 업종은 분석 가능 표본이 부족합니다"
-            desc="최신 분기 점포 수가 50개 미만이라 통계 판단을 보류합니다."
+            desc={`최신 분기 점포 수가 ${sampleMin}개 미만이라 통계 판단을 보류합니다.`}
           />
         ) : (
           <EmptyState icon="database_off" title="분석 결과가 없습니다" desc="데이터 적재 상태를 확인해주세요." />

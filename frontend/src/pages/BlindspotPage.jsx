@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
+import useGradeNotice from "../hooks/useGradeNotice";
 
 // 매일 여는 업무 화면이다. 산출 방식·한계 고지는 하단 「산출 기준」 한 곳에 모으고
 // 본문에는 값과 판정만 둔다. 근거를 본문에 흩으면 두 번째 방문부터는 읽지 않는다.
@@ -416,11 +417,11 @@ export default function BlindspotPage() {
     setParams(next, { replace: true });
   };
 
+  const { meta: thresholds, sampleMin: fallbackSampleMin } = useGradeNotice();
   const [data, setData] = useState(null);
   const [coverage, setCoverage] = useState(null);
   const [industries, setIndustries] = useState(null);
   const [dongs, setDongs] = useState([]);
-  const [thresholds, setThresholds] = useState(null);
   const [loading, setLoading] = useState(true);
   const [shapeLoading, setShapeLoading] = useState(true);
   const [error, setError] = useState("");
@@ -428,7 +429,6 @@ export default function BlindspotPage() {
   const [nearCount, setNearCount] = useState(null);
 
   useEffect(() => {
-    apiFetchJson("/api/alerts/grade-notice").then(setThresholds).catch(() => setThresholds(null));
     apiFetchJson("/api/analysis/dongs")
       .then((d) => setDongs(Array.isArray(d.dongs) ? d.dongs : Array.isArray(d) ? d : []))
       .catch(() => setDongs([]));
@@ -462,7 +462,7 @@ export default function BlindspotPage() {
       .catch(() => setNearCount(null));
   }, [dong]);
 
-  const sampleMin = data?.sample_min ?? thresholds?.sample_min ?? 50;
+  const sampleMin = data?.sample_min ?? fallbackSampleMin;
   const nearMin = data?.near_min_stores ?? 30;
   const highlights = band === "all" ? data?.items ?? [] : [];
 
