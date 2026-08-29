@@ -2642,6 +2642,38 @@ a { color: var(--primary); }
   min-height: 100%;
 }
 
+.official-map-industry-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  width: 100%;
+  margin-top: 6px;
+  padding: 9px 12px;
+  color: var(--primary);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  background: color-mix(in srgb, var(--primary) 6%, white);
+  border: 1px solid color-mix(in srgb, var(--primary) 16%, white);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: background-color 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.official-map-industry-toggle:hover {
+  background: color-mix(in srgb, var(--primary) 11%, white);
+  border-color: color-mix(in srgb, var(--primary) 28%, white);
+}
+
+.official-map-industry-toggle:active {
+  transform: translateY(1px);
+}
+
+.official-map-industry-toggle .material-symbols-outlined {
+  font-size: 19px;
+}
+
 .official-map-ranking {
   min-height: calc(100vh - 106px);
   padding-top: 72px;

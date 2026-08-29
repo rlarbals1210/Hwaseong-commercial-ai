@@ -237,9 +237,16 @@ function Row({ label, children, hint }) {
 
 function AreaPanel({ selected, detail, loading, onClose }) {
   const { sampleMin } = useGradeNotice();
+  const [expandedArea, setExpandedArea] = useState(null);
   if (!selected) return null;
   const judged = selected.risk_ratio != null;
   const industries = detail?.industries ?? [];
+  const showAllIndustries = expandedArea === selected.name;
+  const visibleIndustries = showAllIndustries ? industries : industries.slice(0, 3);
+  const trend = Number(selected.trend);
+  const trendLabel = Number.isFinite(trend)
+    ? `분기당 ${trend > 0 ? "+" : ""}${trend.toFixed(3)}%p`
+    : "—";
   const VS = {
     높음: { label: "시 평균보다 높음", cls: "badge badge-warn" },
     낮음: { label: "시 평균보다 낮음", cls: "badge badge-ok" },
@@ -281,7 +288,7 @@ function AreaPanel({ selected, detail, loading, onClose }) {
               {selected.risk_level}
             </span>
             {/* 근거의 두께는 칩 하나로만 말한다. 자세한 내용은 title과 아래
-                "분석 가능 업종" 줄, 지도 범례에 이미 있다. */}
+                "표본 기준 충족 업종" 줄, 지도 범례에 이미 있다. */}
             {selected.evidence_thin && (
               <span className="badge badge-neutral" title={selected.hold_notice ?? undefined}>
                 근거 얕음
@@ -314,26 +321,33 @@ function AreaPanel({ selected, detail, loading, onClose }) {
             <span className={VS.cls} style={{ marginLeft: 4, fontWeight: 600 }}>{VS.label}</span>
           </Row>
 
-          <Row label="위험 · 주의 업종" hint={`표본 기준을 넘은 ${detail.sample_sufficient_cells}개 업종 중`}>
-            {detail.risk_cells} · {detail.caution_cells}개
+          <Row label="주의가 필요한 업종" hint={`점포 ${sampleMin}곳 이상인 ${detail.sample_sufficient_cells}개 업종 중`}>
+            <span style={{ color: "var(--error)" }}>위험 {detail.risk_cells}개</span>
+            <span style={{ color: "var(--ink-faint)", margin: "0 5px" }}>·</span>
+            <span style={{ color: "var(--accent-orange)" }}>주의 {detail.caution_cells}개</span>
           </Row>
 
-          <Row label="폐업률 추이 기울기">{selected.trend?.toFixed(3)}</Row>
+          <Row
+            label="폐업률 추이"
+            hint="최근 4개 분기의 누적 폐업률 흐름입니다. 양수면 상승, 음수면 하락을 뜻합니다."
+          >
+            {trendLabel}
+          </Row>
 
           <Row
-            label="분석 가능 업종"
+            label="표본 기준 충족 업종"
             hint={
               selected.evidence_thin
                 ? `표본 충족률 ${detail.coverage_pct}% · 업종 10개 미만이라 읍면동 등급의 근거가 얕습니다`
                 : `표본 충족률 ${detail.coverage_pct}% · 점포 ${sampleMin}곳 이상 기준`
             }
           >
-            {detail.sample_sufficient_cells}/{detail.total_cells}개
+            {detail.sample_sufficient_cells}개 / 전체 {detail.total_cells}개
           </Row>
 
           <Row
             label="사각지대"
-            hint={`점포 ${detail.blindspot_stores.toLocaleString()}곳 · 전체의 ${
+            hint={`점포 ${sampleMin}곳 미만이라 통계 판단을 보류한 업종 · 점포 ${detail.blindspot_stores.toLocaleString()}곳, 전체의 ${
               detail.total_stores ? Math.round(detail.blindspot_stores / detail.total_stores * 100) : 0
             }%`}
           >
@@ -355,12 +369,17 @@ function AreaPanel({ selected, detail, loading, onClose }) {
 
           {/* "그래서 어느 업종인가" — 이 목록이 이 패널의 존재 이유다 */}
           {industries.length > 0 && (
-            <div style={{ marginTop: 16 }}>
-              <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 8 }}>
-                업종별 폐업률 (표본 기준 충족 {industries.length}개)
+            <div className="official-map-industry-list" style={{ marginTop: 16 }}>
+              <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
+                <div className="t-eyebrow" style={{ color: "var(--ink-faint)" }}>
+                  업종별 폐업률
+                </div>
+                <span className="t-caption" style={{ color: "var(--ink-faint)", flexShrink: 0 }}>
+                  표본 기준 충족 {industries.length}개
+                </span>
               </div>
-              <div style={{ maxHeight: 260, overflowY: "auto", margin: "0 -6px" }}>
-                {industries.map((item) => (
+              <div style={{ margin: "0 -6px" }}>
+                {visibleIndustries.map((item) => (
                   <Link
                     key={item.industry_id}
                     to={`/cells/${item.area_id}/${item.industry_id}`}
@@ -380,25 +399,21 @@ function AreaPanel({ selected, detail, loading, onClose }) {
                   </Link>
                 ))}
               </div>
+              {industries.length > 3 && (
+                <button
+                  type="button"
+                  className="official-map-industry-toggle"
+                  aria-expanded={showAllIndustries}
+                  onClick={() => setExpandedArea(showAllIndustries ? null : selected.name)}
+                >
+                  {showAllIndustries ? "간단히 보기" : `전체 ${industries.length}개 보기`}
+                  <span className="material-symbols-outlined" aria-hidden="true">
+                    {showAllIndustries ? "expand_less" : "expand_more"}
+                  </span>
+                </button>
+              )}
             </div>
           )}
-
-          <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
-            <Link
-              to="/dashboard"
-              className="btn-utility"
-              style={{ flex: 1, textAlign: "center", color: "var(--primary)", textDecoration: "none", boxSizing: "border-box" }}
-            >
-              조기경보
-            </Link>
-            <Link
-              to={`/blindspots?dong=${encodeURIComponent(selected.name)}`}
-              className="btn-utility"
-              style={{ flex: 1, textAlign: "center", color: "var(--primary)", textDecoration: "none", boxSizing: "border-box" }}
-            >
-              사각지대
-            </Link>
-          </div>
         </>
       )}
     </div>
