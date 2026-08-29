@@ -43,8 +43,13 @@ const QUADRANT_META = {
   Q4: {
     order: "4순위",
     label: "일반 관찰",
-    tone: "var(--accent-green)",
-    soft: "var(--green-soft)",
+    // 초록 -> 중립 회색(2026-08-29). 두 가지 이유다.
+    //   1. 빨강(1순위)과 초록(4순위)이 한 화면에 같이 있으면 적록색맹에서 두 사분면이
+    //      구분되지 않는다. 우선순위를 고르는 화면에서 1순위와 4순위가 섞이는 셈이다.
+    //   2. 4순위는 "정기 모니터링 유지"다. 초록은 "좋다"는 판정으로 읽히는데 우리가 한
+    //      판정은 "지금 볼 순서가 아니다"까지다. 중립색이 그 뜻에 맞는다.
+    tone: "var(--outline)",
+    soft: "var(--surface-container)",
     desc: "위험 등급이 아니고 영향 점포도 적음. 정기 모니터링 유지",
   },
 };
@@ -134,7 +139,13 @@ function QuadrantPanel({ meta, items, highlight }) {
                 <div className="t-caption" style={{ color: "var(--ink-muted)", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {item.category}
                   {" · 최근 1년 "}
-                  <b style={{ color: meta.tone, fontVariantNumeric: "tabular-nums" }}>{item.actual_closure_rate_pct}%</b>
+                  {/* 폐업률 숫자는 중립 잉크로 둔다(2026-08-29).
+                      예전에는 meta.tone을 그대로 입혔는데, 그러면 색이 값이 아니라 이 줄이
+                      속한 사분면을 나타내게 된다. 실제 화면에서 16.0%가 주황(2순위),
+                      14.1%가 빨강(1순위)으로 찍혀 더 높은 값이 더 안전해 보였다.
+                      사분면 소속은 패널 제목과 순위 배지가 이미 말하고 있고, 값의 높낮이는
+                      바로 옆 등급 배지가 말한다. 숫자에 색을 또 얹으면 셋이 서로 다른 말을 한다. */}
+                  <b style={{ color: "var(--ink-secondary)", fontVariantNumeric: "tabular-nums" }}>{item.actual_closure_rate_pct}%</b>
                   {item.cumulative_closure_count ? (
                     <span style={{ color: "var(--ink-faint)" }}> ({item.cumulative_closure_count}곳)</span>
                   ) : null}

@@ -2554,23 +2554,61 @@ a { color: var(--primary); }
   height: 100%;
 }
 
-.official-map-view-switch {
+/* 순위표 여닫기 버튼 — 예전 탭(.official-map-view-switch)이 있던 자리다.
+   탭은 지도를 떠나야 표를 볼 수 있어서 서랍으로 바꿨다(2026-08-29). */
+.official-map-ranking-toggle {
   position: absolute;
   top: 16px;
   left: 16px;
   z-index: 42;
-  width: min(320px, calc(100% - 32px));
-}
-
-.official-map-view-switch > [role="tablist"] {
-  background: rgba(255, 255, 255, 0.9) !important;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 14px;
+  color: #0f172a;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(15, 23, 42, 0.09);
+  border-radius: var(--radius-md);
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
   backdrop-filter: blur(14px);
+  cursor: pointer;
+  transition: background-color 160ms ease, transform 160ms ease;
 }
 
-.official-map-view-switch [role="tab"] {
-  min-height: 38px;
+.official-map-ranking-toggle:hover {
+  background: rgba(255, 255, 255, 0.98);
+}
+
+.official-map-ranking-toggle[aria-expanded="true"] {
+  color: #ffffff;
+  background: var(--primary);
+  border-color: var(--primary);
+}
+
+.official-map-ranking-toggle .material-symbols-outlined {
+  font-size: 18px;
+}
+
+/* 순위표 서랍 — 지도 아래쪽에서 올라온다. 표는 가로로 길어서 옆 패널보다 아래가 맞다.
+   범례(bottom 16, 높이 약 60px) 위에 서도록 bottom을 띄운다. */
+.official-map-ranking-drawer {
+  position: absolute;
+  right: 16px;
+  bottom: 96px;
+  left: 16px;
+  z-index: 40;
+  max-height: calc(100% - 190px);
+  overflow-y: auto;
+  border-radius: var(--radius-lg);
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.22);
+}
+
+.official-map-ranking-drawer > .card {
+  margin: 0;
 }
 
 .official-map-error {
@@ -2672,15 +2710,6 @@ a { color: var(--primary); }
 
 .official-map-industry-toggle .material-symbols-outlined {
   font-size: 19px;
-}
-
-.official-map-ranking {
-  min-height: calc(100vh - 106px);
-  padding-top: 72px;
-}
-
-.official-map-ranking > .card {
-  margin: 0;
 }
 
 .official-shell .btn-primary {
@@ -2801,6 +2830,11 @@ a { color: var(--primary); }
   .official-map-detail-panel {
     bottom: 132px;
   }
+
+  .official-map-ranking-drawer {
+    bottom: 136px;
+    max-height: calc(100% - 230px);
+  }
 }
 
 @media (max-width: 760px) {
@@ -2841,10 +2875,9 @@ a { color: var(--primary); }
     border-radius: 14px;
   }
 
-  .official-map-view-switch {
+  .official-map-ranking-toggle {
     top: 12px;
     left: 12px;
-    width: calc(100% - 24px);
   }
 
   .official-map-error {
@@ -2869,9 +2902,11 @@ a { color: var(--primary); }
     max-height: 52%;
   }
 
-  .official-map-ranking {
-    min-height: calc(100vh - 82px);
-    padding-top: 66px;
+  .official-map-ranking-drawer {
+    right: 12px;
+    bottom: 132px;
+    left: 12px;
+    max-height: 46%;
   }
 }
 

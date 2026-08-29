@@ -2,7 +2,6 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge } from "../components/Badge";
-import TabStrip from "../components/TabStrip";
 import { NAVER_CLIENT_ID, loadNaverMap, fitBoundsTight } from "../lib/naverMap";
 import useCategories from "../hooks/useCategories";
 import useGradeNotice from "../hooks/useGradeNotice";
@@ -12,18 +11,48 @@ import useGradeNotice from "../hooks/useGradeNotice";
 const fmt = (v, d = 1) =>
   typeof v === "number" && Number.isFinite(v) ? v.toFixed(d) : "—";
 
-// 범례 색은 백엔드가 폴리곤에 쓰는 색과 반드시 같아야 한다.
-// 예전에는 여기가 CSS 변수(--error #ba1a1a)이고 백엔드가 #D51B4C를 보내서, 같은 화면에서
-// 폴리곤 색과 범례 점 색이 달랐다(2026-08-25 감사). 지금은 백엔드도 index.css 값을 쓴다.
-const LEGEND = [
-  { label: "위험", color: "var(--error)" },
-  { label: "주의", color: "var(--accent-orange)" },
-  { label: "안정", color: "var(--accent-green)" },
-  { label: "판단보류", color: "var(--outline-variant)" },
+// 지도 배색 — 단일 색조 밝기 단계 (2026-08-29 전면 교체)
+//
+// 이전에는 등급별 상태색(안정 초록 / 주의 주황 / 위험 빨강)을 폴리곤에 그대로 칠했다.
+// 세 가지가 동시에 걸렸다.
+//
+//   1. 적록색맹에서 초록과 빨강이 구분되지 않는다. 남성 12명 중 1명이고, 공공 서비스다.
+//   2. 채도 높은 원색 초록이 화면에서 제일 튀었다. 위험을 찾는 지도인데 눈이 제일 먼저
+//      가는 곳이 "안전한 동네"였다.
+//   3. 형태 선택이 틀렸다. 위험 업종 비율은 크기(magnitude)라서 한 색의 밝기 단계로
+//      그려야 한다. 서로 다른 색조는 "종류가 다르다"는 뜻이고, 여기 값들은 종류가 아니라
+//      정도의 차이다.
+//
+// 따뜻한 계열 한 색조의 5단계로 바꿨다. 초록은 아예 쓰지 않는다.
+//
+// 밝기 검증(OKLab L): 0.931 / 0.841 / 0.732 / 0.608 / 0.434 — 단조 감소하고 단계 간격이
+// 모두 0.09 이상이다. 밝기만으로 순서가 읽히므로 색각과 무관하게 동작한다.
+//
+// 구간은 실측 분포로 잘랐다(29개 읍면동, 최신 분기): 0%가 9곳, 최대 44.4%.
+//
+// label은 범례에 그대로 찍힌다. 한글 라벨을 길게 쓰면 다섯 칸에서 서로 붙어버려
+// ("10% 미만10~20%") 읽을 수 없다. 단위는 제목에 한 번만 쓰고 여기는 숫자만 둔다.
+const RISK_RAMP = [
+  { min: 0,  max: 0,        color: "#fbe3d4", label: "0" },
+  { min: 0,  max: 10,       color: "#f7bd93", label: "~10" },
+  { min: 10, max: 20,       color: "#ef8b4d", label: "10–20" },
+  { min: 20, max: 30,       color: "#d4551a", label: "20–30" },
+  { min: 30, max: Infinity, color: "#96170f", label: "30+" },
 ];
+const HOLD_COLOR = "#b9bcc4";   // 판단 보류 — 색조가 없는 중립 회색. 램프의 어느 단계도 아니다.
 
-// 색은 등급, 진하기는 근거의 두께다. 범례 아래 한 줄로 그 규칙을 밝힌다.
-const OPACITY_NOTE = "흐리게 칠해진 읍면동은 표본이 충분한 업종이 10개 미만이라 등급의 근거가 얕습니다.";
+/** 위험 업종 비율(%) -> 폴리곤 색. 범례도 같은 함수를 쓴다.
+ *  예전에는 백엔드가 색을 내려주고 프론트에 범례가 따로 있어서 둘이 어긋난 적이 있다
+ *  (2026-08-25 감사). 이제 색의 출처는 이 파일 하나다. */
+function riskColor(ratio) {
+  if (ratio == null) return HOLD_COLOR;
+  if (ratio <= 0) return RISK_RAMP[0].color;
+  const step = RISK_RAMP.find((s) => ratio > s.min && ratio <= s.max);
+  return step ? step.color : RISK_RAMP[RISK_RAMP.length - 1].color;
+}
+
+// 색은 값, 진하기는 근거의 두께다. 범례 옆 한 줄로 그 규칙을 밝힌다.
+const OPACITY_NOTE = "흐리게 칠해진 읍면동은 표본이 충분한 업종이 10개 미만이라 근거가 얕습니다.";
 
 // 이 화면에만 있던 loadErrorMessage를 lib/api.js의 describeApiError로 옮겼다.
 // 다른 6개 화면이 같은 처리를 못 갖고 있어서, 토큰이 만료되면 그 화면들은
@@ -61,7 +90,7 @@ function ExcessBar({ rate, average }) {
   );
 }
 
-function RankingTable({ rows, loading, error, category, categories, categoryError, onCategoryChange, sort, onSortChange }) {
+function RankingTable({ rows, loading, error, category, categories, categoryError, onCategoryChange, sort, onSortChange, onClose }) {
   const { sampleMin } = useGradeNotice();
   // 한 업종으로 좁히면 표시 순위와 업종 내 순위가 같은 키로 정렬돼 숫자가 똑같아진다.
   // 같은 값 두 열을 나란히 두는 대신 열을 접고, 모집단 크기는 아래 설명으로 옮긴다.
@@ -104,6 +133,21 @@ function RankingTable({ rows, loading, error, category, categories, categoryErro
               <option key={c} value={c}>{c}</option>
             ))}
           </select>
+          {/* 서랍으로 열리는 표라 닫는 길이 표 안에도 있어야 한다. 지도 위 버튼까지
+              마우스를 올려보내지 않게 한다. */}
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="순위표 닫기"
+              style={{
+                border: "none", background: "transparent", cursor: "pointer",
+                color: "var(--ink-muted)", display: "flex", alignItems: "center", padding: 4,
+              }}
+            >
+              <span className="material-symbols-outlined" style={{ fontSize: 20 }}>close</span>
+            </button>
+          )}
         </div>
       </div>
       <p style={{ margin: "6px 0 16px", fontSize: 12, color: "var(--outline)" }}>
@@ -435,7 +479,8 @@ export default function MapPage() {
   const [category, setCategory] = useState("");
   // 순위표 정렬 축. "폐업률 높은 순"이 기본 — 처음 여는 사람에게는 절대값이 자연스럽다.
   const [rankSort, setRankSort] = useState("rate");
-  const [tab, setTab] = useState("map");
+  // 순위표는 지도를 떠나지 않고 서랍으로 연다. 기본값은 닫힘 — 지도가 먼저 보여야 한다.
+  const [rankingOpen, setRankingOpen] = useState(false);
   // 순위표와 같은 집합(최신 분기·표본충분)을 좁히는 purpose를 쓴다.
   const { categories, error: categoryError } = useCategories("policy");
   const [mapError, setMapError] = useState("");
@@ -480,16 +525,18 @@ export default function MapPage() {
     geojson.features.forEach((feat) => {
       const name = feat.properties.dong_name || feat.properties.EMD_KOR_NM || "";
       const risk = riskMap[name];
-      const color = risk?.color || "#c1c6d5";
       const ratio = risk?.risk_ratio ?? null;
+      // 색은 여기서 정한다. 백엔드의 risk.color(등급 상태색)는 더 이상 폴리곤에 쓰지 않는다.
+      const color = riskColor(ratio);
+      const held = ratio == null;   // 판단 보류 — 표본 충분 업종이 기준 미만
       const coverage = risk?.coverage_pct ?? null;
-      // 색은 등급, 진하기는 근거의 두께. 표본충분 업종이 적은 동은 등급을 내되 흐리게 칠해
+      // 색은 값, 진하기는 근거의 두께. 표본충분 업종이 적은 동은 값을 내되 흐리게 칠해
       // "이 색을 얼마나 믿을지"를 같이 보여준다. 숨기는 것보다 알려주는 쪽을 택했다.
       const thin = Boolean(risk?.evidence_thin);
-      // 배경 지도 위에서 0.5는 색이 씻겨 보인다. 등급을 색으로 읽는 화면이라 진하기를 올린다.
-      // 근거가 얕은 읍면동은 여전히 확실히 옅게 두되(0.22 -> 0.4), 진한 쪽과의 차이는 유지한다.
-      const baseOpacity = thin ? 0.4 : 0.72;
-      const hoverOpacity = thin ? 0.6 : 0.9;
+      const baseOpacity = held ? 0.5 : thin ? 0.45 : 0.8;
+      const hoverOpacity = held ? 0.7 : thin ? 0.65 : 0.95;
+      // 판단 보류는 색조가 없는 회색이라 램프의 제일 옅은 단계(0%)와 헷갈릴 수 있다.
+      // 테두리를 점선으로 끊어 색 말고도 구분되게 한다.
 
       const coords = feat.geometry.type === "Polygon"
         ? [feat.geometry.coordinates]
@@ -499,7 +546,10 @@ export default function MapPage() {
         const path = rings[0].map(([lng, lat]) => new window.naver.maps.LatLng(lat, lng));
         const polygon = new window.naver.maps.Polygon({
           map, paths: [path], fillColor: color, fillOpacity: baseOpacity,
-          strokeColor: "#fff", strokeWeight: 1.5, clickable: true,
+          strokeColor: held ? "#6b7280" : "#ffffff",
+          strokeWeight: held ? 1.2 : 1.5,
+          strokeStyle: held ? "shortdash" : "solid",
+          clickable: true,
         });
 
         window.naver.maps.Event.addListener(polygon, "mouseover", (e) => {
@@ -514,6 +564,8 @@ export default function MapPage() {
           setTooltip(null);
         });
         window.naver.maps.Event.addListener(polygon, "click", () => {
+          // 서랍과 상세 패널은 동시에 열지 않는다(위 렌더 주석 참조).
+          setRankingOpen(false);
           setSelected(risk ? { name, ...risk } : { name });
         });
 
@@ -588,34 +640,16 @@ export default function MapPage() {
     }).catch((err) => setMapError(err.message));
   }, [riskData, drawPolygons]);
 
-  // 숨겨진 동안 컨테이너 크기가 0이라, 그 사이 창이 리사이즈되면 지도가 옛 크기를 들고 있다.
-  // 돌아올 때 한 번 알려준다. 중심·줌은 건드리지 않는다 — 담당자가 옮겨둔 화면을 되돌리면 안 된다.
-  useEffect(() => {
-    if (tab !== "map" || !mapInstanceRef.current || !window.naver?.maps) return;
-    window.naver.maps.Event.trigger(mapInstanceRef.current, "resize");
-  }, [tab]);
-
   return (
     <div className="official-page official-map-page">
-      <div className={`official-map-workspace${tab === "ranking" ? " is-ranking" : ""}`}>
-        {/* 지도와 순위표는 같은 작업 공간 안에서 전환한다. 지도에서는 조작부가 지도 위에
-            떠 있고, 순위표에서는 첫 카드와 겹치지 않도록 상단 여백을 확보한다. */}
-        <div className="official-map-view-switch">
-          <TabStrip
-            tabs={[
-              { key: "map", label: "지도" },
-              { key: "ranking", label: `순위표${ranking.length ? ` (${ranking.length})` : ""}` },
-            ]}
-            value={tab}
-            onChange={(next) => {
-              setTooltip(null);
-              setTab(next);
-            }}
-            ariaLabel="상권 위험 지도 보기 선택"
-          />
-        </div>
+      <div className="official-map-workspace">
+        {/* 순위표를 별도 화면(탭)에서 지도 위 서랍으로 옮겼다(2026-08-29).
+            탭은 지도를 떠나야 표를 볼 수 있어서, 담당자가 "이 동이 왜 진한지"를 확인하려면
+            화면을 왕복해야 했다. 지도를 켜 둔 채로 표를 여닫는다.
 
-        <div className="official-map-stage" style={{ display: tab === "map" ? "block" : "none" }}>
+            서랍과 상세 패널은 동시에 열지 않는다. 둘 다 지도 위에 뜨는데 겹치면
+            어느 쪽이 위인지에 따라 한쪽이 잘린다. 여는 쪽이 다른 쪽을 닫는다. */}
+        <div className="official-map-stage">
           {mapError && (
             <div role="alert" className="official-map-error">
               <span className="material-symbols-outlined" style={{ fontSize: 20, color: "var(--error)" }}>error</span>
@@ -636,20 +670,46 @@ export default function MapPage() {
 
           <div className="official-map-legend">
             <span className="t-eyebrow official-map-legend-title">
-              위험 업종 비율
+              위험 업종 비율 (%)
             </span>
             <div className="official-map-legend-items">
-              {LEGEND.map(({ label, color }) => (
-                <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: "var(--radius-full)", background: color, display: "inline-block", flexShrink: 0 }} />
-                  <span className="t-caption" style={{ color: "var(--ink-secondary)" }}>{label}</span>
-                </span>
-              ))}
+              {/* 칸 사이를 2px 띄운다. 붙여 놓으면 경계가 색 차이로만 읽혀서 인접한 두
+                  단계가 한 덩어리로 보인다. */}
+              <div style={{ display: "flex", gap: 2, alignItems: "flex-end" }}>
+                {RISK_RAMP.map((step) => (
+                  <div key={step.label} style={{ width: 46, textAlign: "center" }}>
+                    <div style={{ height: 10, background: step.color, borderRadius: 2 }} />
+                    <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 4, fontSize: 10.5, whiteSpace: "nowrap" }}>
+                      {step.label}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <span style={{ display: "inline-flex", alignItems: "center", gap: 6, marginLeft: 4 }}>
+                <span style={{ width: 14, height: 10, background: HOLD_COLOR, border: "1px dashed #6b7280", display: "inline-block", flexShrink: 0 }} />
+                <span className="t-caption" style={{ color: "var(--ink-secondary)" }}>판단 보류</span>
+              </span>
             </div>
             <span className="t-caption official-map-legend-note">
               {OPACITY_NOTE}
             </span>
           </div>
+
+          <button
+            type="button"
+            className="official-map-ranking-toggle"
+            aria-expanded={rankingOpen}
+            onClick={() => {
+              setTooltip(null);
+              setRankingOpen((open) => {
+                if (!open) setSelected(null);
+                return !open;
+              });
+            }}
+          >
+            <span className="material-symbols-outlined">{rankingOpen ? "close" : "table_rows"}</span>
+            상권 순위표{ranking.length ? ` (${ranking.length})` : ""}
+          </button>
 
           {selected && (
             <div className="official-map-detail-panel">
@@ -661,9 +721,9 @@ export default function MapPage() {
               />
             </div>
           )}
-        </div>
 
-        <div className="official-map-ranking" style={{ display: tab === "ranking" ? "block" : "none" }}>
+          {rankingOpen && (
+          <div className="official-map-ranking-drawer">
           <RankingTable
             rows={ranking}
             loading={rankingLoading}
@@ -683,7 +743,10 @@ export default function MapPage() {
               setRankingError("");
               setRankSort(next);
             }}
+            onClose={() => setRankingOpen(false)}
           />
+          </div>
+          )}
         </div>
       </div>
 
