@@ -118,7 +118,7 @@ export default function OfficialLoginPage() {
               textDecoration: "none",
             }}
           >
-            RN
+            HS
           </Link>
           <h1 className="t-h2" style={{ margin: 0 }}>화성시 소상공인 폐업위험 조기경보</h1>
         </div>

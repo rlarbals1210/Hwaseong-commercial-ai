@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
-const STEPS = [
+const GUIDES = [
   {
     path: "/dashboard",
     menu: "조기경보 대시보드",
@@ -38,23 +38,21 @@ const STEPS = [
   },
 ];
 
-export default function OfficialQuickStart({ open, onClose }) {
-  const [stepIndex, setStepIndex] = useState(0);
+export default function OfficialQuickStart({ open, onClose, path }) {
   const [targetRect, setTargetRect] = useState(null);
   const dialogRef = useRef(null);
   const closeRef = useRef(null);
-  const step = STEPS[stepIndex];
+  const guide = GUIDES.find((item) => item.path === path);
 
   const closeTour = useCallback(() => {
-    setStepIndex(0);
     onClose();
   }, [onClose]);
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || !guide) return undefined;
 
     const updateTarget = () => {
-      const target = document.querySelector(`[data-quickstart-path="${step.path}"]`);
+      const target = document.querySelector(`[data-quickstart-path="${guide.path}"]`);
       if (!target) {
         setTargetRect(null);
         return;
@@ -69,10 +67,10 @@ export default function OfficialQuickStart({ open, onClose }) {
       window.cancelAnimationFrame(frame);
       window.removeEventListener("resize", updateTarget);
     };
-  }, [open, step.path]);
+  }, [open, guide]);
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open || !guide) return undefined;
 
     const previousFocus = document.activeElement;
     const previousOverflow = document.body.style.overflow;
@@ -106,9 +104,9 @@ export default function OfficialQuickStart({ open, onClose }) {
       document.body.style.overflow = previousOverflow;
       previousFocus?.focus?.();
     };
-  }, [open, closeTour]);
+  }, [open, closeTour, guide]);
 
-  if (!open) return null;
+  if (!open || !guide) return null;
 
   const popoverTop = targetRect
     ? Math.max(24, Math.min(targetRect.top - 26, window.innerHeight - 390))
@@ -117,7 +115,7 @@ export default function OfficialQuickStart({ open, onClose }) {
 
   return (
     <div className="quickstart-tour-layer">
-      <button type="button" className="quickstart-tour-blocker" onClick={closeTour} aria-label="사용법 건너뛰기" />
+      <button type="button" className="quickstart-tour-blocker" onClick={closeTour} aria-label="사용법 닫기" />
 
       {targetRect && (
         <div
@@ -143,8 +141,8 @@ export default function OfficialQuickStart({ open, onClose }) {
       >
         <header className="quickstart-tour-header">
           <div>
-            <span className="quickstart-tour-count">{stepIndex + 1} / {STEPS.length}</span>
-            <span className="quickstart-tour-menu">{step.menu}</span>
+            <span className="quickstart-tour-count">화면 안내</span>
+            <span className="quickstart-tour-menu">{guide.menu}</span>
           </div>
           <button ref={closeRef} type="button" className="quickstart-tour-close" onClick={closeTour} aria-label="사용법 닫기">
             <span className="material-symbols-outlined" aria-hidden="true">close</span>
@@ -152,27 +150,18 @@ export default function OfficialQuickStart({ open, onClose }) {
         </header>
 
         <div className="quickstart-tour-content">
-          <h2 id="quickstart-title">{step.goal}</h2>
+          <h2 id="quickstart-title">{guide.goal}</h2>
           <div id="quickstart-description" className="quickstart-tour-instructions">
-            <p><b>이렇게 하세요</b>{step.action}</p>
-            <p><b>할 수 있는 일</b>{step.outcome}</p>
+            <p><b>이렇게 하세요</b>{guide.action}</p>
+            <p><b>할 수 있는 일</b>{guide.outcome}</p>
           </div>
         </div>
 
         <footer className="quickstart-tour-footer">
-          <button type="button" className="quickstart-tour-skip" onClick={closeTour}>건너뛰기</button>
-          <div>
-            {stepIndex > 0 && (
-              <button type="button" className="btn-utility" onClick={() => setStepIndex((index) => index - 1)}>이전</button>
-            )}
-            {stepIndex < STEPS.length - 1 ? (
-              <button type="button" className="btn-primary" onClick={() => setStepIndex((index) => index + 1)}>
-                다음 <span className="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
-              </button>
-            ) : (
-              <button type="button" className="btn-primary" onClick={closeTour}>사용법 마치기</button>
-            )}
-          </div>
+          <span className="quickstart-tour-session-note">이 로그인 중에는 이 화면에서 다시 표시하지 않습니다.</span>
+          <button type="button" className="btn-primary" onClick={closeTour}>
+            확인했어요 <span className="material-symbols-outlined" aria-hidden="true">check</span>
+          </button>
         </footer>
       </section>
     </div>

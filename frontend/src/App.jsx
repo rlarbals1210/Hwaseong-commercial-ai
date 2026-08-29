@@ -86,7 +86,7 @@ function Sidebar({ nav, pathname, username, onLogout, onOpenQuickStart }) {
             letterSpacing: "-0.5px",
           }}
         >
-          RN
+          HS
         </div>
         <div style={{ lineHeight: 1.25 }}>
           <div style={{ fontSize: 12, color: "var(--ink-muted)" }}>화성시 소상공인 조기경보</div>
@@ -146,7 +146,7 @@ function Sidebar({ nav, pathname, username, onLogout, onOpenQuickStart }) {
           <span className="material-symbols-outlined" style={{ fontSize: 20 }}>
             help
           </span>
-          업무별 사용법
+          현재 화면 사용법
         </button>
         <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "4px 8px 12px" }}>
           <div
@@ -278,12 +278,24 @@ export default function App() {
   const isOfficial = isAuthenticated && role === "official";
   const isPublicPage = PUBLIC_PATHS.includes(pathname);
   const [manualQuickStartOpen, setManualQuickStartOpen] = useState(false);
-  const [dismissedLoginSequence, setDismissedLoginSequence] = useState(0);
-  const shouldAutoOpenQuickStart = isOfficial && loginSequence > dismissedLoginSequence;
-  const quickStartOpen = isOfficial && (manualQuickStartOpen || shouldAutoOpenQuickStart);
+  const [dismissedQuickStartKeys, setDismissedQuickStartKeys] = useState(() => new Set());
+  const isGuidePath = NAV.some((item) => item.path === pathname);
+  const quickStartKey = `${loginSequence}:${pathname}`;
+  const shouldAutoOpenQuickStart = isOfficial
+    && loginSequence > 0
+    && isGuidePath
+    && !dismissedQuickStartKeys.has(quickStartKey);
+  const quickStartOpen = isOfficial && isGuidePath && (manualQuickStartOpen || shouldAutoOpenQuickStart);
 
   const closeQuickStart = () => {
-    setDismissedLoginSequence(loginSequence);
+    if (loginSequence > 0 && isGuidePath) {
+      setDismissedQuickStartKeys((current) => {
+        if (current.has(quickStartKey)) return current;
+        const next = new Set(current);
+        next.add(quickStartKey);
+        return next;
+      });
+    }
     setManualQuickStartOpen(false);
   };
 
@@ -340,7 +352,9 @@ export default function App() {
           pathname={pathname}
           username={username}
           onLogout={handleLogout}
-          onOpenQuickStart={() => setManualQuickStartOpen(true)}
+          onOpenQuickStart={() => {
+            if (isGuidePath) setManualQuickStartOpen(true);
+          }}
         />
         <div style={{ marginLeft: 248, display: "flex", flexDirection: "column", minHeight: "100vh" }}>
           <TopBar title={current?.label ?? "조기경보 대시보드"} />
@@ -349,6 +363,7 @@ export default function App() {
         <OfficialQuickStart
           open={quickStartOpen}
           onClose={closeQuickStart}
+          path={pathname}
         />
       </div>
     );

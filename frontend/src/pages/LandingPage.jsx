@@ -428,6 +428,8 @@ const CSS = `
   }
   .lp-cta .lp-section-desc { margin: 0 auto 40px; }
   .lp-cta .lp-actions { justify-content: center; }
+  .lp-cta-official, .lp-cta-risk { color: #38bdf8; }
+  .lp-cta-citizen, .lp-cta-opportunity { color: #2dd4bf; }
   .lp-cta-note { font-size: 13px; color: #64748b; line-height: 1.7; margin: 22px auto 0; max-width: 720px; word-break: keep-all; }
 
   .lp-account {
@@ -842,8 +844,8 @@ export default function LandingPage() {
       <section className="lp-section lp-cta">
         <div className="lp-section-inner">
           <h2 className="lp-section-title lp-reveal">
-            공무원은 위험 상권을,<br />
-            <span style={{ color: "#38bdf8" }}>시민은 창업 후보를 확인하세요</span>
+            <span className="lp-cta-official">공무원</span>은 <span className="lp-cta-risk">위험 상권</span>을,<br />
+            <span className="lp-cta-citizen">시민</span>은 <span className="lp-cta-opportunity">창업 후보</span>를 확인하세요
           </h2>
           <p className="lp-section-desc lp-reveal lp-d1">
             폐업 위험 조기경보와 수요·공급 기반 맞춤 상권 탐색을 각 화면에서 바로 확인할 수 있습니다.
