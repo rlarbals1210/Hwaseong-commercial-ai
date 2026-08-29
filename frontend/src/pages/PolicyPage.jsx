@@ -59,6 +59,18 @@ const QUADRANT_META = {
 
 const QUADRANT_ORDER = ["Q3", "Q1", "Q4", "Q2"];
 const displayPct = (value) => Number.isFinite(Number(value)) ? Number(value).toFixed(1) : "—";
+const POINTS_PER_METRIC = 4;
+
+function selectVisibleItems(items) {
+  const selected = new Map();
+  const add = (item) => selected.set(`${item.area_id}-${item.industry_id}`, item);
+  items.slice(0, POINTS_PER_METRIC).forEach(add);
+  [...items]
+    .sort((a, b) => b.store_count - a.store_count)
+    .slice(0, POINTS_PER_METRIC)
+    .forEach(add);
+  return [...selected.values()];
+}
 
 function PageHeader({ title, desc }) {
   return (
@@ -87,25 +99,37 @@ function ScatterPlot({ data, dangerThreshold, medianStores, activeQuadrant, onOp
   const PAD = { left: 76, right: 34, top: 34, bottom: 70 };
   const plotWidth = WIDTH - PAD.left - PAD.right;
   const plotHeight = HEIGHT - PAD.top - PAD.bottom;
-  const points = QUADRANT_ORDER.flatMap((quadrant) =>
+  const allPoints = QUADRANT_ORDER.flatMap((quadrant) =>
     data[quadrant].map((item) => ({ ...item, quadrant }))
   );
-  const maxRate = Math.max(dangerThreshold * 1.2, ...points.map((item) => item.actual_closure_rate_pct || 0), 1);
-  const maxStores = Math.max(medianStores * 1.25, ...points.map((item) => item.store_count || 0), 1);
+  const points = QUADRANT_ORDER.flatMap((quadrant) =>
+    selectVisibleItems(data[quadrant]).map((item) => ({ ...item, quadrant }))
+  );
+  const maxRate = Math.max(dangerThreshold * 1.2, ...allPoints.map((item) => item.actual_closure_rate_pct || 0), 1);
+  const maxStores = Math.max(medianStores * 1.25, ...allPoints.map((item) => item.store_count || 0), 1);
   const xMax = Math.ceil(maxRate / 2) * 2;
   const yStep = maxStores > 500 ? 100 : maxStores > 200 ? 50 : 20;
   const yMax = Math.ceil(maxStores / yStep) * yStep;
-  const x = (value) => PAD.left + Math.min(Math.max(value, 0), xMax) / xMax * plotWidth;
-  const y = (value) => PAD.top + plotHeight - Math.min(Math.max(value, 0), yMax) / yMax * plotHeight;
-  const cutX = x(dangerThreshold);
-  const cutY = y(medianStores);
-  const xTicks = Array.from({ length: 6 }, (_, index) => xMax * index / 5);
-  const yTicks = Array.from({ length: 6 }, (_, index) => yMax * index / 5);
-  const representative = new Set(
-    QUADRANT_ORDER.flatMap((quadrant) =>
-      data[quadrant].slice(0, 1).map((item) => `${item.area_id}-${item.industry_id}`)
-    )
-  );
+  const cutX = PAD.left + plotWidth / 2;
+  const cutY = PAD.top + plotHeight / 2;
+  // 기준선을 정중앙에 고정하되, 각 사분면 안에서는 실제 수치 간 비율을 유지한다.
+  // 그래서 네 영역은 같은 크기이고 점의 좌우·상하 순서는 그대로 해석할 수 있다.
+  const x = (value) => {
+    const clamped = Math.min(Math.max(value, 0), xMax);
+    if (clamped <= dangerThreshold) {
+      return PAD.left + (clamped / Math.max(dangerThreshold, 1)) * (plotWidth / 2);
+    }
+    return cutX + ((clamped - dangerThreshold) / Math.max(xMax - dangerThreshold, 1)) * (plotWidth / 2);
+  };
+  const y = (value) => {
+    const clamped = Math.min(Math.max(value, 0), yMax);
+    if (clamped <= medianStores) {
+      return PAD.top + plotHeight - (clamped / Math.max(medianStores, 1)) * (plotHeight / 2);
+    }
+    return cutY - ((clamped - medianStores) / Math.max(yMax - medianStores, 1)) * (plotHeight / 2);
+  };
+  const xTicks = [0, dangerThreshold / 2, dangerThreshold, dangerThreshold + (xMax - dangerThreshold) / 2, xMax];
+  const yTicks = [0, medianStores / 2, medianStores, medianStores + (yMax - medianStores) / 2, yMax];
   const quadrantRects = {
     Q3: { x: PAD.left, y: PAD.top, width: cutX - PAD.left, height: cutY - PAD.top },
     Q1: { x: cutX, y: PAD.top, width: PAD.left + plotWidth - cutX, height: cutY - PAD.top },
@@ -150,10 +174,12 @@ function ScatterPlot({ data, dangerThreshold, medianStores, activeQuadrant, onOp
           );
         })}
 
-        {xTicks.map((tick) => (
+        {xTicks.map((tick, index) => (
           <g key={`x-${tick}`}>
             <line x1={x(tick)} y1={PAD.top} x2={x(tick)} y2={PAD.top + plotHeight} className="policy-scatter-grid" />
-            <text x={x(tick)} y={HEIGHT - 42} textAnchor="middle" className="policy-scatter-tick">{tick.toFixed(1)}%</text>
+            <text x={x(tick)} y={HEIGHT - 42} textAnchor="middle" className="policy-scatter-tick">
+              {index === 2 ? `기준 ${tick.toFixed(1)}%` : `${tick.toFixed(1)}%`}
+            </text>
           </g>
         ))}
         {yTicks.map((tick) => (
@@ -165,40 +191,31 @@ function ScatterPlot({ data, dangerThreshold, medianStores, activeQuadrant, onOp
 
         <line x1={cutX} y1={PAD.top} x2={cutX} y2={PAD.top + plotHeight} className="policy-scatter-cut" />
         <line x1={PAD.left} y1={cutY} x2={PAD.left + plotWidth} y2={cutY} className="policy-scatter-cut" />
-        <text x={cutX + 8} y={HEIGHT - 56} className="policy-scatter-cut-label">위험 기준 {dangerThreshold.toFixed(1)}%</text>
         <text x={PAD.left + 8} y={cutY - 8} className="policy-scatter-cut-label">영향 기준 {medianStores.toLocaleString()}곳</text>
 
-        {points.map((item, index) => {
+        {points.map((item) => {
           const key = `${item.area_id}-${item.industry_id}`;
-          const named = representative.has(key);
           const meta = QUADRANT_META[item.quadrant];
           const pointX = x(item.actual_closure_rate_pct);
           const pointY = y(item.store_count);
-          const onRight = pointX > WIDTH * 0.72;
-          const labelX = onRight ? pointX - 10 : pointX + 10;
-          const labelY = pointY + (index % 3 === 0 ? -10 : index % 3 === 1 ? 15 : -18);
           return (
             <g
               key={key}
-              className={`policy-scatter-point${named ? " is-named" : ""}`}
-              role={named ? "link" : undefined}
-              tabIndex={named ? "0" : undefined}
+              className="policy-scatter-point"
+              role="link"
+              tabIndex="0"
+              aria-label={`${item.dong} ${item.category} 상세 보기`}
               onClick={(event) => {
                 event.stopPropagation();
                 onOpenPoint(item);
               }}
               onKeyDown={(event) => {
-                if (named && (event.key === "Enter" || event.key === " ")) onOpenPoint(item);
+                if (event.key === "Enter" || event.key === " ") onOpenPoint(item);
               }}
             >
-              <circle cx={pointX} cy={pointY} r={named ? 5.5 : 3.5} fill={meta.tone}>
+              <circle cx={pointX} cy={pointY} r="5" fill={meta.tone}>
                 <title>{`${item.dong} · ${item.category} · 폐업률 ${displayPct(item.actual_closure_rate_pct)}% · 점포 ${item.store_count}곳`}</title>
               </circle>
-              {named && (
-                <text x={labelX} y={labelY} textAnchor={onRight ? "end" : "start"} className="policy-scatter-point-label">
-                  {item.dong} · {item.category}
-                </text>
-              )}
             </g>
           );
         })}
@@ -213,7 +230,7 @@ function ScatterPlot({ data, dangerThreshold, medianStores, activeQuadrant, onOp
         </text>
       </svg>
       <p className="policy-scatter-note">
-        점 하나는 행정동×업종 상권입니다. 모든 상권은 점으로 표시하고, 각 사분면의 대표 상권 1개만 이름을 표시했습니다.
+        기준선을 중앙에 두어 네 영역을 같은 크기로 표시했습니다. 각 영역에는 폐업률 상위 4개와 영향 점포 수 상위 4개만 점으로 표시하며, 전체 목록은 사분면을 클릭해 확인할 수 있습니다.
       </p>
     </div>
   );

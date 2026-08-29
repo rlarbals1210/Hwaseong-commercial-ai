@@ -2821,22 +2821,10 @@ a { color: var(--primary); }
 }
 
 .policy-scatter-point:hover circle,
-.policy-scatter-point:focus circle,
-.policy-scatter-point.is-named circle {
+.policy-scatter-point:focus circle {
   fill-opacity: 0.96;
   stroke: #ffffff;
   stroke-width: 2;
-}
-
-.policy-scatter-point-label {
-  fill: var(--ink-secondary);
-  font-size: 10.5px;
-  font-weight: 700;
-  paint-order: stroke;
-  stroke: rgba(255, 255, 255, 0.94);
-  stroke-width: 4px;
-  stroke-linejoin: round;
-  pointer-events: none;
 }
 
 .policy-scatter-note {
