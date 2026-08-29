@@ -91,9 +91,11 @@ def get_closure_risk(
 
     정렬은 모델 순위(predicted_rank)를 그대로 쓴다.
 
-    2026-08-26 재검증(ai/validate_ranking.py) — 과거 시점 순위를 그 뒤 4분기 실제
-    폐업률과 맞춘 결과 스피어만은 모델 0.324 / 관측 0.268 / 앙상블 0.318,
-    리프트는 1.180 / 1.142 / 1.208이었다. 지표에 따라 승자가 갈리고 차이가 오차 수준이라
+    2026-08-29 재검증(ai/validate_ranking.py, 표본 기준 30) — 과거 시점 순위를 그 뒤
+    4분기 실제 폐업률과 맞춘 결과 스피어만은 모델 0.349 / 관측 0.268 / 앙상블 0.338,
+    리프트는 1.291 / 1.242 / 1.274였다(384셀 기준). 표본 기준 50이던 시절의 값은
+    0.324 / 1.180이었고, 기준을 내린 뒤 두 지표 모두 올랐다.
+    지표에 따라 승자가 갈리고 차이가 오차 수준이라
     성능으로는 못 고른다. 모델 단독을 택한 이유는 화면 정체성이다 — 조기경보는
     "모델이 본 2분기 뒤", 현장 확인은 "이미 관측된 최근 1년"으로 갈라놓았고 화면에
     그렇게 안내한다. 여기에 관측을 섞으면 그 구분이 흐려진다."""
@@ -116,6 +118,7 @@ def get_closure_risk(
     result = []
     for prediction, commercial, dong, industry in rows:
         level = commercial.risk_grade or "안정"
+        interval = closure_interval_pct(commercial) or {}
         result.append(ClosureRiskItem(
             prediction_id=prediction.id,
             predicted_rank=prediction.predicted_rank,
@@ -127,6 +130,9 @@ def get_closure_risk(
             cumulative_closure_count=commercial.closure_count_cum4 or 0,
             store_count=commercial.store_count,
             confidence_lower_pct=_pct(commercial.closure_rate_lower4),
+            closure_lower_pct=interval.get("lower_pct"),
+            closure_upper_pct=interval.get("upper_pct"),
+            interval_approximate=bool(interval.get("approximate", False)),
             risk_grade=level,
             cell_type=commercial.cell_type,
             cell_type_summary=CELL_TYPES.get(commercial.cell_type, {}).get("summary"),
@@ -663,9 +669,12 @@ def get_blindspots(
 ):
     """사각지대 — 표본부족으로 등급·순위에서 빠진 셀.
 
-    조회 기준(점포 50곳)을 넘지 못하면 화면에서 아예 사라진다. 그렇게 빠지는 점포가
-    전체의 38%이고, 기배동·매송면은 커버율이 0%다. 아무리 상황이 나빠도 후보에 못 오른다.
-    정책 우선순위를 고르는 도구에서 이건 형평성 문제로 직결된다.
+    조회 기준(ai/build_risk_index.py의 SAMPLE_MIN)을 넘지 못하면 화면에서 아예 사라진다.
+    숫자를 여기 적지 않는 이유는 그 상수가 바뀌기 때문이다 — 실제로 2026-08-29에 50에서
+    30으로 내렸고, 그 시점에 사각지대 점포 비중은 38%에서 25%로, 커버율 0%인 읍면동은
+    기배동·매송면 2곳에서 0곳으로 줄었다. 그래도 사각지대는 남는다. 아무리 상황이 나빠도
+    후보에 못 오르는 상권이 있다는 뜻이고, 정책 우선순위를 고르는 도구에서 이건 형평성
+    문제로 직결된다.
 
     통계 판단은 계속 보류하되(등급을 매기지 않는다) 목록에서 지우지는 않는다.
     """

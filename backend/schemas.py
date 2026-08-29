@@ -27,7 +27,15 @@ class ClosureRiskItem(BaseModel):
     cumulative_closure_rate_pct: float | None = None   # 최근 1년 누적 폐업률. 미산출이면 None
     cumulative_closure_count: int        # 같은 창의 폐업 건수 — "23곳 닫힘" 형태로 병기
     store_count: int
-    confidence_lower_pct: float | None = None   # Wilson 신뢰하한. 소표본 여부를 가늠하는 근거
+    confidence_lower_pct: float | None = None   # Wilson 신뢰하한(적재된 값). 정렬 근거
+    # 신뢰구간 — 2026-08-29 추가. 표본 기준을 50에서 30으로 내리면서 상위 10% 목록의
+    # 절반가량이 점포 50곳 미만 셀로 바뀌었다. 점추정만 큰 글씨로 띄우면 점포 34곳에서
+    # 나온 12.5%가 점포 240곳에서 나온 12.9%와 같은 무게로 읽힌다. 구간을 같이 준다.
+    # 아래 두 값은 closure_interval_pct()가 같은 분모로 함께 낸 값이라 서로 정합적이다
+    # (confidence_lower_pct는 적재 시점의 저장값이라 미세하게 다를 수 있다).
+    closure_lower_pct: float | None = None
+    closure_upper_pct: float | None = None
+    interval_approximate: bool = False   # 폐업 0건이면 분모를 복원할 수 없어 근사한다
     risk_grade: str
     # 유형은 등급과 별개 축이다. 등급은 "얼마나 위험한가", 유형은 "그래서 무엇을 할 것인가".
     cell_type: str | None = None

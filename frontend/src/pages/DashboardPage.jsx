@@ -4,16 +4,18 @@ import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge, TypeBadge } from "../components/Badge";
 import { downloadCsv, csvNum } from "../lib/csv";
 import useCategories from "../hooks/useCategories";
+import useGradeNotice from "../hooks/useGradeNotice";
 
 const CSV_HEADERS = [
   "예측순위", "읍면동", "업종", "등급", "상권유형",
-  "최근1년누적_폐업률(%)", "최근1년_폐업건수", "점포수", "개업률(%)", "트렌드이상", "후속조치_검토안",
+  "최근1년누적_폐업률(%)", "구간하한(%)", "구간상한(%)", "최근1년_폐업건수", "점포수", "개업률(%)", "트렌드이상", "후속조치_검토안",
 ];
 
 const csvRows = (rows) =>
   rows.map((r) => [
     r.predicted_rank, r.dong, r.category, r.risk_grade, r.cell_type ?? "",
-    csvNum(r.cumulative_closure_rate_pct), r.cumulative_closure_count ?? "", r.store_count,
+    csvNum(r.cumulative_closure_rate_pct), csvNum(r.closure_lower_pct), csvNum(r.closure_upper_pct),
+    r.cumulative_closure_count ?? "", r.store_count,
     csvNum(r.open_rate_pct), r.anomaly ? "Y" : "N", r.action,
   ]);
 
@@ -100,6 +102,26 @@ function RiskCard({ item }) {
         {/* 라벨을 숫자 아래로 내렸다. 위에 두면 카드 열 장에서 같은 문구가 먼저 열 번 읽힌다. */}
         <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 1 }}>최근 1년 누적 폐업률</div>
 
+        {/* 신뢰구간(2026-08-29). 표본 기준을 30으로 내리면서 이 목록의 절반가량이 점포
+            50곳 미만 셀이 됐다. 점추정만 30px로 띄우면 점포 34곳의 12.5%가 점포 240곳의
+            12.9%와 같은 무게로 읽힌다 — 앞은 구간이 6~24%로 벌어지고 뒤는 10~16%다.
+            자리는 항상 잡아 둔다(카드 높이가 어긋나면 한 줄에 늘어선 숫자가 흐트러진다). */}
+        <div
+          className="t-caption"
+          style={{
+            color: "var(--ink-faint)",
+            marginTop: 3,
+            fontVariantNumeric: "tabular-nums",
+            whiteSpace: "nowrap",
+          }}
+        >
+          {num(item.closure_lower_pct) !== null && num(item.closure_upper_pct) !== null
+            ? `95% 구간 ${fmtPct(item.closure_lower_pct)}~${fmtPct(item.closure_upper_pct)}%${
+                item.interval_approximate ? " (근사)" : ""
+              }`
+            : "\u00a0"}
+        </div>
+
         {/* 비율만 두면 점포 60곳에서 6곳 닫힌 것과 600곳에서 60곳 닫힌 것이 같아 보인다.
             "N곳 / M곳"으로 묶지 않는다 — 위 비율의 분모는 4개 분기 직전점포수의 합이지
             현재 점포수가 아니라서, 슬래시로 묶으면 눈으로 나눈 값이 4배쯤 어긋난다
@@ -163,13 +185,7 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const { categories, error: categoryError } = useCategories("alert");
   // 기준선·고지 문구는 서버에서 받는다. 실패해도 화면은 폴백 값으로 그대로 뜬다.
-  const [meta, setMeta] = useState(null);
-
-  useEffect(() => {
-    apiFetchJson(`/api/alerts/grade-notice`)
-      .then(setMeta)
-      .catch(() => setMeta(null));
-  }, []);
+  const { meta, sampleMin } = useGradeNotice();
 
   useEffect(() => {
     const params = new URLSearchParams({ limit: 10 });
@@ -353,7 +369,7 @@ export default function DashboardPage() {
           <EmptyState
             icon="filter_alt_off"
             title="선택한 업종은 분석 가능 표본이 부족합니다"
-            desc="최신 분기 점포 수가 50개 미만이라 통계 판단을 보류합니다."
+            desc={`최신 분기 점포 수가 ${sampleMin}개 미만이라 통계 판단을 보류합니다.`}
           />
         ) : (
           <EmptyState
