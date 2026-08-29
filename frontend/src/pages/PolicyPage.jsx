@@ -94,6 +94,8 @@ function StatCard({ label, value, unit, tone }) {
 }
 
 function ScatterPlot({ data, dangerThreshold, medianStores, activeQuadrant, onOpenQuadrant, onOpenPoint }) {
+  const [hoveredQuadrant, setHoveredQuadrant] = useState(null);
+  const [hoveredPoint, setHoveredPoint] = useState(null);
   const WIDTH = 1000;
   const HEIGHT = 610;
   const PAD = { left: 76, right: 34, top: 34, bottom: 70 };
@@ -158,6 +160,10 @@ function ScatterPlot({ data, dangerThreshold, medianStores, activeQuadrant, onOp
               role="button"
               tabIndex="0"
               aria-label={`${meta.axis}, ${data[quadrant].length}건 전체보기`}
+              onMouseEnter={() => setHoveredQuadrant(quadrant)}
+              onMouseLeave={() => setHoveredQuadrant(null)}
+              onFocus={() => setHoveredQuadrant(quadrant)}
+              onBlur={() => setHoveredQuadrant(null)}
               onClick={() => onOpenQuadrant(quadrant)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" || event.key === " ") onOpenQuadrant(quadrant);
@@ -205,6 +211,10 @@ function ScatterPlot({ data, dangerThreshold, medianStores, activeQuadrant, onOp
               role="link"
               tabIndex="0"
               aria-label={`${item.dong} ${item.category} 상세 보기`}
+              onMouseEnter={() => setHoveredPoint({ item, x: pointX, y: pointY })}
+              onMouseLeave={() => setHoveredPoint(null)}
+              onFocus={() => setHoveredPoint({ item, x: pointX, y: pointY })}
+              onBlur={() => setHoveredPoint(null)}
               onClick={(event) => {
                 event.stopPropagation();
                 onOpenPoint(item);
@@ -213,12 +223,38 @@ function ScatterPlot({ data, dangerThreshold, medianStores, activeQuadrant, onOp
                 if (event.key === "Enter" || event.key === " ") onOpenPoint(item);
               }}
             >
-              <circle cx={pointX} cy={pointY} r="5" fill={meta.tone}>
-                <title>{`${item.dong} · ${item.category} · 폐업률 ${displayPct(item.actual_closure_rate_pct)}% · 점포 ${item.store_count}곳`}</title>
-              </circle>
+              <circle cx={pointX} cy={pointY} r="5" fill={meta.tone} />
             </g>
           );
         })}
+
+        {hoveredQuadrant && !hoveredPoint && !activeQuadrant && (() => {
+          const rect = quadrantRects[hoveredQuadrant];
+          const centerX = rect.x + rect.width / 2;
+          const centerY = rect.y + rect.height / 2;
+          return (
+            <g className="policy-quadrant-hover-action" transform={`translate(${centerX} ${centerY})`} aria-hidden="true">
+              <rect x="-58" y="-20" width="116" height="40" rx="20" />
+              <text x="0" y="5" textAnchor="middle">전체보기 →</text>
+            </g>
+          );
+        })()}
+
+        {hoveredPoint && (() => {
+          const tooltipX = Math.min(Math.max(hoveredPoint.x, PAD.left + 112), PAD.left + plotWidth - 112);
+          const tooltipY = hoveredPoint.y < PAD.top + 82 ? hoveredPoint.y + 16 : hoveredPoint.y - 72;
+          return (
+            <g className="policy-point-tooltip" transform={`translate(${tooltipX} ${tooltipY})`} aria-hidden="true">
+              <rect x="-108" y="0" width="216" height="58" rx="10" />
+              <text x="0" y="22" textAnchor="middle" className="policy-point-tooltip-title">
+                {hoveredPoint.item.dong} · {hoveredPoint.item.category}
+              </text>
+              <text x="0" y="43" textAnchor="middle" className="policy-point-tooltip-detail">
+                폐업률 {displayPct(hoveredPoint.item.actual_closure_rate_pct)}% · 점포 {hoveredPoint.item.store_count}곳
+              </text>
+            </g>
+          );
+        })()}
 
         <line x1={PAD.left} y1={PAD.top + plotHeight} x2={PAD.left + plotWidth} y2={PAD.top + plotHeight} className="policy-scatter-axis" />
         <line x1={PAD.left} y1={PAD.top} x2={PAD.left} y2={PAD.top + plotHeight} className="policy-scatter-axis" />
@@ -442,6 +478,14 @@ export default function PolicyPage() {
             onOpenQuadrant={setSelectedQuadrant}
             onOpenPoint={(item) => navigate(`/cells/${item.area_id}/${item.industry_id}`)}
           />
+          {selectedQuadrant && (
+            <button
+              type="button"
+              className="policy-quadrant-backdrop"
+              aria-label="사분면 전체 목록 배경 닫기"
+              onClick={() => setSelectedQuadrant(null)}
+            />
+          )}
           <QuadrantDrawer
             quadrant={selectedQuadrant}
             items={selectedQuadrant ? data[selectedQuadrant] : []}
