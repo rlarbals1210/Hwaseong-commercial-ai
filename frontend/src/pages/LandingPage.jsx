@@ -346,7 +346,10 @@ const CSS = `
   .lp-steps::before {
     content: ''; position: absolute; top: 25px; left: 6%; right: 6%; height: 2px;
     background: linear-gradient(90deg,rgba(var(--flow-rgb),.28),var(--flow-color));
+    transform: scaleX(0); transform-origin: left;
+    transition: transform 1.15s cubic-bezier(.22,1,.36,1);
   }
+  .lp-flow-lane.visible .lp-steps::before { transform: scaleX(1); }
   .lp-step {
     position: relative; z-index: 1; display: flex; flex-direction: column;
     opacity: 0; transform: translateX(24px);
@@ -377,6 +380,16 @@ const CSS = `
   .lp-step-arrow {
     position: absolute; z-index: 2; top: 17px; right: -22px;
     display: inline-flex; color: var(--flow-color); filter: drop-shadow(0 0 6px rgba(var(--flow-rgb),.35));
+    opacity: 0; transform: translateX(-8px); transition: opacity .35s ease, transform .5s cubic-bezier(.22,1,.36,1);
+  }
+  .lp-flow-lane.visible .lp-step-arrow { opacity: 1; transform: none; }
+  .lp-flow-lane.visible .lp-step:nth-child(1) .lp-step-arrow { transition-delay: .16s; }
+  .lp-flow-lane.visible .lp-step:nth-child(2) .lp-step-arrow { transition-delay: .3s; }
+  .lp-flow-lane.visible .lp-step:nth-child(3) .lp-step-arrow { transition-delay: .44s; }
+
+  @keyframes lp-flow-focus {
+    0%,100% { box-shadow: 0 0 0 7px rgba(var(--flow-rgb),.11),0 0 18px rgba(var(--flow-rgb),.12); }
+    50% { box-shadow: 0 0 0 10px rgba(var(--flow-rgb),.17),0 0 34px rgba(var(--flow-rgb),.28); }
   }
 
   /* ── 원칙 ───────────────────────────────────────────────────────── */
@@ -445,7 +458,7 @@ const CSS = `
     .lp-reveal { opacity: 1; transform: none; transition: none; }
     .lp-badge-dot { animation: none; }
     .lp-audience-card, .lp-audience-progress-btn, .lp-audience-progress-line::after,
-    .lp-step { transition: none; }
+    .lp-step, .lp-step-body, .lp-step-marker, .lp-step-arrow, .lp-steps::before { transition: none; animation: none; }
   }
   @media (max-width: 1000px) {
     .lp-nav-links { display: none; }
@@ -455,12 +468,39 @@ const CSS = `
     .lp-steps::before {
       top: 26px; bottom: 26px; left: 25px; right: auto; width: 2px; height: auto;
       background: linear-gradient(180deg,rgba(var(--flow-rgb),.28),var(--flow-color));
+      transform: scaleY(0); transform-origin: top;
     }
+    .lp-flow-lane.visible .lp-steps::before { transform: scaleY(1); }
     .lp-step { display: grid; grid-template-columns: 52px minmax(0,1fr); gap: 18px; padding-bottom: 24px; }
+    .lp-flow-lane.visible .lp-step {
+      opacity: .4; transform: translateY(22px); transition-delay: 0s;
+    }
+    .lp-flow-lane.visible .lp-step.lp-flow-complete {
+      opacity: .72; transform: none;
+    }
+    .lp-flow-lane.visible .lp-step.lp-flow-current {
+      opacity: 1; transform: none;
+    }
     .lp-step:last-child { padding-bottom: 0; }
     .lp-step-marker { margin: 0; }
-    .lp-step-body { min-height: 0; padding: 20px 22px; }
-    .lp-step-arrow { top: auto; right: auto; left: 17px; bottom: 1px; transform: rotate(90deg); }
+    .lp-step-body { min-height: 0; padding: 20px 22px; transition: border-color .35s,box-shadow .35s,transform .45s; }
+    .lp-step.lp-flow-current .lp-step-body {
+      transform: translateX(5px); border-color: rgba(var(--flow-rgb),.46);
+      box-shadow: 0 16px 38px rgba(0,0,0,.2),0 0 0 1px rgba(var(--flow-rgb),.08);
+    }
+    .lp-step.lp-flow-current .lp-step-marker { animation: lp-flow-focus 1.7s ease-in-out infinite; }
+    .lp-step.lp-flow-complete .lp-step-marker {
+      background: rgba(var(--flow-rgb),.14); border-color: rgba(var(--flow-rgb),.72);
+    }
+    .lp-step-arrow {
+      top: auto; right: auto; left: 17px; bottom: 1px;
+      opacity: .18; transform: rotate(90deg) translateX(-5px); transition-delay: 0s;
+    }
+    .lp-flow-lane.visible .lp-step-arrow { opacity: .18; transform: rotate(90deg); transition-delay: 0s; }
+    .lp-flow-lane.visible .lp-step.lp-flow-current .lp-step-arrow,
+    .lp-flow-lane.visible .lp-step.lp-flow-complete .lp-step-arrow {
+      opacity: 1; filter: drop-shadow(0 0 8px rgba(var(--flow-rgb),.55));
+    }
   }
   @media (max-width: 780px) {
     .lp-audiences { min-height: 220vh; }
@@ -487,6 +527,9 @@ const CSS = `
     .lp-step-arrow { left: 14px; }
     .lp-step-body { padding: 18px; }
     .lp-principle { padding: 28px 24px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .lp-step, .lp-step-body, .lp-step-marker, .lp-step-arrow, .lp-steps::before { transition: none; animation: none !important; }
   }
 `;
 
@@ -549,6 +592,48 @@ export default function LandingPage() {
     };
 
     updateAudience();
+    window.addEventListener("scroll", requestUpdate, { passive: true });
+    window.addEventListener("resize", requestUpdate);
+    return () => {
+      window.cancelAnimationFrame(frameId);
+      window.removeEventListener("scroll", requestUpdate);
+      window.removeEventListener("resize", requestUpdate);
+    };
+  }, []);
+
+  useEffect(() => {
+    const lanes = Array.from(document.querySelectorAll(".lp-flow-lane"));
+    if (!lanes.length) return undefined;
+
+    let frameId = 0;
+    const updateFlow = () => {
+      const isVertical = window.matchMedia("(max-width: 1000px)").matches;
+      const triggerY = window.innerHeight * 0.56;
+
+      lanes.forEach((lane) => {
+        const steps = Array.from(lane.querySelectorAll(".lp-step"));
+        if (!isVertical) {
+          steps.forEach((step) => step.classList.remove("lp-flow-current", "lp-flow-complete"));
+          return;
+        }
+
+        let currentIndex = 0;
+        steps.forEach((step, index) => {
+          const marker = step.querySelector(".lp-step-marker");
+          if (marker && marker.getBoundingClientRect().top <= triggerY) currentIndex = index;
+        });
+        steps.forEach((step, index) => {
+          step.classList.toggle("lp-flow-current", index === currentIndex);
+          step.classList.toggle("lp-flow-complete", index < currentIndex);
+        });
+      });
+    };
+    const requestUpdate = () => {
+      window.cancelAnimationFrame(frameId);
+      frameId = window.requestAnimationFrame(updateFlow);
+    };
+
+    updateFlow();
     window.addEventListener("scroll", requestUpdate, { passive: true });
     window.addEventListener("resize", requestUpdate);
     return () => {
