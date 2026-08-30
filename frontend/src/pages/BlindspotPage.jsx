@@ -16,6 +16,9 @@ const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v.toLocaleStri
 
 const COVERAGE_COLS = "64px 1fr 54px 52px";
 const HEAVY_BLINDSPOT_PCT = 50;   // 점포 절반 이상이 사각지대인 읍면동
+const LIST_INITIAL_ROWS = 8;
+const LIST_ROW_STEP = 8;
+const LIST_MAX_ROWS = 200;         // API limit 상한
 const COVERAGE_TIERS = [
   { key: "none", label: "5% 미만", test: (v) => v < 5 },
   { key: "some", label: "5~15%", test: (v) => v >= 5 && v < 15 },
@@ -325,7 +328,7 @@ function IndustryTable({ data, loading }) {
   );
 }
 
-function VerdictTile({ label, count, tone, active, onClick }) {
+function VerdictTile({ label, count, tone, active, disabled = false, onClick }) {
   const TONE = {
     warn: { fg: "var(--badge-warn-ink)", bg: "var(--orange-soft)", bar: "var(--accent-orange)" },
     ok: { fg: "var(--badge-ok-ink)", bg: "var(--green-soft)", bar: "var(--accent-green)" },
@@ -334,10 +337,12 @@ function VerdictTile({ label, count, tone, active, onClick }) {
   return (
     <button
       onClick={onClick}
+      disabled={disabled}
       style={{
         flex: "1 1 130px",
         textAlign: "left",
-        cursor: "pointer",
+        cursor: disabled ? "default" : "pointer",
+        opacity: disabled ? 0.62 : 1,
         border: `1px solid ${active ? TONE.bar : "var(--hairline)"}`,
         background: active ? TONE.bg : "var(--surface-container-lowest)",
         borderRadius: "var(--radius-md)",
@@ -370,26 +375,32 @@ function PooledVerdict({ data, loading }) {
     차이없음: heavy.filter((item) => item.vs_city === "차이없음"),
     낮음: heavy.filter((item) => item.vs_city === "낮음"),
   };
+  const selectedGroup = groups[openGroup]?.length
+    ? openGroup
+    : ["높음", "차이없음", "낮음"].find((key) => groups[key].length) ?? "높음";
 
   return (
     <div>
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
-        <VerdictTile label="확인 필요" count={groups.높음.length} tone="warn"
-          active={openGroup === "높음"} onClick={() => setOpenGroup("높음")} />
-        <VerdictTile label="유의차 없음" count={groups.차이없음.length} tone="neutral"
-          active={openGroup === "차이없음"} onClick={() => setOpenGroup("차이없음")} />
-        <VerdictTile label="시 평균 이하" count={groups.낮음.length} tone="ok"
-          active={openGroup === "낮음"} onClick={() => setOpenGroup("낮음")} />
+      <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+        <VerdictTile label="시 평균보다 높음" count={groups.높음.length} tone="warn"
+          active={selectedGroup === "높음"} disabled={!groups.높음.length} onClick={() => setOpenGroup("높음")} />
+        <VerdictTile label="뚜렷한 차이 없음" count={groups.차이없음.length} tone="neutral"
+          active={selectedGroup === "차이없음"} disabled={!groups.차이없음.length} onClick={() => setOpenGroup("차이없음")} />
+        <VerdictTile label="시 평균보다 낮음" count={groups.낮음.length} tone="ok"
+          active={selectedGroup === "낮음"} disabled={!groups.낮음.length} onClick={() => setOpenGroup("낮음")} />
       </div>
 
+      {groups.높음.length === 0 && (
+        <div className="t-caption" style={{ margin: "0 0 12px", color: "var(--ink-muted)" }}>
+          데이터가 없는 것이 아니라, 읍면동 전체를 합산했을 때 시 평균보다 통계적으로 높은 지역이 없다는 뜻입니다.
+        </div>
+      )}
+
       <div className="card" style={{ padding: 0, overflow: "hidden" }}>
-        {groups[openGroup].length === 0 ? (
-          <div className="t-caption" style={{ padding: 20, color: "var(--ink-muted)" }}>해당 읍면동 없음</div>
-        ) : (
-          groups[openGroup].map((item, index) => {
+        {groups[selectedGroup].map((item, index) => {
             const diff = item.pooled_closure_rate_pct - city;
-            const warn = openGroup === "높음";
-            const good = openGroup === "낮음";
+            const warn = selectedGroup === "높음";
+            const good = selectedGroup === "낮음";
             return (
               <div
                 key={item.dong}
@@ -437,8 +448,7 @@ function PooledVerdict({ data, loading }) {
                 </div>
               </div>
             );
-          })
-        )}
+          })}
       </div>
     </div>
   );
@@ -517,13 +527,6 @@ export default function BlindspotPage() {
   const [params, setParams] = useSearchParams();
   const dong = params.get("dong") ?? "";
   const band = params.get("band") === "near" ? "near" : "all";
-  const setParam = (key, value) => {
-    const next = new URLSearchParams(params);
-    if (value) next.set(key, value);
-    else next.delete(key);
-    setParams(next, { replace: true });
-  };
-
   const { sampleMin: fallbackSampleMin } = useGradeNotice();
   const [data, setData] = useState(null);
   const [coverage, setCoverage] = useState(null);
@@ -534,6 +537,15 @@ export default function BlindspotPage() {
   const [error, setError] = useState("");
   const [allCount, setAllCount] = useState(null);
   const [nearCount, setNearCount] = useState(null);
+  const [rowLimit, setRowLimit] = useState(LIST_INITIAL_ROWS);
+
+  const setParam = (key, value) => {
+    const next = new URLSearchParams(params);
+    if (value) next.set(key, value);
+    else next.delete(key);
+    setRowLimit(LIST_INITIAL_ROWS);
+    setParams(next, { replace: true });
+  };
 
   useEffect(() => {
     apiFetchJson("/api/analysis/dongs")
@@ -552,13 +564,13 @@ export default function BlindspotPage() {
   useEffect(() => {
     setLoading(true);
     setError("");
-    const query = new URLSearchParams({ limit: 40, band });
+    const query = new URLSearchParams({ limit: rowLimit, band });
     if (dong) query.set("dong", dong);
     apiFetchJson(`/api/alerts/blindspots?${query}`)
       .then((d) => { setData(d); if (band === "all") setAllCount(d.band_cells); })
       .catch((err) => setError(describeApiError(err)))
       .finally(() => setLoading(false));
-  }, [dong, band]);
+  }, [dong, band, rowLimit]);
 
   // 탭 라벨의 개수는 어느 탭을 보고 있든 필요하다.
   useEffect(() => {
@@ -645,7 +657,7 @@ export default function BlindspotPage() {
 
       <section style={{ marginTop: 36 }}>
         <SectionHead
-          title="판단 보류 상권 전체 목록"
+          title="판단 보류 상권"
           count={data?.band_cells != null ? num(data.band_cells) : undefined}
           right={
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
@@ -728,9 +740,31 @@ export default function BlindspotPage() {
                 </tbody>
               </table>
             </div>
-            {data.band_cells > data.items.length && (
-              <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 10 }}>
-                {num(data.band_cells)}개 중 상위 {data.items.length}개 표시
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
+              <div className="t-caption" style={{ color: "var(--ink-faint)" }}>
+                전체 {num(data.band_cells)}개 중 {data.items.length}개 표시
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {rowLimit > LIST_INITIAL_ROWS && (
+                  <button type="button" className="btn-utility" onClick={() => setRowLimit(LIST_INITIAL_ROWS)}>
+                    간단히 보기
+                  </button>
+                )}
+                {data.band_cells > data.items.length && rowLimit < LIST_MAX_ROWS && (
+                  <button
+                    type="button"
+                    className="btn-utility"
+                    onClick={() => setRowLimit((value) => Math.min(value + LIST_ROW_STEP, LIST_MAX_ROWS))}
+                  >
+                    {Math.min(LIST_ROW_STEP, data.band_cells - data.items.length)}개 더 보기
+                    <span className="material-symbols-outlined" aria-hidden="true" style={{ fontSize: 18 }}>expand_more</span>
+                  </button>
+                )}
+              </div>
+            </div>
+            {data.band_cells > data.items.length && rowLimit >= LIST_MAX_ROWS && (
+              <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 8 }}>
+                화면에서는 상위 {LIST_MAX_ROWS}개까지 확인할 수 있습니다. 읍면동 필터를 사용하면 범위를 더 좁힐 수 있습니다.
               </div>
             )}
           </>
