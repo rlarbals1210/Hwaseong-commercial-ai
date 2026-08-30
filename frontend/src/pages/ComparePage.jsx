@@ -319,26 +319,23 @@ function VerdictHeadline({ data }) {
   );
 }
 
-/** 접이식 근거 구획. 기본은 닫힘 — 결론을 읽고 궁금한 것만 편다. */
-function Section({ title, caption, defaultOpen = false, children }) {
+/** 근거 구획. 접지 않고 항상 펼쳐 보인다 — 결론과 근거를 한 번에 읽는다. */
+function Section({ title, caption, children }) {
   if (!children) return null;
   return (
-    <details open={defaultOpen} style={{ marginBottom: 12 }}>
-      <summary
+    <section style={{ marginBottom: 12 }}>
+      <div
         style={{
-          cursor: "pointer", listStyle: "none", display: "flex", alignItems: "baseline", gap: 10,
+          display: "flex", alignItems: "baseline", gap: 10,
           padding: "12px 16px", background: "var(--surface-container-low)",
           border: "1px solid var(--hairline)", borderRadius: "var(--radius-md)",
         }}
       >
         <span className="t-title" style={{ color: "var(--on-surface)" }}>{title}</span>
         {caption && <span className="t-caption" style={{ color: "var(--ink-faint)" }}>{caption}</span>}
-        <span className="material-symbols-outlined" style={{ marginLeft: "auto", fontSize: 20, color: "var(--ink-muted)" }}>
-          expand_more
-        </span>
-      </summary>
+      </div>
       <div style={{ marginTop: 12 }}>{children}</div>
-    </details>
+    </section>
   );
 }
 
@@ -869,7 +866,7 @@ export default function ComparePage() {
       {/* ── 3층: 근거 ───────────────────────────────────────────────── */}
 
       {data && (
-        <Section title="무엇이 다른가" caption="지표별 차이와 유의성" defaultOpen>
+        <Section title="무엇이 다른가" caption="지표별 차이와 유의성">
           <div className="card" style={{ padding: 22 }}>
             <DiffRows data={data} />
             {data.industry_cells && (
@@ -920,13 +917,7 @@ export default function ComparePage() {
       )}
 
       {context && !context.sample_insufficient && (
-        <Section
-          title="같은 업종 안에서의 위치"
-          caption={rankLabel ?? undefined}
-          /* 비교 상대가 아직 없으면 펼쳐 둔다. 접어 두면 첫 화면에 고를 것이 하나도
-             없어서 "비교할 상권을 고르세요"라는 안내만 남는다. */
-          defaultOpen={!data}
-        >
+        <Section title="같은 업종 안에서의 위치" caption={rankLabel ?? undefined}>
           <div className="card" style={{ padding: "20px 24px" }}>
             <IndustryRanking
               context={context}
@@ -941,7 +932,6 @@ export default function ComparePage() {
         <Section
           title="비교 후보"
           caption={`점포 ${num(context.peer_store_min)}~${num(context.peer_store_max)}곳 · ${context.peers.length}곳`}
-          defaultOpen={!data}
         >
           <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
             <PeerCard
