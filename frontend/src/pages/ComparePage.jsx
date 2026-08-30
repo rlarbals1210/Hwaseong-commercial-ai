@@ -449,11 +449,10 @@ function DiffRows({ data }) {
     <div ref={visualRef} className="compare-diff-visual">
       <div className="compare-diff-legend" aria-label="양방향 막대 색상 기준">
         <span className="compare-diff-legend-side is-left">
-          <i aria-hidden="true" /> {data.left.area_name} 값이 큼
+          <i aria-hidden="true" /> {data.left.area_name}
         </span>
-        <span className="compare-diff-legend-neutral">차이 적음</span>
         <span className="compare-diff-legend-side is-right">
-          {data.right.area_name} 값이 큼 <i aria-hidden="true" />
+          {data.right.area_name} <i aria-hidden="true" />
         </span>
       </div>
 
@@ -660,7 +659,7 @@ function TrendOverlay({ trend, leftName, rightName }) {
     <div style={{ overflowX: "auto" }}>
       <svg width={W} height={H} role="img" aria-label="분기별 누적 폐업률 비교">
         <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--hairline)" />
-        <path d={path("right_pct")} fill="none" stroke="var(--outline)" strokeWidth="2" strokeDasharray="4 3" />
+        <path d={path("right_pct")} fill="none" stroke="#ea580c" strokeWidth="2.5" />
         <path d={path("left_pct")} fill="none" stroke="var(--primary)" strokeWidth="2.5" />
         <text x={PAD} y={16} fontSize="11" fill="var(--ink-faint)">{fmt(max)}%</text>
         <text x={PAD} y={H - 8} fontSize="11" fill="var(--ink-faint)">{points[0].label}</text>
@@ -670,7 +669,7 @@ function TrendOverlay({ trend, leftName, rightName }) {
       </svg>
       <div className="t-caption" style={{ display: "flex", gap: 18, color: "var(--ink-muted)", marginTop: 4 }}>
         <span><span style={{ display: "inline-block", width: 16, height: 2, background: "var(--primary)", verticalAlign: "middle", marginRight: 6 }} />{leftName}</span>
-        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "var(--outline)", verticalAlign: "middle", marginRight: 6 }} />{rightName}</span>
+        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#ea580c", verticalAlign: "middle", marginRight: 6 }} />{rightName}</span>
       </div>
     </div>
   );
