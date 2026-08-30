@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge, TypeBadge } from "../components/Badge";
@@ -416,6 +416,7 @@ function PeerCard({ peer, base, tone, caption, onPick }) {
 
 /** 차이를 업종 내 표준편차로 재서 큰 순으로. 단위가 제각각인 지표를 한 자로 재는 유일한 방법. */
 function DiffRows({ data }) {
+  const visualRef = useRef(null);
   const rows = [...data.diffs];
   const hasSigma = rows.some((d) => d.sigma != null);
   // 설명 후보를 먼저, 그다음 차이가 큰 순. 이 업종에서 폐업률과 함께 움직이지 않는
@@ -425,21 +426,51 @@ function DiffRows({ data }) {
       (b.explains ? 1 : 0) - (a.explains ? 1 : 0) ||
       Math.abs(b.sigma ?? 0) - Math.abs(a.sigma ?? 0));
   }
-  const maxSigma = Math.max(...rows.map((d) => Math.abs(d.sigma ?? 0)), 1);
+  useEffect(() => {
+    const node = visualRef.current;
+    if (!node) return undefined;
+    node.classList.remove("is-visible");
+
+    if (!("IntersectionObserver" in window)) {
+      node.classList.add("is-visible");
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting) return;
+      node.classList.add("is-visible");
+      observer.disconnect();
+    }, { threshold: 0.2 });
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [data.left.area_id, data.right.area_id]);
 
   return (
-    <div style={{ display: "grid", gap: 2 }}>
-      {rows.map((d) => {
+    <div ref={visualRef} className="compare-diff-visual">
+      <div className="compare-diff-legend" aria-label="양방향 막대 색상 기준">
+        <span className="compare-diff-legend-side is-left">
+          <i aria-hidden="true" /> {data.left.area_name} 값이 큼
+        </span>
+        <span className="compare-diff-legend-neutral">차이 적음</span>
+        <span className="compare-diff-legend-side is-right">
+          {data.right.area_name} 값이 큼 <i aria-hidden="true" />
+        </span>
+      </div>
+
+      <div style={{ display: "grid", gap: 2 }}>
+      {rows.map((d, index) => {
         const muted = (side) => side?.sample_insufficient && d.kind === "rate";
         const diffUnit = d.unit === "%" ? "%p" : d.unit;
         const sigma = d.sigma;
-        const width = sigma != null ? (Math.abs(sigma) / maxSigma) * 50 : 0;
+        const strength = sigma != null ? Math.min(Math.abs(sigma) / 3, 1) : 0;
+        const width = strength * 50;
+        const direction = sigma > 0 ? "is-left" : "is-right";
         return (
           <div
             key={d.metric}
             style={{
               display: "grid",
-              gridTemplateColumns: "1fr 150px 1fr",
+              gridTemplateColumns: "1fr 220px 1fr",
               alignItems: "center",
               gap: 12,
               padding: "13px 0",
@@ -462,16 +493,18 @@ function DiffRows({ data }) {
               </div>
               {/* 발산 막대 — 가운데가 0, 왼쪽으로 뻗으면 왼쪽 상권이 크다 */}
               {sigma != null ? (
-                <div style={{ position: "relative", height: 8, marginTop: 5 }}>
-                  <div style={{ position: "absolute", left: "50%", top: 0, bottom: 0, width: 1, background: "var(--hairline)" }} />
+                <div
+                  className="compare-diff-track"
+                  role="img"
+                  aria-label={`${d.label}: ${sigma > 0 ? data.left.area_name : data.right.area_name} 값이 ${Math.abs(sigma).toFixed(2)} 표준편차만큼 큼`}
+                >
+                  <div className="compare-diff-center" />
                   <div
+                    className={`compare-diff-bar ${direction}`}
                     style={{
-                      position: "absolute",
-                      top: 1, height: 6,
-                      borderRadius: 3,
-                      background: "var(--ink-muted)",
-                      width: `${width}%`,
-                      left: sigma > 0 ? `${50 - width}%` : "50%",
+                      "--diff-width": `${width}%`,
+                      "--diff-opacity": 0.28 + strength * 0.72,
+                      "--diff-delay": `${index * 70}ms`,
                     }}
                   />
                 </div>
@@ -496,6 +529,7 @@ function DiffRows({ data }) {
           </div>
         );
       })}
+      </div>
     </div>
   );
 }
