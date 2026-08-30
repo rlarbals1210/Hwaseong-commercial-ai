@@ -63,7 +63,7 @@ function Hero({ data }) {
   const visible = Math.max(0, 100 - blind);
   return (
     <div className="card" style={{ padding: "26px 28px 22px", borderLeft: "4px solid var(--primary)" }}>
-      <div className="t-eyebrow" style={{ color: "var(--ink-faint)" }}>분석 커버리지</div>
+      <div className="t-eyebrow" style={{ color: "var(--ink-faint)" }}>판단 보류 점포 비중</div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
         <span className="t-metric" style={{ fontSize: 56, lineHeight: 1 }}>{fmt(blind)}%</span>
         <span className="t-body" style={{ color: "var(--ink-secondary)" }}>
@@ -93,6 +93,78 @@ function Hero({ data }) {
   );
 }
 
+function ActionGuide({ sampleMin }) {
+  const steps = [
+    {
+      number: "01",
+      title: "판단이 비어 있는 범위 확인",
+      desc: "상단의 판단 보류 비중과 표본 기준을 보고 통계가 비어 있는 규모를 파악합니다.",
+    },
+    {
+      number: "02",
+      title: "관측 근거로 범위 좁히기",
+      desc: "위험 등급 대신 실제 폐업 건수와 읍면동 합산 비교로 확인할 곳을 좁힙니다.",
+    },
+    {
+      number: "03",
+      title: "현장 자료로 최종 확인",
+      desc: "점포 변동, 민원, 공실 등 화면에 없는 원인을 담당자가 추가로 확인합니다.",
+    },
+  ];
+
+  return (
+    <section style={{ marginTop: 32 }}>
+      <SectionHead title="사각지대에서는 이렇게 확인합니다" />
+      <div
+        className="card"
+        style={{
+          padding: 18,
+          marginBottom: 12,
+          borderLeft: "4px solid var(--primary)",
+          background: "var(--primary-container)",
+        }}
+      >
+        <div className="t-body-sm" style={{ color: "var(--ink-secondary)", lineHeight: 1.7 }}>
+          <b style={{ color: "var(--on-surface)" }}>사각지대는 위험하다는 뜻이 아닙니다.</b>{" "}
+          업종별 점포가 {sampleMin}곳 미만이라 통계 등급을 계산하지 않은 범위입니다.
+        </div>
+      </div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+        {steps.map((step, index) => (
+          <div key={step.number} className="card" style={{ padding: 20, position: "relative" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+              <span
+                className="t-eyebrow"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  width: 34,
+                  height: 34,
+                  borderRadius: "50%",
+                  color: "var(--primary)",
+                  background: "var(--primary-container)",
+                }}
+              >
+                {step.number}
+              </span>
+              <h3 className="t-title" style={{ margin: 0, fontSize: 17 }}>{step.title}</h3>
+              {index < steps.length - 1 && (
+                <span className="material-symbols-outlined" aria-hidden="true" style={{ marginLeft: "auto", color: "var(--primary)", fontSize: 20 }}>
+                  arrow_forward
+                </span>
+              )}
+            </div>
+            <p className="t-caption" style={{ margin: "12px 0 0 44px", color: "var(--ink-muted)", lineHeight: 1.65 }}>
+              {step.desc}
+            </p>
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function HighlightCards({ items }) {
   const top = (items || []).slice(0, 3);
   if (!top.length) return null;
@@ -118,13 +190,17 @@ function HighlightCards({ items }) {
 }
 
 function CoverageBars({ data, loading }) {
+  const [expanded, setExpanded] = useState(false);
   if (loading) return <div className="t-caption" style={{ color: "var(--ink-muted)" }}>불러오는 중…</div>;
   if (!data?.items?.length) return <div className="t-caption" style={{ color: "var(--ink-muted)" }}>자료 없음</div>;
+
+  const sorted = [...data.items].sort((a, b) => a.coverage_pct - b.coverage_pct);
+  const visibleItems = expanded ? sorted : sorted.slice(0, 8);
 
   return (
     <div>
       {COVERAGE_TIERS.map((tier) => {
-        const rows = data.items.filter((item) => tier.test(item.coverage_pct));
+        const rows = visibleItems.filter((item) => tier.test(item.coverage_pct));
         if (!rows.length) return null;
         return (
           <div key={tier.key} style={{ marginBottom: 20 }}>
@@ -165,17 +241,34 @@ function CoverageBars({ data, loading }) {
           </div>
         );
       })}
+      {sorted.length > 8 && (
+        <button
+          type="button"
+          className="btn-utility"
+          onClick={() => setExpanded((value) => !value)}
+          style={{ width: "100%", justifyContent: "center", marginTop: 2 }}
+        >
+          {expanded ? "간단히 보기" : `전체 ${sorted.length}곳 보기`}
+          <span className="material-symbols-outlined" aria-hidden="true" style={{ fontSize: 18 }}>
+            {expanded ? "expand_less" : "expand_more"}
+          </span>
+        </button>
+      )}
     </div>
   );
 }
 
 function IndustryTable({ data, loading }) {
+  const [expanded, setExpanded] = useState(false);
   if (loading) return <div className="t-caption" style={{ color: "var(--ink-muted)" }}>불러오는 중…</div>;
   if (!data?.items?.length) return <div className="t-caption" style={{ color: "var(--ink-muted)" }}>자료 없음</div>;
 
+  const visibleItems = expanded ? data.items : data.items.slice(0, 8);
+
   return (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 400 }}>
+    <div>
+      <div style={{ overflowX: "auto" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 400 }}>
         <thead>
           <tr style={{ borderBottom: "1px solid var(--hairline)" }}>
             {["업종", "커버율", "점포", "폐업"].map((h, i) => (
@@ -190,7 +283,7 @@ function IndustryTable({ data, loading }) {
           </tr>
         </thead>
         <tbody>
-          {data.items.map((item) => (
+          {visibleItems.map((item) => (
             <tr key={item.category} style={{ borderBottom: "1px solid var(--hairline)" }}>
               <td className="t-caption" style={{ padding: "9px 12px" }}>
                 {item.category}
@@ -213,7 +306,21 @@ function IndustryTable({ data, loading }) {
             </tr>
           ))}
         </tbody>
-      </table>
+        </table>
+      </div>
+      {data.items.length > 8 && (
+        <button
+          type="button"
+          className="btn-utility"
+          onClick={() => setExpanded((value) => !value)}
+          style={{ width: "100%", justifyContent: "center", marginTop: 12 }}
+        >
+          {expanded ? "간단히 보기" : `전체 ${data.items.length}개 업종 보기`}
+          <span className="material-symbols-outlined" aria-hidden="true" style={{ fontSize: 18 }}>
+            {expanded ? "expand_less" : "expand_more"}
+          </span>
+        </button>
+      )}
     </div>
   );
 }
@@ -417,7 +524,7 @@ export default function BlindspotPage() {
     setParams(next, { replace: true });
   };
 
-  const { meta: thresholds, sampleMin: fallbackSampleMin } = useGradeNotice();
+  const { sampleMin: fallbackSampleMin } = useGradeNotice();
   const [data, setData] = useState(null);
   const [coverage, setCoverage] = useState(null);
   const [industries, setIndustries] = useState(null);
@@ -479,25 +586,41 @@ export default function BlindspotPage() {
 
       {data && (
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap", marginTop: 12 }}>
-          <Stat label="사각지대 상권" value={num(data.total_cells)} unit="개" />
-          <Stat label="해당 점포" value={num(data.total_stores)} unit="곳" />
+          <Stat label="판단 보류 상권" value={num(data.total_cells)} unit="개" />
+          <Stat label="판단 보류 점포" value={num(data.total_stores)} unit="곳" />
           <Stat label="최근 1년 폐업" value={num(data.total_closures)} unit="건" />
           <Stat label="표본 기준" value={sampleMin} unit="곳" />
         </div>
       )}
 
+      <ActionGuide sampleMin={sampleMin} />
+
       {highlights.length > 0 && (
         <section style={{ marginTop: 32 }}>
-          <SectionHead title="폐업 건수 상위" />
+          <SectionHead title="먼저 확인할 판단 보류 상권" />
+          <p className="t-caption" style={{ margin: "-6px 0 14px", color: "var(--ink-muted)" }}>
+            위험 순위가 아니라, 판단을 보류한 상권 중 실제 폐업 건수가 많은 곳입니다.
+          </p>
           <HighlightCards items={highlights} />
         </section>
       )}
 
       <section style={{ marginTop: 36 }}>
+        <SectionHead title="업종을 합쳐 다시 확인한 지역" count="판단 보류 점포 50% 이상" />
+        <p className="t-caption" style={{ margin: "-6px 0 14px", color: "var(--ink-muted)", lineHeight: 1.65 }}>
+          개별 업종은 표본이 작아도 읍면동 전체를 합치면 비교할 수 있습니다. 위험 등급이 아니라 현장 확인을 돕는 보조 근거입니다.
+        </p>
+        <PooledVerdict data={coverage} loading={shapeLoading} />
+      </section>
+
+      <section style={{ marginTop: 36 }}>
         <SectionHead
-          title="사각지대 분포"
+          title="판단 보류 범위"
           count={coverage?.items?.length ? `읍면동 ${coverage.items.length} · 업종 ${industries?.industry_total ?? "—"}` : undefined}
         />
+        <p className="t-caption" style={{ margin: "-6px 0 14px", color: "var(--ink-muted)", lineHeight: 1.65 }}>
+          커버율은 표본 기준을 충족해 등급을 계산할 수 있는 업종의 비율입니다. 낮다고 해서 위험한 지역은 아닙니다.
+        </p>
         {coverage?.zero_coverage_dongs?.length > 0 && (
           <p className="t-caption" style={{ margin: "0 0 14px", color: "var(--ink-secondary)" }}>
             <b>{coverage.zero_coverage_dongs.join(" · ")}</b>: 판단 가능한 업종 없음.
@@ -508,24 +631,21 @@ export default function BlindspotPage() {
         )}
         <div style={{ display: "grid", gap: 16, gridTemplateColumns: "repeat(auto-fit, minmax(330px, 1fr))" }}>
           <div className="card">
-            <h3 className="t-eyebrow" style={{ margin: "0 0 16px", color: "var(--ink-faint)" }}>읍면동별 커버율</h3>
+            <h3 className="t-eyebrow" style={{ margin: "0 0 4px", color: "var(--ink-faint)" }}>읍면동별 커버율</h3>
+            <p className="t-caption" style={{ margin: "0 0 16px", color: "var(--ink-muted)" }}>커버율이 낮은 8곳부터 표시합니다.</p>
             <CoverageBars data={coverage} loading={shapeLoading} />
           </div>
           <div className="card">
-            <h3 className="t-eyebrow" style={{ margin: "0 0 16px", color: "var(--ink-faint)" }}>업종별 커버율</h3>
+            <h3 className="t-eyebrow" style={{ margin: "0 0 4px", color: "var(--ink-faint)" }}>업종별 커버율</h3>
+            <p className="t-caption" style={{ margin: "0 0 16px", color: "var(--ink-muted)" }}>커버율이 낮은 업종부터 일부만 표시합니다.</p>
             <IndustryTable data={industries} loading={shapeLoading} />
           </div>
         </div>
       </section>
 
       <section style={{ marginTop: 36 }}>
-        <SectionHead title="읍면동 단위 판정" count="점포 절반 이상 사각지대" />
-        <PooledVerdict data={coverage} loading={shapeLoading} />
-      </section>
-
-      <section style={{ marginTop: 36 }}>
         <SectionHead
-          title="상권 목록"
+          title="판단 보류 상권 전체 목록"
           count={data?.band_cells != null ? num(data.band_cells) : undefined}
           right={
             <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
