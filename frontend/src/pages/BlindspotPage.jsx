@@ -132,35 +132,37 @@ function ActionGuide({ sampleMin }) {
           업종별 점포가 {sampleMin}곳 미만이라 통계 등급을 계산하지 않은 범위입니다.
         </div>
       </div>
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+      <div className="blindspot-action-steps">
         {steps.map((step, index) => (
-          <div key={step.number} className="card" style={{ padding: 20, position: "relative" }}>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <span
-                className="t-eyebrow"
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  width: 34,
-                  height: 34,
-                  borderRadius: "50%",
-                  color: "var(--primary)",
-                  background: "var(--primary-container)",
-                }}
-              >
-                {step.number}
-              </span>
-              <h3 className="t-title" style={{ margin: 0, fontSize: 17 }}>{step.title}</h3>
-              {index < steps.length - 1 && (
-                <span className="material-symbols-outlined" aria-hidden="true" style={{ marginLeft: "auto", color: "var(--primary)", fontSize: 20 }}>
-                  arrow_forward
+          <div key={step.number} className="blindspot-action-step">
+            <div className="card blindspot-action-card" style={{ padding: 20 }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span
+                  className="t-eyebrow"
+                  style={{
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    width: 34,
+                    height: 34,
+                    borderRadius: "50%",
+                    color: "var(--primary)",
+                    background: "var(--primary-container)",
+                  }}
+                >
+                  {step.number}
                 </span>
-              )}
+                <h3 className="t-title" style={{ margin: 0, fontSize: 17 }}>{step.title}</h3>
+              </div>
+              <p className="t-caption" style={{ margin: "12px 0 0 44px", color: "var(--ink-muted)", lineHeight: 1.65 }}>
+                {step.desc}
+              </p>
             </div>
-            <p className="t-caption" style={{ margin: "12px 0 0 44px", color: "var(--ink-muted)", lineHeight: 1.65 }}>
-              {step.desc}
-            </p>
+            {index < steps.length - 1 && (
+              <span className="blindspot-action-arrow material-symbols-outlined" aria-hidden="true">
+                arrow_forward
+              </span>
+            )}
           </div>
         ))}
       </div>
