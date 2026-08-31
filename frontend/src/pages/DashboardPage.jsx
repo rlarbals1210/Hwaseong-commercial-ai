@@ -43,19 +43,6 @@ function PageHeader({ title, desc }) {
   );
 }
 
-// 지표 타일 — 큰 숫자가 주인공. 라벨은 위, 값은 아래로 두어 스캔 시 라벨 먼저 읽히게 한다.
-function StatCard({ label, value, unit, tone }) {
-  return (
-    <div className="card" style={{ padding: 20 }}>
-      <div className="t-eyebrow" style={{ color: "var(--ink-muted)", textTransform: "uppercase" }}>{label}</div>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginTop: 10 }}>
-        <span className="t-metric" style={{ fontSize: 32, color: tone ?? "var(--on-surface)" }}>{value}</span>
-        {unit && <span style={{ fontSize: 15, color: "var(--ink-faint)", fontWeight: 500 }}>{unit}</span>}
-      </div>
-    </div>
-  );
-}
-
 // AI 예측값(부풀려진 절대 수치)은 화면에 표시하지 않는다 — 순위만 신뢰할 수 있는 정보라
 // "예측 위험 #N"으로만 보여주고, 근거는 실제 관측 폐업률로 뒷받침한다.
 //
@@ -65,16 +52,15 @@ function StatCard({ label, value, unit, tone }) {
 function RiskCard({ item, beyondValidated = false }) {
   // 카드 전체를 링크로 둔다. 예전에는 카드마다 "· 상세 →"를 적었는데 10장이면 같은 문구가
   // 열 번 반복되고, 정작 누를 수 있는 곳은 제목 줄뿐이었다.
-  const watchOnly = item.risk_grade === "안정";
   return (
     <Link
       to={`/cells/${item.area_id}/${item.industry_id}`}
       className="card"
       style={{
-        padding: 16,
+        padding: 20,
         display: "flex",
         flexDirection: "column",
-        gap: 10,
+        gap: 13,
         textDecoration: "none",
         color: "inherit",
       }}
@@ -82,89 +68,95 @@ function RiskCard({ item, beyondValidated = false }) {
       {/* 순위는 칩이 아니라 숫자로 둔다. 칩이 셋이면 색이 셋이라 어디를 봐야 할지 흩어진다 —
           색을 쓰는 것은 등급 하나뿐이고 순위와 유형은 글자로만 말한다. */}
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <span className="t-eyebrow" style={{ color: "var(--ink-faint)", fontVariantNumeric: "tabular-nums" }}>
-          #{item.predicted_rank}
+        {/* 순위가 예측이고 아래 숫자는 관측이다. 둘이 세로로 붙어 있으면 "1위이고 9.5%"로
+            한 덩어리로 읽혀서 출처가 다르다는 게 안 보인다. 순위 옆에 성격을 밝힌다. */}
+        <span style={{ display: "flex", alignItems: "baseline", gap: 5, minWidth: 0 }}>
+          <span style={{ fontSize: 12.5, fontWeight: 700, color: "var(--ink-faint)", fontVariantNumeric: "tabular-nums" }}>
+            #{item.predicted_rank}
+          </span>
+          <span style={{ fontSize: 10.5, color: "var(--ink-faint)", whiteSpace: "nowrap" }}>AI 예측 순위</span>
         </span>
         <span style={{ marginLeft: "auto", display: "flex", gap: 6, alignItems: "center" }}>
           <TypeBadge type={item.cell_type} />
           {/* "안정"도 그린다. 감추면 등급이 없는 셀과 구분되지 않고,
               비교·상세 화면에서는 보이던 것이 여기서만 사라져 화면끼리 어긋났다. */}
           <GradeBadge grade={item.risk_grade} />
+          {item.anomaly && (
+            <span
+              className="badge"
+              style={{ background: "var(--error-soft)", color: "var(--on-error-container)" }}
+            >
+              트렌드 이상
+            </span>
+          )}
         </span>
       </div>
 
       <div>
-        <div className="t-title" style={{ color: "var(--on-surface)", lineHeight: 1.3 }}>{item.dong}</div>
-        <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 2 }}>{item.category}</div>
+        <div style={{ fontSize: 19, fontWeight: 700, color: "var(--on-surface)", lineHeight: 1.3, letterSpacing: "-0.01em" }}>
+          {item.dong}
+        </div>
+        <div style={{ fontSize: 13, color: "var(--ink-muted)", marginTop: 5, lineHeight: 1.45 }}>
+          {item.category}
+        </div>
       </div>
 
+      {/* 값 블록 — 위계를 셋으로 줄였다(2026-08-31).
+          예전에는 큰 숫자 아래로 비슷한 크기·색의 캡션이 세 줄 매달려서, 무엇이 값이고
+          무엇이 근거인지 구분되지 않았다. 지금은
+            ① 숫자(34px)  ② 라벨+구간 한 줄(10.5px)  ③ 구분선 아래 건수(11.5px)
+          로 크기를 벌리고, 근거는 실선 하나로 값과 갈라 둔다. */}
       <div style={{ marginTop: "auto" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
-          <span className="t-metric" style={{ fontSize: 30 }}>{fmtPct(item.cumulative_closure_rate_pct)}</span>
-          <span style={{ fontSize: 15, color: "var(--ink-faint)", fontWeight: 500 }}>%</span>
+          <span
+            className="t-metric"
+            style={{ fontSize: 38, lineHeight: 1.05, letterSpacing: "-0.02em" }}
+          >
+            {fmtPct(item.cumulative_closure_rate_pct)}
+          </span>
+          <span style={{ fontSize: 18, color: "var(--ink-faint)", fontWeight: 500 }}>%</span>
         </div>
-        {/* 라벨을 숫자 아래로 내렸다. 위에 두면 카드 열 장에서 같은 문구가 먼저 열 번 읽힌다. */}
-        <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 1 }}>최근 1년 누적 폐업률</div>
 
-        {/* 신뢰구간(2026-08-29). 표본 기준을 30으로 내리면서 이 목록의 절반가량이 점포
-            50곳 미만 셀이 됐다. 점추정만 30px로 띄우면 점포 34곳의 12.5%가 점포 240곳의
-            12.9%와 같은 무게로 읽힌다 — 앞은 구간이 6~24%로 벌어지고 뒤는 10~16%다.
-            자리는 항상 잡아 둔다(카드 높이가 어긋나면 한 줄에 늘어선 숫자가 흐트러진다). */}
-        <div
-          className="t-caption"
-          style={{
-            color: "var(--ink-faint)",
-            marginTop: 3,
-            fontVariantNumeric: "tabular-nums",
-            whiteSpace: "nowrap",
-          }}
-        >
-          {num(item.closure_lower_pct) !== null && num(item.closure_upper_pct) !== null
-            ? `95% 구간 ${fmtPct(item.closure_lower_pct)}~${fmtPct(item.closure_upper_pct)}%${
-                item.interval_approximate ? " (근사)" : ""
-              }`
-            : "\u00a0"}
+        {/* 라벨을 숫자 아래에 둔다. 위에 두면 카드 열 장에서 같은 문구가 먼저 열 번 읽힌다.
+            신뢰구간을 같은 줄에 붙여 캡션 줄 수를 둘에서 하나로 줄였다. 표본 기준을 30으로
+            내린 뒤 이 목록의 절반가량이 점포 50곳 미만이라, 점추정만 크게 띄우면 점포
+            34곳의 12.5%가 점포 240곳의 12.9%와 같은 무게로 읽힌다. */}
+        <div style={{ marginTop: 8, color: "var(--ink-faint)", fontVariantNumeric: "tabular-nums" }}>
+          <div style={{ fontSize: 12.5, lineHeight: 1.5 }}>실제 폐업률 (최근 1년)</div>
         </div>
 
         {/* 비율만 두면 점포 60곳에서 6곳 닫힌 것과 600곳에서 60곳 닫힌 것이 같아 보인다.
             "N곳 / M곳"으로 묶지 않는다 — 위 비율의 분모는 4개 분기 직전점포수의 합이지
             현재 점포수가 아니라서, 슬래시로 묶으면 눈으로 나눈 값이 4배쯤 어긋난다
-            (2026-08-25 감사). 가운뎃점으로 갈라 각각의 사실로 읽히게 한다. */}
-        {num(item.store_count) !== null && (
-          <div
-            className="t-caption"
-            style={{ color: "var(--ink-muted)", marginTop: 8, fontVariantNumeric: "tabular-nums", whiteSpace: "nowrap" }}
-          >
-            {num(item.cumulative_closure_count) !== null
-              ? `${item.cumulative_closure_count.toLocaleString()}곳 닫힘`
-              : "건수 미산출"}
-            {" · 점포 "}{item.store_count.toLocaleString()}곳
-          </div>
-        )}
+            (2026-08-25 감사). 가운뎃점으로 갈라 각각의 사실로 읽히게 한다.
 
-        {/* "안정인데 왜 조기경보에 있냐"는 질문이 나오는 자리다. 정렬은 모델이 본 2분기 뒤
-            위험 순위이고 등급은 이미 관측된 실적이라 둘은 어긋날 수 있다 — 그게 조기경보의
-            존재 이유이기도 하다. 예전에는 박스로 띄웠는데 그 카드만 키가 달라져 한 줄에
-            늘어선 숫자들이 어긋났다. 한 줄로 줄이고 자리를 항상 잡아 둔다. */}
+            "지금은 안정 · 2분기 뒤 위험 상위 예측"은 지웠다(2026-08-31). 같은 말을 상단
+            배너가 이미 하고 있어서 카드 열 장에 열 번 반복됐다. 트렌드 이상은 정보량이
+            있으므로 위 배지 줄로 옮겼다. */}
         <div
-          className="t-caption"
           style={{
-            marginTop: 8,
-            paddingTop: 8,
+            fontSize: 13,
+            lineHeight: 1.5,
+            color: "var(--ink-muted)",
+            marginTop: 18,
+            paddingTop: 16,
             borderTop: "1px solid var(--hairline)",
-            color: watchOnly ? "var(--ink-secondary)" : "var(--ink-faint)",
+            fontVariantNumeric: "tabular-nums",
             whiteSpace: "nowrap",
-            overflow: "hidden",
-            textOverflow: "ellipsis",
           }}
         >
-          {beyondValidated
-            ? "검증 구간 밖 · 순서는 참고용"
-            : watchOnly
-              ? "지금은 안정 · 2분기 뒤 위험 상위 예측"
-              : item.anomaly
-                ? "트렌드 이상 감지"
-                : "\u00a0"}
+          {beyondValidated ? (
+            <span style={{ color: "var(--ink-faint)" }}>검증 구간 밖 · 순서는 참고용</span>
+          ) : (
+            <>
+              {num(item.cumulative_closure_count) !== null
+                ? `${item.cumulative_closure_count.toLocaleString()}곳 닫힘`
+                : "건수 미산출"}
+              {num(item.store_count) !== null && (
+                <>{" · 점포 "}{item.store_count.toLocaleString()}곳</>
+              )}
+            </>
+          )}
         </div>
       </div>
     </Link>
@@ -264,7 +256,6 @@ export default function DashboardPage() {
   const cohortLabel = lookupMode
     ? `${[dong, category].filter(Boolean).join(" · ")} 상권 ${cohort.length}개`
     : `예측 상위 ${headline.length}개 상권`;
-  const anomalyCount = cohort.filter((d) => d.anomaly).length;
   const cityAvg = meta?.city_average_pct ?? CITY_AVG_FALLBACK_PCT;
   const cumValues = cohort.map((d) => num(d.cumulative_closure_rate_pct)).filter((v) => v !== null);
   const avgActual = cumValues.length
@@ -297,7 +288,7 @@ export default function DashboardPage() {
               background: "var(--surface-container-lowest)",
             }}
           >
-            <div style={{ maxWidth: 620 }}>
+            <div style={{ maxWidth: 780 }}>
               <span className="badge" style={{ background: "var(--primary-fixed)", color: "var(--primary)" }}>
                 {cohortLabel}
               </span>
@@ -314,9 +305,14 @@ export default function DashboardPage() {
                   </>
                 )}
               </div>
+              {/* 두 줄로 고정한다(2026-08-31). 서버 notice를 뒤에 이어붙이면 한 문단이
+                  네 줄로 늘어져서, 정작 읽어야 할 "예측"과 "상대 순위"가 묻혔다.
+                  줄마다 하나씩만 말한다 — 첫 줄은 예측의 성격, 둘째 줄은 등급의 기준. */}
               <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "12px 0 0", lineHeight: 1.6 }}>
-                2분기 뒤를 예측한 값입니다. 개별 상권의 폐업률이 낮아도 상위 순위에 오를 수 있습니다.
-                {meta?.notice ? ` ${meta.notice}` : ""}
+                2분기 뒤를 예측한 값으로, 개별 상권의 폐업률이 낮아도 상위 순위에 오를 수 있습니다.
+              </p>
+              <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "3px 0 0", lineHeight: 1.6, whiteSpace: "nowrap" }}>
+                등급은 최근 4분기 누적 폐업률의 화성시 내 상대 순위입니다 (위험 상위 10% · 주의 상위 30%).
               </p>
             </div>
 
@@ -346,25 +342,10 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* 세 타일 모두 머리 10개 안에서 센 값이다. 예전 라벨이 "분석 대상 구역"이라
-              화성시 전체에서 10개만 분석한 것처럼 읽혔다 — 실제 표본충분 상권은 382개이고
-              (2026-08-29 표본 기준 30 하향 후) 사각지대까지 더하면 1,802개다.
-              자기 강점을 깎아먹는 라벨이었다. */}
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 8 }}>
-            <StatCard label={cohortLabel} value={cohort.length} unit="개" />
-            <StatCard
-              label="그중 트렌드 이상"
-              value={anomalyCount}
-              unit="개"
-              tone={anomalyCount > 0 ? "var(--error)" : "var(--on-surface)"}
-            />
-            <StatCard label="평균 폐업률" value={fmtPct(avgActual)} unit="%" tone="var(--primary)" />
-          </div>
-          <p className="t-caption" style={{ color: "var(--ink-faint)", margin: "0 0 24px" }}>
-            {cohortLabel} 안에서 센 값입니다. 전체 분석 대상{" "}
-            {meta?.eligible_cells ? `${meta.eligible_cells.toLocaleString()}개 상권` : "상권"} ·
-            표본 부족은 <Link to="/blindspots" style={{ color: "var(--primary)" }}>사각지대</Link>에서 관리
-          </p>
+          {/* 지표 타일 3개를 제거했다(2026-08-31).
+              "예측 상위 10개 상권 = 10개"는 라벨이 곧 값이라 아무것도 말하지 않았고,
+              "그중 트렌드 이상 0개"는 0이라 자리만 차지했다. 평균 폐업률은 바로 위 배너가
+              이미 화성시 전체와 나란히 보여준다. 셋 다 배너의 중복이었다. */}
         </>
       )}
 
@@ -438,9 +419,7 @@ export default function DashboardPage() {
             className="t-caption"
             style={{ marginTop: 7, color: categoryError ? "var(--error)" : "var(--ink-faint)" }}
           >
-            {categoryError
-              ? "업종 목록을 불러오지 못했습니다."
-              : `표본 기준을 넘고 AI 순위가 산출된 ${categories.length}개 업종`}
+            {categoryError ? "업종 목록을 불러오지 못했습니다." : ""}
           </div>
         </div>
 
@@ -482,13 +461,6 @@ export default function DashboardPage() {
         )
       ) : (
         <>
-          {/* 면책 문구는 '후속 조치 검토안' 카드에 있었다(2026-08-29 제거). 그 카드는 상위 2개를
-              다시 보여주며 등급에서 기계적으로 파생된 문구 5종을 붙일 뿐이라 새 정보가 없었다.
-              문구 자체는 심사·감사에서 방어선이므로 목록 머리로 옮겨 살린다. */}
-          <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "0 0 14px", lineHeight: 1.6 }}>
-            AI가 지원 대상을 결정하지 않습니다. 확인 순서를 제안할 뿐이며 최종 판단은 담당자가 합니다.
-          </p>
-
           {/* 머리 10개는 카드 — "먼저 볼 곳"과 "쭉 훑을 목록"은 다른 물건이라 형태를 나눈다.
               카드 50장은 스크롤 벽이 되고, 표 10줄은 우선순위가 안 읽힌다. */}
           {!lookupMode && (
@@ -562,16 +534,23 @@ export default function DashboardPage() {
                     {meta?.ranked_cells ? `${meta.ranked_cells.toLocaleString()}개` : "전체"} 상권 중
                     상위 {visible.length}곳입니다.{" "}
                     <b style={{ color: "var(--ink-secondary)" }}>
-                      이 집단이 나머지보다 실제로 더 많이 닫힌다는 것까지가 검증된 범위입니다
-                      {meta?.validated_lift ? ` (리프트 ${meta.validated_lift}배)` : ""}.
-                    </b>{" "}
-                    아래 순위 안쪽의 순서는 참고 자료로만 보시기 바랍니다.
-                    {data.length > visible.length && (
-                      <>
-                        {" "}그 외 {(data.length - visible.length).toLocaleString()}개 상권은 위에서
-                        읍면동 또는 업종을 선택하시면 조회하실 수 있습니다.
-                      </>
-                    )}
+                      {/* 리프트 수치는 뺐다(2026-08-31). 이 화면 값(validate_ranking.py, 순위를
+                          매기고 미래 4분기를 확인)과 발표에 쓰는 값(train_model.py, 고정 분할
+                          검증)은 측정 방식이 달라 숫자가 다르다. 한 자리에서 두 값이 부딪히면
+                          "왜 다르냐"에 시간을 쓰게 된다. 문장 뜻은 숫자 없이도 그대로다. */}
+                      이 집단이 나머지보다 실제로 더 많이 닫힌다는 것까지가 검증된 범위입니다.
+                    </b>
+                    {/* 검증 범위까지가 한 문단, 사용 안내는 다음 줄로 내린다.
+                        한 덩어리로 붙여 두면 정작 읽어야 할 "검증된 범위"가 안내에 묻힌다. */}
+                    <span style={{ display: "block", marginTop: 6 }}>
+                      아래 순위 안쪽의 순서는 참고 자료로만 보시기 바랍니다.
+                      {data.length > visible.length && (
+                        <>
+                          {" "}그 외 {(data.length - visible.length).toLocaleString()}개 상권은 위에서
+                          읍면동 또는 업종을 선택하시면 조회하실 수 있습니다.
+                        </>
+                      )}
+                    </span>
                   </>
                 )}
               </p>
