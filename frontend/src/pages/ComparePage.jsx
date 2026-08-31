@@ -305,8 +305,8 @@ function VerdictHeadline({ data }) {
       {separated != null && comparable && (
         <p className="t-body-sm" style={{ margin: "10px 0 0", color: "var(--ink-secondary)", lineHeight: 1.7 }}>
           {separated
-            ? "95% 구간이 겹치지 않습니다. 표본 크기를 감안해도 남는 차이입니다."
-            : "다만 95% 구간이 겹칩니다. 표본 크기를 감안하면 우연일 수 있어 단정하기 어렵습니다."}
+            ? "표본 크기를 감안해도 남는 차이입니다."
+            : "다만 표본이 작아 이 수치만으로는 판단하기 어렵습니다. 현장 확인이나 다른 자료를 함께 보십시오."}
         </p>
       )}
 
@@ -634,11 +634,27 @@ function TrendOverlay({ trend, leftName, rightName }) {
   );
   if (points.length < 3) return null;
 
-  const W = 660, H = 190, PAD = 34;
+  const LEFT_COLOR = "var(--primary)";
+  const RIGHT_COLOR = "#ea580c";
+  const W = 680, H = 148;
+  const L = 34, R = 10, T = 10, B = 26;
+  const plotW = W - L - R;
+  const plotH = H - T - B;
+
   const values = points.flatMap((p) => [p.left_pct, p.right_pct]).filter(Number.isFinite);
-  const max = Math.max(...values, 1) * 1.15;
-  const x = (i) => PAD + (i * (W - PAD * 2)) / (points.length - 1);
-  const y = (v) => H - PAD - (v / max) * (H - PAD * 2);
+  const rawMax = Math.max(...values, 1);
+  // 눈금은 1·2·5 단위로 세 칸만. 촘촘한 격자는 선을 읽는 데 방해가 된다.
+  const rough = (rawMax * 1.08) / 3;
+  const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+  const norm = rough / mag;
+  const step = (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
+  const max = Math.ceil((rawMax * 1.06) / step) * step;
+  const ticks = [];
+  for (let v = 0; v <= max + 1e-9; v += step) ticks.push(v);
+
+  const x = (i) => L + (i * plotW) / (points.length - 1);
+  const y = (v) => T + plotH - (v / max) * plotH;
+  const band = plotW / Math.max(points.length - 1, 1);
 
   // 값이 빈 분기에서 선을 잇지 않는다. 이어 버리면 미산출 구간이 완만한 변화로 보인다.
   const path = (key) => {
@@ -646,28 +662,110 @@ function TrendOverlay({ trend, leftName, rightName }) {
     points.forEach((p, i) => {
       const v = p[key];
       if (!Number.isFinite(v)) { pen = false; return; }
-      d += `${pen ? "L" : "M"}${x(i)},${y(v)} `;
+      d += `${pen ? "L" : "M"}${x(i).toFixed(1)},${y(v).toFixed(1)} `;
       pen = true;
     });
     return d.trim();
   };
+  const lastOf = (key) => {
+    for (let i = points.length - 1; i >= 0; i -= 1) {
+      if (Number.isFinite(points[i][key])) return { i, v: points[i][key] };
+    }
+    return null;
+  };
+
+  const series = [
+    { key: "left_pct", name: leftName, color: LEFT_COLOR, last: lastOf("left_pct") },
+    { key: "right_pct", name: rightName, color: RIGHT_COLOR, last: lastOf("right_pct") },
+  ];
+  const xLabelIdx = [0, Math.floor((points.length - 1) / 2), points.length - 1];
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <svg width={W} height={H} role="img" aria-label="분기별 누적 폐업률 비교">
-        <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--hairline)" />
-        <path d={path("right_pct")} fill="none" stroke="#ea580c" strokeWidth="2.5" />
-        <path d={path("left_pct")} fill="none" stroke="var(--primary)" strokeWidth="2.5" />
-        <text x={PAD} y={16} fontSize="11" fill="var(--ink-faint)">{fmt(max)}%</text>
-        <text x={PAD} y={H - 8} fontSize="11" fill="var(--ink-faint)">{points[0].label}</text>
-        <text x={W - PAD} y={H - 8} fontSize="11" fill="var(--ink-faint)" textAnchor="end">
-          {points[points.length - 1].label}
-        </text>
-      </svg>
-      <div className="t-caption" style={{ display: "flex", gap: 18, color: "var(--ink-muted)", marginTop: 4 }}>
-        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "var(--primary)", verticalAlign: "middle", marginRight: 6 }} />{leftName}</span>
-        <span><span style={{ display: "inline-block", width: 16, height: 2, background: "#ea580c", verticalAlign: "middle", marginRight: 6 }} />{rightName}</span>
+    <div>
+      <div className="t-caption" style={{ color: "var(--ink-muted)", marginBottom: 8 }}>
+        세로축 — 최근 4분기 누적 폐업률 (%)
       </div>
+      {/* 범례를 위에 두고 현재 값을 함께 적는다. 그래프 안에 숫자를 얹으면 선을 가린다. */}
+      <div style={{ display: "flex", gap: 20, flexWrap: "wrap", marginBottom: 12 }}>
+        {series.map((sr) => (
+          <span key={`l${sr.key}`} style={{ display: "inline-flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{ width: 10, height: 10, borderRadius: 3, background: sr.color, alignSelf: "center" }} />
+            <span className="t-body-sm" style={{ color: "var(--ink-secondary)" }}>{sr.name}</span>
+            {sr.last && (
+              <b style={{ fontSize: 15, color: "var(--on-surface)", fontVariantNumeric: "tabular-nums" }}>
+                {fmt(sr.last.v)}%
+              </b>
+            )}
+          </span>
+        ))}
+      </div>
+
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        width="100%"
+        style={{ display: "block", maxWidth: W }}
+        role="img"
+        aria-label="분기별 최근 4분기 누적 폐업률 비교"
+      >
+        {ticks.map((v, i) => (
+          <g key={v}>
+            <line
+              x1={L}
+              y1={y(v)}
+              x2={W - R}
+              y2={y(v)}
+              stroke="var(--hairline)"
+              strokeWidth="1"
+              strokeDasharray={i === 0 ? undefined : "3 5"}
+            />
+            <text x={L - 7} y={y(v) + 3.5} fontSize="10" fill="var(--ink-faint)" textAnchor="end">
+              {fmt(v, v < 10 ? 1 : 0)}
+            </text>
+          </g>
+        ))}
+
+        {series.map((sr) => (
+          <path key={`p${sr.key}`} d={path(sr.key)} fill="none" stroke={sr.color} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
+        ))}
+
+        {/* 점은 끝에만. 분기마다 찍으면 선이 구슬 목걸이가 된다 */}
+        {series.map((sr) =>
+          sr.last ? (
+            <circle
+              key={`e${sr.key}`}
+              cx={x(sr.last.i)}
+              cy={y(sr.last.v)}
+              r="4"
+              fill={sr.color}
+              stroke="var(--surface-container-lowest)"
+              strokeWidth="2"
+            />
+          ) : null
+        )}
+
+        {xLabelIdx.map((i) => (
+          <text
+            key={`x${i}`}
+            x={x(i)}
+            y={T + plotH + 17}
+            fontSize="10.5"
+            fill="var(--ink-faint)"
+            textAnchor={i === 0 ? "start" : i === points.length - 1 ? "end" : "middle"}
+          >
+            {points[i].label}
+          </text>
+        ))}
+
+        {/* 분기마다 투명한 판을 깔아 마우스를 올리면 두 상권 값이 함께 뜬다 */}
+        {points.map((p, i) => (
+          <rect key={`h${p.label ?? i}`} x={x(i) - band / 2} y={T} width={band} height={plotH} fill="transparent">
+            <title>
+              {`${p.label}\n${leftName} ${Number.isFinite(p.left_pct) ? `${fmt(p.left_pct)}%` : "미산출"}` +
+                `\n${rightName} ${Number.isFinite(p.right_pct) ? `${fmt(p.right_pct)}%` : "미산출"}`}
+            </title>
+          </rect>
+        ))}
+      </svg>
     </div>
   );
 }
@@ -899,11 +997,8 @@ export default function ComparePage() {
       )}
 
       {data?.trend?.length > 2 && (
-        <Section title="분기별 추이" caption="원래 높았나, 최근 높아졌나">
-          <div className="card" style={{ padding: 22 }}>
-            <p className="t-body-sm" style={{ margin: "0 0 14px", color: "var(--ink-muted)" }}>
-              최신 분기만으로는 원래 높았던 상권과 최근 높아진 상권이 구분되지 않습니다.
-            </p>
+        <Section title="폐업률 분기별 추이" caption="원래 높았나, 최근 높아졌나">
+          <div className="card" style={{ padding: 18 }}>
             <TrendOverlay trend={data.trend} leftName={data.left.area_name} rightName={data.right.area_name} />
           </div>
         </Section>

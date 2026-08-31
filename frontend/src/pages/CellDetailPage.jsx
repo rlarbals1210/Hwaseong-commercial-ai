@@ -34,34 +34,165 @@ function Section({ title, note, children }) {
  */
 function TrendChart({ rows }) {
   const points = rows.filter((r) => Number.isFinite(r.cumulative_closure_rate_pct));
-  const skipped = rows.length - points.length;
   if (points.length < 2) {
     return <div className="t-caption" style={{ color: "var(--ink-muted)" }}>추이를 그릴 자료가 부족합니다.</div>;
   }
-  const W = 640;
-  const H = 160;
-  const PAD = 28;
-  const max = Math.max(...points.map((p) => p.cumulative_closure_rate_pct), 1) * 1.15;
-  const x = (i) => PAD + (i * (W - PAD * 2)) / (points.length - 1);
-  const y = (v) => H - PAD - (v / max) * (H - PAD * 2);
-  const path = points.map((p, i) => `${i ? "L" : "M"}${x(i)},${y(p.cumulative_closure_rate_pct)}`).join(" ");
+
+  const W = 680, H = 250;
+  const L = 46, R = 18, T = 18, B = 46;
+  const plotW = W - L - R;
+  const plotH = H - T - B;
+
+  const rawMax = Math.max(
+    ...points.map((p) => p.cumulative_closure_rate_pct),
+    ...points.map((p) => (Number.isFinite(p.quarter_closure_rate_pct) ? p.quarter_closure_rate_pct : 0)),
+    1
+  );
+  // 눈금이 8.7% 같은 수로 끝나면 읽는 사람이 축을 못 센다. 1·2·5 단위로 올림해서 자른다.
+  const niceStep = (raw) => {
+    const rough = raw / 4;
+    const mag = Math.pow(10, Math.floor(Math.log10(rough)));
+    const norm = rough / mag;
+    return (norm <= 1 ? 1 : norm <= 2 ? 2 : norm <= 5 ? 5 : 10) * mag;
+  };
+  const step = niceStep(rawMax * 1.1);
+  const max = Math.ceil((rawMax * 1.08) / step) * step;
+  const ticks = [];
+  for (let v = 0; v <= max + 1e-9; v += step) ticks.push(v);
+
+  const x = (i) => L + (points.length === 1 ? plotW / 2 : (i * plotW) / (points.length - 1));
+  const y = (v) => T + plotH - (v / max) * plotH;
+  const band = plotW / Math.max(points.length - 1, 1);
+  // 막대가 얇으면 0%인 분기와 자료가 없는 분기가 똑같이 빈칸으로 보인다.
+  // 간격을 거의 채우고, 0%인 분기에도 바닥에 자국을 남겨 "닫힌 곳 없음"을 눈에 띄게 한다.
+  const barW = Math.max(6, band * 0.82);
+
+  const line = points.map((p, i) => `${i ? "L" : "M"}${x(i).toFixed(1)},${y(p.cumulative_closure_rate_pct).toFixed(1)}`).join(" ");
+  const area = `${line} L${x(points.length - 1).toFixed(1)},${(T + plotH).toFixed(1)} L${x(0).toFixed(1)},${(T + plotH).toFixed(1)} Z`;
+
   const last = points[points.length - 1];
+  const labelStep = Math.ceil(points.length / 7);
+
+  // "1년 전과 견주면" 한 줄. 그래프를 못 읽어도 결론은 남는다.
+  const prev = points.length > 4 ? points[points.length - 5] : points[0];
+  const diff = last.cumulative_closure_rate_pct - prev.cumulative_closure_rate_pct;
+  const rising = diff > 0.05, falling = diff < -0.05;
 
   return (
-    <div style={{ overflowX: "auto" }}>
-      <svg width={W} height={H} role="img" aria-label="분기별 누적 폐업률 추이">
-        <line x1={PAD} y1={H - PAD} x2={W - PAD} y2={H - PAD} stroke="var(--hairline)" />
-        <path d={path} fill="none" stroke="var(--primary)" strokeWidth="2" />
-        <circle cx={x(points.length - 1)} cy={y(last.cumulative_closure_rate_pct)} r="4" fill="var(--primary)" />
-        <text x={PAD} y={16} fontSize="11" fill="var(--ink-faint)">{fmt(max)}%</text>
-        <text x={PAD} y={H - 8} fontSize="11" fill="var(--ink-faint)">{points[0].label}</text>
-        <text x={W - PAD} y={H - 8} fontSize="11" fill="var(--ink-faint)" textAnchor="end">{last.label}</text>
-      </svg>
-      {skipped > 0 && (
-        <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 4 }}>
-          앞 {skipped}개 분기는 누적 {WINDOW_LABEL}분기가 채워지지 않아 값이 없습니다. 0%가 아니라 미산출입니다.
-        </div>
-      )}
+    <div>
+      <div
+        className="t-body-sm"
+        style={{ display: "flex", alignItems: "baseline", gap: 8, flexWrap: "wrap", marginBottom: 12, color: "var(--ink-secondary)" }}
+      >
+        <b style={{ color: "var(--on-surface)", fontSize: 15 }}>
+          {prev.label} {fmt(prev.cumulative_closure_rate_pct)}% → {last.label} {fmt(last.cumulative_closure_rate_pct)}%
+        </b>
+        <span
+          style={{
+            padding: "2px 8px",
+            borderRadius: 999,
+            fontSize: 12.5,
+            fontWeight: 600,
+            background: rising ? "var(--accent-orange-container, var(--surface-container-low))" : "var(--surface-container-low)",
+            color: rising ? "var(--accent-orange)" : falling ? "var(--primary)" : "var(--ink-muted)",
+          }}
+        >
+          {fmt(Math.abs(diff))}%p {rising ? "상승" : falling ? "하락" : "변화 없음"}
+        </span>
+      </div>
+
+      <div style={{ overflowX: "auto" }}>
+        <svg viewBox={`0 0 ${W} ${H}`} width="100%" style={{ minWidth: 420, display: "block" }} role="img" aria-label="분기별 폐업률 추이">
+          <defs>
+            <linearGradient id="trendFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.18" />
+              <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+
+          {/* 가로 눈금 — 축을 셀 수 있어야 "높다/낮다"가 눈으로 판단된다 */}
+          {ticks.map((v) => (
+            <g key={v}>
+              <line x1={L} y1={y(v)} x2={W - R} y2={y(v)} stroke="var(--hairline)" strokeWidth="1" />
+              <text x={L - 8} y={y(v) + 4} fontSize="11" fill="var(--ink-faint)" textAnchor="end">{fmt(v, v < 10 ? 1 : 0)}%</text>
+            </g>
+          ))}
+
+          {/* 분기별 값은 옅은 막대, 누적은 선. 같은 축에 겹쳐야 "튀는 분기"가 보인다 */}
+          {points.map((p, i) => {
+            if (!Number.isFinite(p.quarter_closure_rate_pct)) return null;
+            const zero = p.quarter_closure_rate_pct <= 0;
+            const h = zero ? 2.5 : Math.max(2.5, T + plotH - y(p.quarter_closure_rate_pct));
+            return (
+              <rect
+                key={`b${p.quarter_code}`}
+                x={x(i) - barW / 2}
+                y={T + plotH - h}
+                width={barW}
+                height={h}
+                fill="var(--outline-variant)"
+                opacity={zero ? 0.3 : 0.5}
+                rx="1.5"
+              />
+            );
+          })}
+
+          <path d={area} fill="url(#trendFill)" />
+          <path d={line} fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+
+          {points.map((p, i) => (
+            <circle key={`d${p.quarter_code}`} cx={x(i)} cy={y(p.cumulative_closure_rate_pct)} r="2.6" fill="var(--primary)" />
+          ))}
+          <circle cx={x(points.length - 1)} cy={y(last.cumulative_closure_rate_pct)} r="6" fill="var(--surface-container-lowest)" stroke="var(--primary)" strokeWidth="2.5" />
+          <text
+            x={x(points.length - 1)}
+            y={y(last.cumulative_closure_rate_pct) - 13}
+            fontSize="13"
+            fontWeight="700"
+            fill="var(--primary)"
+            textAnchor="end"
+          >
+            {fmt(last.cumulative_closure_rate_pct)}%
+          </text>
+
+          <line x1={L} y1={T + plotH} x2={W - R} y2={T + plotH} stroke="var(--outline-variant)" strokeWidth="1" />
+          {points.map((p, i) =>
+            i % labelStep === 0 || i === points.length - 1 ? (
+              <text key={`x${p.quarter_code}`} x={x(i)} y={T + plotH + 18} fontSize="11" fill="var(--ink-faint)" textAnchor="middle">
+                {p.label}
+              </text>
+            ) : null
+          )}
+
+          {/* 분기마다 투명한 판을 깔아 마우스를 올리면 그 분기 값이 전부 뜬다 */}
+          {points.map((p, i) => (
+            <rect key={`h${p.quarter_code}`} x={x(i) - band / 2} y={T} width={band} height={plotH} fill="transparent">
+              <title>
+                {`${p.label}\n${WINDOW_LABEL}분기 누적 ${fmt(p.cumulative_closure_rate_pct)}%` +
+                  (Number.isFinite(p.quarter_closure_rate_pct) ? `\n1분기 ${fmt(p.quarter_closure_rate_pct)}%` : "") +
+                  (Number.isFinite(p.opening_rate_pct) ? `\n개업률 ${fmt(p.opening_rate_pct)}%` : "") +
+                  (Number.isFinite(p.store_count) ? `\n점포 ${p.store_count.toLocaleString()}곳` : "")}
+              </title>
+            </rect>
+          ))}
+        </svg>
+      </div>
+
+      {/* 범례 — 선과 막대가 다른 것을 잰다는 걸 모르면 그래프가 거짓말로 읽힌다 */}
+      <div
+        className="t-caption"
+        style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 10, color: "var(--ink-muted)", alignItems: "center" }}
+      >
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <svg width="18" height="8" aria-hidden="true"><line x1="0" y1="4" x2="18" y2="4" stroke="var(--primary)" strokeWidth="2.5" /></svg>
+          {WINDOW_LABEL}분기 누적 폐업률
+        </span>
+        <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}>
+          <svg width="10" height="10" aria-hidden="true"><rect x="2" y="0" width="6" height="10" rx="1.5" fill="var(--outline-variant)" opacity="0.6" /></svg>
+          1분기 폐업률
+        </span>
+      </div>
+
     </div>
   );
 }
@@ -116,9 +247,6 @@ function PopulationChart({ series }) {
         <text x={PAD} y={H - 8} fontSize="11" fill="var(--ink-faint)">{points[0].label}</text>
         <text x={W - PAD} y={H - 8} fontSize="11" fill="var(--ink-faint)" textAnchor="end">{last.label}</text>
       </svg>
-      <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 4 }}>
-        세로축은 0에서 시작하지 않습니다. 변화를 보이기 위한 눈금이며 막대 높이로 크기를 비교하지 마세요.
-      </div>
     </div>
   );
 }
@@ -343,17 +471,6 @@ export default function CellDetailPage() {
         )}
       </div>
 
-      {/* 조기경보 1위를 눌러 들어오면 등급이 "안정"인 경우가 흔하다. 예측은 2분기 뒤를 보고
-          등급은 이미 관측된 값이라 그런 것인데, 그 설명이 이 화면에 없어서 "1위인데 안정?"으로
-          읽혔다. 현장 확인 화면에는 같은 안내를 붙여뒀다. */}
-      {cell.predicted_rank && cell.risk_grade && cell.risk_grade !== "위험" && (
-        <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "8px 0 0", lineHeight: 1.7 }}>
-          예측 순위와 등급은 서로 다른 것을 봅니다 — <b>예측 #{cell.predicted_rank}</b>은 모델이 본
-          <b> 2분기 뒤</b> 위험 순위이고, <b>{cell.risk_grade}</b>은 <b>이미 관측된</b> 최근 1년 실적입니다.
-          지금 나빠진 곳과 앞으로 나빠질 곳은 같지 않습니다.
-        </p>
-      )}
-
       <h1 className="t-h1" style={{ margin: "8px 0 2px" }}>{cell.dong} · {cell.category}</h1>
       <p className="t-caption" style={{ color: "var(--ink-muted)", margin: 0 }}>
         점포 {cell.store_count}곳 · {String(cell.quarter_code).slice(0, 4)}년 {String(cell.quarter_code).slice(-1)}분기 기준
@@ -393,7 +510,7 @@ export default function CellDetailPage() {
       {/* ① 확인된 위험 신호 */}
       <Section
         title="확인된 위험 신호"
-        note={`전부 관측된 사실입니다. 최근 ${cell.window_quarters}분기 누적 기준. ${cell.grade_notice ?? ""}`}
+        note={"등급은 화성시 안에서의 상대 순위입니다 (위험 = 상위 10%, 주의 = 상위 30%)"}
       >
         <div className="card" style={{ padding: 20 }}>
           {/* 표본부족 셀에서는 대표 숫자를 폐업률이 아니라 건수로 바꾼다.
@@ -402,20 +519,26 @@ export default function CellDetailPage() {
               률은 점포가 적을수록 크게 튀므로 여기서는 참고값으로 내린다. */}
           {sampleThin ? (
             <>
-              <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                <span className="t-metric" style={{ fontSize: 38 }}>
-                  {Number.isFinite(cell.cumulative_closure_count) ? cell.cumulative_closure_count.toLocaleString() : "—"}
-                </span>
-                <span style={{ fontSize: 16, color: "var(--ink-faint)" }}>곳 닫힘</span>
+              <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+                <span style={{ fontSize: 32, fontWeight: 400, color: "var(--on-surface)" }}>폐업</span>
+                <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+                  <span className="t-metric" style={{ fontSize: 38 }}>
+                    {Number.isFinite(cell.cumulative_closure_count) ? cell.cumulative_closure_count.toLocaleString() : "—"}
+                  </span>
+                  <span style={{ fontSize: 16, color: "var(--ink-faint)" }}>곳 닫힘</span>
+                </div>
               </div>
               <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 2 }}>
                 폐업률 {fmt(cell.cumulative_closure_rate_pct)}% (참고) · 점포가 적어 률은 크게 튑니다
               </div>
             </>
           ) : (
-          <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-            <span className="t-metric" style={{ fontSize: 38 }}>{fmt(cell.cumulative_closure_rate_pct)}</span>
-            <span style={{ fontSize: 16, color: "var(--ink-faint)" }}>%</span>
+          <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
+            <span style={{ fontSize: 32, fontWeight: 400, color: "var(--on-surface)" }}>폐업률</span>
+            <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
+              <span className="t-metric" style={{ fontSize: 38 }}>{fmt(cell.cumulative_closure_rate_pct)}</span>
+              <span style={{ fontSize: 16, color: "var(--ink-faint)" }}>%</span>
+            </div>
           </div>
           )}
           <div className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 2, fontVariantNumeric: "tabular-nums" }}>
@@ -458,7 +581,7 @@ export default function CellDetailPage() {
         </div>
       </Section>
 
-      <Section title="추이" note="누적 기준이라 분기별 우연에 흔들리지 않습니다.">
+      <Section title="폐업률 추이">
         <div className="card" style={{ padding: 16 }}>
           <TrendChart rows={trend} />
         </div>
@@ -466,7 +589,7 @@ export default function CellDetailPage() {
 
       {/* ② 유형 판정과 처방 */}
       {cell.cell_type_advice && (
-        <Section title="유형 판정과 후속 조치 검토안" note="AI가 지원 대상을 결정하지 않습니다. 최종 판단은 담당자가 합니다.">
+        <Section title="유형 판정과 후속 조치 검토안">
           <div className="card" style={{ padding: 20 }}>
             {/* 유형에 색을 주지 않는다. 유형은 위험도가 아니라 성격이고, 색을 주면 등급 축과 섞인다. */}
             <div className="t-title" style={{ color: "var(--on-surface)" }}>
@@ -536,7 +659,6 @@ export default function CellDetailPage() {
       {population?.series?.length > 0 && (
         <Section
           title="배후인구 추이"
-          note={population.notice}
         >
           <div className="card" style={{ padding: 20 }}>
             <div

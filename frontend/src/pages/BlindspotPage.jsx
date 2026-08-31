@@ -96,80 +96,6 @@ function Hero({ data }) {
   );
 }
 
-function ActionGuide({ sampleMin }) {
-  const steps = [
-    {
-      number: "01",
-      title: "판단이 비어 있는 범위 확인",
-      desc: "상단의 판단 보류 비중과 표본 기준을 보고 통계가 비어 있는 규모를 파악합니다.",
-    },
-    {
-      number: "02",
-      title: "관측 근거로 범위 좁히기",
-      desc: "위험 등급 대신 실제 폐업 건수와 읍면동 합산 비교로 확인할 곳을 좁힙니다.",
-    },
-    {
-      number: "03",
-      title: "현장 자료로 최종 확인",
-      desc: "점포 변동, 민원, 공실 등 화면에 없는 원인을 담당자가 추가로 확인합니다.",
-    },
-  ];
-
-  return (
-    <section style={{ marginTop: 32 }}>
-      <SectionHead title="사각지대에서는 이렇게 확인합니다" />
-      <div
-        className="card"
-        style={{
-          padding: 18,
-          marginBottom: 12,
-          borderLeft: "4px solid var(--primary)",
-          background: "var(--primary-container)",
-        }}
-      >
-        <div className="t-body-sm" style={{ color: "var(--ink-secondary)", lineHeight: 1.7 }}>
-          <b style={{ color: "var(--on-surface)" }}>사각지대는 위험하다는 뜻이 아닙니다.</b>{" "}
-          업종별 점포가 {sampleMin}곳 미만이라 통계 등급을 계산하지 않은 범위입니다.
-        </div>
-      </div>
-      <div className="blindspot-action-steps">
-        {steps.map((step, index) => (
-          <div key={step.number} className="blindspot-action-step">
-            <div className="card blindspot-action-card" style={{ padding: 20 }}>
-              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                <span
-                  className="t-eyebrow"
-                  style={{
-                    display: "inline-flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    width: 34,
-                    height: 34,
-                    borderRadius: "50%",
-                    color: "var(--primary)",
-                    background: "var(--primary-container)",
-                  }}
-                >
-                  {step.number}
-                </span>
-                <h3 className="t-title" style={{ margin: 0, fontSize: 17 }}>{step.title}</h3>
-              </div>
-              <p className="t-caption" style={{ margin: "12px 0 0 44px", color: "var(--ink-muted)", lineHeight: 1.65 }}>
-                {step.desc}
-              </p>
-            </div>
-            {index < steps.length - 1 && (
-              <span className="blindspot-action-arrow material-symbols-outlined" aria-hidden="true">
-                arrow_forward
-              </span>
-            )}
-          </div>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 function HighlightCards({ items }) {
   const top = (items || []).slice(0, 3);
   if (!top.length) return null;
@@ -607,20 +533,16 @@ export default function BlindspotPage() {
         </div>
       )}
 
-      <ActionGuide sampleMin={sampleMin} />
 
       {highlights.length > 0 && (
         <section style={{ marginTop: 32 }}>
           <SectionHead title="먼저 확인할 판단 보류 상권" />
-          <p className="t-caption" style={{ margin: "-6px 0 14px", color: "var(--ink-muted)" }}>
-            위험 순위가 아니라, 판단을 보류한 상권 중 실제 폐업 건수가 많은 곳입니다.
-          </p>
           <HighlightCards items={highlights} />
         </section>
       )}
 
       <section style={{ marginTop: 36 }}>
-        <SectionHead title="업종을 합쳐 다시 확인한 지역" count="판단 보류 점포 50% 이상" />
+        <SectionHead title="읍면동 단위 비교" count="판단 보류 점포 50% 이상" />
         <p className="t-caption" style={{ margin: "-6px 0 14px", color: "var(--ink-muted)", lineHeight: 1.65 }}>
           개별 업종은 표본이 작아도 읍면동 전체를 합치면 비교할 수 있습니다. 위험 등급이 아니라 현장 확인을 돕는 보조 근거입니다.
         </p>

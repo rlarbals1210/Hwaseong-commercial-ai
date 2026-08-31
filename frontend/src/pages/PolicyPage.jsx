@@ -197,7 +197,8 @@ function ScatterPlot({ data, dangerThreshold, medianStores, activeQuadrant, onOp
 
         <line x1={cutX} y1={PAD.top} x2={cutX} y2={PAD.top + plotHeight} className="policy-scatter-cut" />
         <line x1={PAD.left} y1={cutY} x2={PAD.left + plotWidth} y2={cutY} className="policy-scatter-cut" />
-        <text x={PAD.left + 8} y={cutY - 8} className="policy-scatter-cut-label">영향 기준 {medianStores.toLocaleString()}곳</text>
+        <rect x={PAD.left + 4} y={cutY - 21} width={126} height={18} rx="4" className="policy-scatter-cut-label-bg" />
+        <text x={PAD.left + 10} y={cutY - 8} className="policy-scatter-cut-label">영향 기준 {medianStores.toLocaleString()}곳</text>
 
         {points.map((item) => {
           const key = `${item.area_id}-${item.industry_id}`;
@@ -383,7 +384,7 @@ export default function PolicyPage() {
     <div className="official-page official-policy-page">
       <PageHeader
         title="현장 확인 우선순위"
-        desc="최근 1년 누적 폐업률(4분기 합산 관측치) × 영향 점포 수 기준 확인 순서입니다. 지원 대상 결정이 아닙니다."
+        desc="최근 1년 누적 폐업률(4분기 합산 관측치) × 영향 점포 수 기준 확인 순서입니다."
       />
 
       {/* 대시보드의 예측 순위와 이 화면의 관측 사분면은 서로 다른 질문에 답한다. */}

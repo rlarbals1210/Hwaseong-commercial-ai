@@ -2739,7 +2739,7 @@ a { color: var(--primary); }
 }
 
 .policy-quadrant-zone > rect {
-  fill-opacity: 0.58;
+  fill-opacity: 0.3;
   stroke: rgba(15, 23, 42, 0.06);
   stroke-width: 1;
   transition: fill-opacity 160ms ease, stroke 160ms ease, stroke-width 160ms ease;
@@ -2748,7 +2748,7 @@ a { color: var(--primary); }
 .policy-quadrant-zone:hover > rect,
 .policy-quadrant-zone:focus > rect,
 .policy-quadrant-zone.is-active > rect {
-  fill-opacity: 0.88;
+  fill-opacity: 0.55;
   stroke: var(--primary);
   stroke-width: 2;
 }
@@ -2777,15 +2777,16 @@ a { color: var(--primary); }
 }
 
 .policy-quadrant-zone-title {
-  fill: var(--ink-secondary);
-  font-size: 13px;
+  fill: var(--on-surface);
+  font-size: 14px;
   font-weight: 750;
   pointer-events: none;
 }
 
 .policy-quadrant-zone-count {
-  fill: var(--ink-faint);
-  font-size: 11px;
+  fill: var(--ink-muted);
+  font-size: 12px;
+  font-weight: 600;
   pointer-events: none;
 }
 
@@ -2802,26 +2803,30 @@ a { color: var(--primary); }
 }
 
 .policy-scatter-cut {
-  stroke: rgba(15, 23, 42, 0.56);
+  stroke: var(--outline);
   stroke-width: 1.5;
   stroke-dasharray: 7 6;
   pointer-events: none;
 }
 
 .policy-scatter-cut-label {
-  fill: var(--ink-secondary);
-  font-size: 11px;
+  fill: var(--on-surface);
+  font-size: 11.5px;
   font-weight: 700;
-  paint-order: stroke;
-  stroke: rgba(255, 255, 255, 0.88);
-  stroke-width: 4px;
-  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.policy-scatter-cut-label-bg {
+  fill: var(--surface-container-lowest);
+  stroke: var(--hairline);
+  stroke-width: 1;
   pointer-events: none;
 }
 
 .policy-scatter-tick {
-  fill: var(--ink-faint);
-  font-size: 11px;
+  fill: var(--ink-muted);
+  font-size: 11.5px;
+  font-weight: 600;
   pointer-events: none;
 }
 
@@ -2837,7 +2842,7 @@ a { color: var(--primary); }
 }
 
 .policy-scatter-point circle {
-  fill-opacity: 0.48;
+  fill-opacity: 0.85;
   stroke: rgba(255, 255, 255, 0.88);
   stroke-width: 1.2;
   transition: r 140ms ease, fill-opacity 140ms ease;
@@ -2881,7 +2886,7 @@ a { color: var(--primary); }
 
 .policy-scatter-note {
   margin: -4px 0 4px;
-  color: var(--ink-faint);
+  color: var(--ink-muted);
   font-size: 12px;
   line-height: 1.6;
   text-align: center;
