@@ -2663,6 +2663,13 @@ a { color: var(--primary); }
   font-weight: 600;
 }
 
+.data-current-sub {
+  margin-top: -3px;
+  color: var(--ink-faint);
+  font-size: 11px;
+  letter-spacing: 0.1px;
+}
+
 .data-current-empty {
   display: flex;
   align-items: center;

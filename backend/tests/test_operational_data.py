@@ -43,12 +43,13 @@ def _seed(session):
     session.add_all([batch, *areas, *industries])
     session.flush()
 
-    def cell(area, industry, quarter):
+    def cell(area, industry, quarter, *, sufficient=True):
         return CommercialQuarter(
             area_id=area.id,
             industry_id=industry.id,
             quarter_code=quarter,
-            store_count=10,
+            store_count=40 if sufficient else 5,
+            sample_insufficient=not sufficient,
             batch_id=batch.id,
         )
 
@@ -60,8 +61,8 @@ def _seed(session):
         cell(areas[1], industries[1], 20253),
         cell(areas[0], industries[0], 20254),
         cell(areas[1], industries[0], 20254),
-        cell(areas[2], industries[0], 20254),
-        cell(areas[0], industries[1], 20254),
+        cell(areas[2], industries[0], 20254, sufficient=False),
+        cell(areas[0], industries[1], 20254, sufficient=False),
     ])
     session.commit()
 
@@ -85,6 +86,8 @@ def test_summary_counts_latest_quarter_only():
     assert summary["area_count"] == 3
     assert summary["industry_count"] == 2
     assert summary["analysis_cell_count"] == 4
+    # 표본부족 2건은 총 레코드 수에는 들어가지만 표본충분 모수에서는 빠진다.
+    assert summary["sample_sufficient_cell_count"] == 2
 
 
 def test_summary_on_empty_database_returns_null_and_zeroes():
@@ -99,6 +102,7 @@ def test_summary_on_empty_database_returns_null_and_zeroes():
         "area_count": 0,
         "industry_count": 0,
         "analysis_cell_count": 0,
+        "sample_sufficient_cell_count": 0,
     }
 
 

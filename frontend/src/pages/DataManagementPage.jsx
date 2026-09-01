@@ -217,7 +217,18 @@ function CurrentDataSummary({ data }) {
     { key: "quarter_count", icon: "database", label: "적재된 분기", value: formatCount(data?.quarter_count), unit: "개" },
     { key: "area_count", icon: "location_on", label: "행정동", value: formatCount(data?.area_count), unit: "개" },
     { key: "industry_count", icon: "storefront", label: "업종", value: formatCount(data?.industry_count), unit: "개" },
-    { key: "cell_count", icon: "grid_view", label: "분석 셀", value: formatCount(data?.analysis_cell_count), unit: "개" },
+    {
+      key: "cell_count",
+      icon: "grid_view",
+      label: "분석 셀",
+      value: formatCount(data?.analysis_cell_count),
+      unit: "개",
+      // 조기경보·등급 기준선은 표본충분 셀만 모수로 쓴다. 총 레코드 수만 적으면
+      // 두 화면이 서로 다른 수를 "셀"이라 부르게 되므로 함께 적는다.
+      sub: data?.sample_sufficient_cell_count != null
+        ? `표본충분 ${formatCount(data.sample_sufficient_cell_count)}개`
+        : null,
+    },
   ];
 
   return (
@@ -245,6 +256,7 @@ function CurrentDataSummary({ data }) {
                 <b>{metric.value}</b>
                 {metric.unit && <small>{metric.unit}</small>}
               </dd>
+              {metric.sub && <span className="data-current-sub">{metric.sub}</span>}
             </div>
           ))}
         </dl>

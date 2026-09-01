@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlalchemy import distinct, func
+from sqlalchemy import case, distinct, func
 from sqlalchemy.orm import Session
 
 from ..models import CommercialQuarter
@@ -25,6 +25,7 @@ EMPTY_SUMMARY: dict[str, Any] = {
     "area_count": 0,
     "industry_count": 0,
     "analysis_cell_count": 0,
+    "sample_sufficient_cell_count": 0,
 }
 
 
@@ -55,11 +56,15 @@ def current_data_summary(db: Session) -> dict[str, Any]:
     quarter_count = (
         db.query(func.count(distinct(CommercialQuarter.quarter_code))).scalar() or 0
     )
-    area_count, industry_count, analysis_cell_count = (
+    area_count, industry_count, analysis_cell_count, sufficient_count = (
         db.query(
             func.count(distinct(CommercialQuarter.area_id)),
             func.count(distinct(CommercialQuarter.industry_id)),
             func.count(CommercialQuarter.id),
+            # 표본충분 셀(점포수 >= sample_min)은 조기경보·등급 기준선의 모수다.
+            # 총 레코드 수만 내면 이 화면의 "분석 셀"과 조기경보 화면의 "N개 셀 중
+            # 상위 10%"가 다른 수를 가리켜 읽는 사람이 둘을 대조할 수 없다.
+            func.sum(case((CommercialQuarter.sample_insufficient.is_(False), 1), else_=0)),
         )
         .filter(CommercialQuarter.quarter_code == latest)
         .one()
@@ -72,4 +77,5 @@ def current_data_summary(db: Session) -> dict[str, Any]:
         "area_count": int(area_count or 0),
         "industry_count": int(industry_count or 0),
         "analysis_cell_count": int(analysis_cell_count or 0),
+        "sample_sufficient_cell_count": int(sufficient_count or 0),
     }
