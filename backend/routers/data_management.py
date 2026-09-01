@@ -16,7 +16,11 @@ from ..services.manual_uploads import (
     store_validated_upload,
     upload_root,
 )
-from ..services.operational_data import current_data_summary, operational_batches
+from ..services.operational_data import (
+    batch_detail,
+    current_data_summary,
+    operational_batches,
+)
 
 
 router = APIRouter(
@@ -39,6 +43,19 @@ def get_data_management(db: Session = Depends(get_db)):
         "operational_batches": operational_batches(db),
         **management_payload(),
     }
+
+
+@router.get("/batches/{batch_key}")
+def get_batch_detail(batch_key: str, db: Session = Depends(get_db)):
+    """이력표에서 배치 한 건을 펼칠 때만 부른다.
+
+    목록 조회에 붙이지 않는 이유는 배치마다 분기별 집계를 도는 비용이 있고,
+    화면은 대개 한 건만 펼치기 때문이다.
+    """
+    detail = batch_detail(db, batch_key)
+    if detail is None:
+        raise HTTPException(status_code=404, detail="해당 적재 배치를 찾을 수 없습니다")
+    return detail
 
 
 @router.post("/uploads/{dataset_type}", status_code=201)

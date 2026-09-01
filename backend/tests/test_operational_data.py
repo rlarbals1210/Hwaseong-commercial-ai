@@ -8,7 +8,9 @@ from backend.models import (
     DataBatch,
     IndustryCategory,
 )
+from backend.models import AreaQuarterSummary, RiskThresholdSet, StoreCluster
 from backend.services.operational_data import (
+    batch_detail,
     current_data_summary,
     operational_batches,
     quarter_label_ko,
@@ -24,6 +26,9 @@ def _session():
             IndustryCategory.__table__,
             DataBatch.__table__,
             CommercialQuarter.__table__,
+            RiskThresholdSet.__table__,
+            StoreCluster.__table__,
+            AreaQuarterSummary.__table__,
         ],
     )
     return sessionmaker(bind=engine)()
@@ -190,3 +195,60 @@ def test_operational_batches_report_real_import_time_and_range():
 
 def test_operational_batches_empty_when_nothing_imported():
     assert operational_batches(_session()) == []
+
+
+def _seeded_batch(session):
+    """_seed와 같은 셀 구성을 쓰되 배치 상세용 부속 행을 더 넣는다."""
+    _seed(session)
+    batch = session.query(DataBatch).one()
+    session.add(
+        RiskThresholdSet(
+            batch_id=batch.id,
+            quarter_code=20254,
+            avg_closure_rate_pct=5.56,
+            danger_threshold_pct=9.71,
+            caution_threshold_pct=6.9,
+            area_ratio_avg_pct=10.84,
+            area_ratio_danger_pct=25.46,
+            sample_min=30,
+            window_quarters=4,
+            method="cumulative_quantile",
+        )
+    )
+    session.commit()
+    return batch
+
+
+def test_batch_detail_reports_thresholds_and_quarter_breakdown():
+    session = _session()
+    _seeded_batch(session)
+
+    detail = batch_detail(session, "summary-test")
+
+    assert detail["batch_key"] == "summary-test"
+    assert detail["quarter_count"] == 2
+    assert detail["latest_quarter_label"] == "2025년 4분기"
+    assert detail["area_count"] == 3
+    assert detail["industry_count"] == 2
+    # 최신 분기가 먼저, 표본충분 수도 분기별로 갈린다.
+    assert detail["quarters"][0]["quarter_code"] == 20254
+    assert detail["quarters"][0]["cell_count"] == 4
+    assert detail["quarters"][0]["sample_sufficient_cell_count"] == 2
+    assert detail["quarters"][1]["cell_count"] == 4
+    assert detail["thresholds"]["danger_threshold_pct"] == 9.71
+    assert detail["thresholds"]["method"] == "cumulative_quantile"
+
+
+def test_batch_detail_never_exposes_prediction_fields():
+    session = _session()
+    _seeded_batch(session)
+
+    detail = batch_detail(session, "summary-test")
+
+    blocked = {"predicted_closure_rate_internal", "predicted_rank", "grade", "top_percent"}
+    assert blocked.isdisjoint(detail.keys())
+    assert all(blocked.isdisjoint(quarter.keys()) for quarter in detail["quarters"])
+
+
+def test_batch_detail_returns_none_for_unknown_key():
+    assert batch_detail(_session(), "does-not-exist") is None

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
 import { apiFetchJson, describeApiError } from "../lib/api";
 
 
@@ -293,6 +293,8 @@ function historyRows(batches, uploads) {
     ].filter(Boolean).join(" · "),
     actor: "파이프라인 적재",
     status: { label: "운영 반영 완료", className: "data-status-live" },
+    kind: "batch",
+    batchKey: batch.batch_key,
   }));
   const fromUploads = (uploads ?? []).map((upload) => ({
     key: `upload:${upload.upload_id}`,
@@ -303,14 +305,178 @@ function historyRows(batches, uploads) {
     result: validationSummary(upload).join(" · ") || "형식 검증 완료",
     actor: upload.uploaded_by,
     status: { label: "반영 대기", className: "data-status-pending" },
+    kind: "upload",
+    upload,
   }));
   return [...fromBatches, ...fromUploads].sort(
     (a, b) => String(b.at ?? "").localeCompare(String(a.at ?? "")),
   );
 }
 
+function DetailGrid({ items }) {
+  const visible = items.filter((item) => item.value !== null && item.value !== undefined && item.value !== "");
+  if (!visible.length) return null;
+  return (
+    <dl className="data-history-detail-grid">
+      {visible.map((item) => (
+        <div key={item.label}>
+          <dt>{item.label}</dt>
+          <dd className={item.mono ? "is-mono" : undefined}>{item.value}</dd>
+        </div>
+      ))}
+    </dl>
+  );
+}
+
+function UploadDetail({ upload }) {
+  const v = upload?.validation ?? {};
+  const pct = (part, whole) =>
+    whole ? ` (${((Number(part) / Number(whole)) * 100).toFixed(3)}%)` : "";
+  return (
+    <>
+      <DetailGrid
+        items={[
+          { label: "저장 파일명", value: upload.stored_filename, mono: true },
+          { label: "크기", value: formatBytes(upload.size_bytes) },
+          { label: "업로더", value: upload.uploaded_by },
+          { label: "상태", value: "형식 검증 통과 · 운영 미반영" },
+          { label: "SHA-256", value: upload.sha256, mono: true },
+        ]}
+      />
+      <DetailGrid
+        items={[
+          { label: "인코딩", value: v.encoding },
+          {
+            label: "행 수",
+            value: v.row_count != null ? `${Number(v.row_count).toLocaleString("ko-KR")}행` : null,
+          },
+          {
+            label: "형식 오류 행",
+            value: v.invalid_row_count != null
+              ? `${Number(v.invalid_row_count).toLocaleString("ko-KR")}행${pct(v.invalid_row_count, v.row_count)}`
+              : null,
+          },
+          {
+            label: "커버 기간",
+            value: v.month_start && v.month_end
+              ? `${v.month_start}~${v.month_end}${v.month_count ? ` (${v.month_count}개월)` : ""}`
+              : null,
+          },
+          { label: "행정동 코드", value: v.area_code_count != null ? `${v.area_code_count}개` : null },
+          { label: "업종 코드", value: v.industry_code_count != null ? `${v.industry_code_count}개` : null },
+          { label: "중복 코드", value: v.duplicate_code_count != null ? `${v.duplicate_code_count}개` : null },
+          { label: "시트", value: v.sheet },
+        ]}
+      />
+    </>
+  );
+}
+
+const pctText = (value) => (value == null ? null : `${Number(value).toFixed(2)}%`);
+
+function BatchDetail({ state }) {
+  if (state?.status === "loading") {
+    return (
+      <div className="data-history-detail-loading">
+        <span className="material-symbols-outlined" aria-hidden="true">progress_activity</span>
+        상세를 불러오는 중…
+      </div>
+    );
+  }
+  if (state?.status === "error") {
+    return <div className="data-history-detail-error" role="alert">{state.message}</div>;
+  }
+  const d = state?.data;
+  if (!d) return null;
+  const t = d.thresholds;
+  return (
+    <>
+      <DetailGrid
+        items={[
+          {
+            label: "적재 범위",
+            value: [d.quarter_start_label, d.quarter_end_label].filter(Boolean).join(" ~ ")
+              + (d.quarter_count ? ` · ${d.quarter_count}개 분기` : ""),
+          },
+          { label: "방법 버전", value: d.method_version, mono: true },
+          { label: "배치 키", value: d.batch_key, mono: true },
+          {
+            label: "적재 행 수",
+            value: d.row_count != null ? `${Number(d.row_count).toLocaleString("ko-KR")}행` : null,
+          },
+          { label: "최신 분기 구성", value: `행정동 ${d.area_count}개 · 업종 ${d.industry_count}개` },
+          {
+            label: "점포 격자",
+            value: d.store_cluster_count
+              ? `${Number(d.store_cluster_count).toLocaleString("ko-KR")}칸`
+              : null,
+          },
+          { label: "품질 메모", value: d.quality_notes },
+        ]}
+      />
+
+      {t && (
+        <div className="data-history-detail-block">
+          <div className="data-history-detail-title">
+            이 배치가 사용한 기준선{t.quarter_label ? ` · ${t.quarter_label}` : ""}
+          </div>
+          <DetailGrid
+            items={[
+              { label: "평균 폐업률", value: pctText(t.avg_closure_rate_pct) },
+              { label: "주의 경계", value: pctText(t.caution_threshold_pct) },
+              { label: "위험 경계", value: pctText(t.danger_threshold_pct) },
+              { label: "동 평균 위험업종비율", value: pctText(t.area_ratio_avg_pct) },
+              { label: "동 위험 경계", value: pctText(t.area_ratio_danger_pct) },
+              { label: "표본 최소 점포수", value: t.sample_min != null ? `${t.sample_min}개` : null },
+              { label: "누적 창", value: t.window_quarters != null ? `${t.window_quarters}분기` : null },
+              { label: "산출 방법", value: t.method, mono: true },
+            ]}
+          />
+        </div>
+      )}
+
+      {d.quarters?.length > 0 && (
+        <div className="data-history-detail-block">
+          <div className="data-history-detail-title">분기별 셀 수</div>
+          <ul className="data-history-quarters">
+            {d.quarters.map((q) => (
+              <li key={q.quarter_code}>
+                <span>{q.quarter_label ?? q.quarter_code}</span>
+                <b>{Number(q.cell_count).toLocaleString("ko-KR")}</b>
+                <small>표본충분 {Number(q.sample_sufficient_cell_count).toLocaleString("ko-KR")}</small>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </>
+  );
+}
+
 function UploadHistory({ batches, uploads }) {
   const rows = historyRows(batches, uploads);
+  const [openKey, setOpenKey] = useState(null);
+  // 펼친 배치의 상세는 클릭할 때 한 번만 받아 캐시한다. 접었다 펴도 다시 안 부른다.
+  const [details, setDetails] = useState({});
+
+  const toggle = (row) => {
+    if (openKey === row.key) {
+      setOpenKey(null);
+      return;
+    }
+    setOpenKey(row.key);
+    if (row.kind !== "batch" || details[row.key]) return;
+    setDetails((prev) => ({ ...prev, [row.key]: { status: "loading" } }));
+    apiFetchJson(`/api/data-management/batches/${encodeURIComponent(row.batchKey)}`)
+      .then((data) => setDetails((prev) => ({ ...prev, [row.key]: { status: "ready", data } })))
+      .catch((error) =>
+        setDetails((prev) => ({
+          ...prev,
+          [row.key]: { status: "error", message: describeApiError(error) },
+        })),
+      );
+  };
+
   return (
     <section className="data-upload-history card">
       <div className="data-upload-section-head">
@@ -318,7 +484,7 @@ function UploadHistory({ batches, uploads }) {
           <h2 className="t-title">데이터 반영·업로드 이력</h2>
           <p className="t-body-sm">
             운영에 반영된 적재 배치와, 올렸지만 아직 반영되지 않은 파일을 함께 보여줍니다.
-            파일은 덮어쓰지 않고 시간별 버전으로 보관됩니다.
+            줄을 누르면 자세한 내역이 열립니다.
           </p>
         </div>
         <span className="badge badge-neutral">{rows.length}건</span>
@@ -336,21 +502,49 @@ function UploadHistory({ batches, uploads }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => (
-                <tr key={row.key}>
-                  <td><b>{row.title}</b></td>
-                  <td>
-                    <span>{row.detail || "—"}</span>
-                    {row.detailSub && <small>{row.detailSub}</small>}
-                  </td>
-                  <td>{row.result || "—"}</td>
-                  <td>
-                    <span>{formatDateTime(row.at)}</span>
-                    <small>{row.actor}</small>
-                  </td>
-                  <td><span className={`badge ${row.status.className}`}>{row.status.label}</span></td>
-                </tr>
-              ))}
+              {rows.map((row) => {
+                const open = openKey === row.key;
+                return (
+                  <Fragment key={row.key}>
+                    <tr className={`data-history-row${open ? " is-open" : ""}`}>
+                      <td>
+                        <button
+                          type="button"
+                          className="data-history-toggle"
+                          aria-expanded={open}
+                          onClick={() => toggle(row)}
+                        >
+                          <span className="material-symbols-outlined" aria-hidden="true">
+                            {open ? "expand_more" : "chevron_right"}
+                          </span>
+                          <b>{row.title}</b>
+                        </button>
+                      </td>
+                      <td>
+                        <span>{row.detail || "—"}</span>
+                        {row.detailSub && <small>{row.detailSub}</small>}
+                      </td>
+                      <td>{row.result || "—"}</td>
+                      <td>
+                        <span>{formatDateTime(row.at)}</span>
+                        <small>{row.actor}</small>
+                      </td>
+                      <td><span className={`badge ${row.status.className}`}>{row.status.label}</span></td>
+                    </tr>
+                    {open && (
+                      <tr className="data-history-detail-row">
+                        <td colSpan={5}>
+                          <div className="data-history-detail">
+                            {row.kind === "batch"
+                              ? <BatchDetail state={details[row.key]} />
+                              : <UploadDetail upload={row.upload} />}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                );
+              })}
             </tbody>
           </table>
         </div>

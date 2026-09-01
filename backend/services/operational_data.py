@@ -15,7 +15,13 @@ from typing import Any
 from sqlalchemy import case, distinct, func
 from sqlalchemy.orm import Session
 
-from ..models import CommercialQuarter, DataBatch
+from ..models import (
+    AreaQuarterSummary,
+    CommercialQuarter,
+    DataBatch,
+    RiskThresholdSet,
+    StoreCluster,
+)
 
 
 EMPTY_SUMMARY: dict[str, Any] = {
@@ -108,3 +114,106 @@ def operational_batches(db: Session, limit: int = 20) -> list[dict[str, Any]]:
         }
         for row in rows
     ]
+
+
+def batch_detail(db: Session, batch_key: str) -> dict[str, Any] | None:
+    """이력표에서 배치 한 건을 펼쳤을 때 보여줄 상세.
+
+    목록에 없는 것만 추가로 캔다 — 그 배치가 실제로 사용한 기준선, 분기별 셀 수,
+    최신 분기의 행정동·업종 수, 점포 격자 수. **예측 산출물은 넣지 않는다**:
+    ``risk_predictions``의 값은 절대값 비노출 원칙 대상이고, 이 화면은 적재
+    현황을 보여주는 자리지 모델 결과를 보여주는 자리가 아니다.
+    """
+    batch = db.query(DataBatch).filter(DataBatch.batch_key == batch_key).one_or_none()
+    if batch is None:
+        return None
+
+    quarter_rows = (
+        db.query(
+            CommercialQuarter.quarter_code,
+            func.count(CommercialQuarter.id),
+            func.sum(case((CommercialQuarter.sample_insufficient.is_(False), 1), else_=0)),
+        )
+        .filter(CommercialQuarter.batch_id == batch.id)
+        .group_by(CommercialQuarter.quarter_code)
+        .order_by(CommercialQuarter.quarter_code.desc())
+        .all()
+    )
+    quarters = [
+        {
+            "quarter_code": int(code),
+            "quarter_label": quarter_label_ko(code),
+            "cell_count": int(total or 0),
+            "sample_sufficient_cell_count": int(sufficient or 0),
+        }
+        for code, total, sufficient in quarter_rows
+    ]
+
+    latest = quarters[0]["quarter_code"] if quarters else None
+    area_count = industry_count = 0
+    if latest is not None:
+        area_count, industry_count = (
+            db.query(
+                func.count(distinct(CommercialQuarter.area_id)),
+                func.count(distinct(CommercialQuarter.industry_id)),
+            )
+            .filter(
+                CommercialQuarter.batch_id == batch.id,
+                CommercialQuarter.quarter_code == latest,
+            )
+            .one()
+        )
+
+    threshold = (
+        db.query(RiskThresholdSet)
+        .filter(RiskThresholdSet.batch_id == batch.id)
+        .order_by(RiskThresholdSet.quarter_code.desc())
+        .first()
+    )
+    thresholds = None
+    if threshold is not None:
+        thresholds = {
+            "quarter_code": threshold.quarter_code,
+            "quarter_label": quarter_label_ko(threshold.quarter_code),
+            "avg_closure_rate_pct": threshold.avg_closure_rate_pct,
+            "caution_threshold_pct": threshold.caution_threshold_pct,
+            "danger_threshold_pct": threshold.danger_threshold_pct,
+            "area_ratio_avg_pct": threshold.area_ratio_avg_pct,
+            "area_ratio_danger_pct": threshold.area_ratio_danger_pct,
+            "sample_min": threshold.sample_min,
+            "window_quarters": threshold.window_quarters,
+            "method": threshold.method,
+        }
+
+    store_cluster_count = (
+        db.query(func.count(StoreCluster.id))
+        .filter(StoreCluster.batch_id == batch.id)
+        .scalar()
+        or 0
+    )
+    area_summary_count = (
+        db.query(func.count(AreaQuarterSummary.id))
+        .filter(AreaQuarterSummary.batch_id == batch.id)
+        .scalar()
+        or 0
+    )
+
+    return {
+        "batch_key": batch.batch_key,
+        "source_name": batch.source_name,
+        "method_version": batch.method_version,
+        "quarter_start_label": quarter_label_ko(batch.source_start_quarter),
+        "quarter_end_label": quarter_label_ko(batch.source_end_quarter),
+        "row_count": batch.row_count,
+        "quality_notes": batch.quality_notes,
+        "imported_at": batch.imported_at.isoformat() if batch.imported_at else None,
+        "retention_until": batch.retention_until.isoformat() if batch.retention_until else None,
+        "quarter_count": len(quarters),
+        "latest_quarter_label": quarter_label_ko(latest),
+        "area_count": int(area_count or 0),
+        "industry_count": int(industry_count or 0),
+        "store_cluster_count": int(store_cluster_count),
+        "area_summary_count": int(area_summary_count),
+        "thresholds": thresholds,
+        "quarters": quarters,
+    }
