@@ -8,7 +8,11 @@ from backend.models import (
     DataBatch,
     IndustryCategory,
 )
-from backend.services.operational_data import current_data_summary, quarter_label_ko
+from backend.services.operational_data import (
+    current_data_summary,
+    operational_batches,
+    quarter_label_ko,
+)
 
 
 def _session():
@@ -143,3 +147,46 @@ def test_manual_upload_does_not_change_operational_summary(tmp_path):
     )
 
     assert current_data_summary(session) == before
+
+
+def test_operational_batches_report_real_import_time_and_range():
+    """이력표 시각은 화면을 여는 시각이 아니라 배치가 적재된 시각이어야 한다."""
+    from datetime import datetime, timezone
+
+    session = _session()
+    imported = datetime(2026, 8, 24, 16, 32, tzinfo=timezone.utc)
+    session.add_all([
+        DataBatch(
+            batch_key="sbiz-gapfill-t11-20254",
+            source_name="소상공인시장진흥공단 분기 스냅샷",
+            method_version="gapfill-t11-trailing-stats-v1",
+            source_start_quarter=20181,
+            source_end_quarter=20254,
+            row_count=35513,
+            quality_notes="2023Q1 원천 결함 보정",
+            imported_at=imported,
+        ),
+        DataBatch(
+            batch_key="older-batch",
+            source_name="이전 스냅샷",
+            method_version="v0",
+            source_start_quarter=20181,
+            source_end_quarter=20253,
+            row_count=100,
+            imported_at=datetime(2026, 7, 1, tzinfo=timezone.utc),
+        ),
+    ])
+    session.commit()
+
+    batches = operational_batches(session)
+
+    assert [b["batch_key"] for b in batches] == ["sbiz-gapfill-t11-20254", "older-batch"]
+    latest = batches[0]
+    assert latest["imported_at"].startswith("2026-08-24T16:32")
+    assert latest["quarter_start_label"] == "2018년 1분기"
+    assert latest["quarter_end_label"] == "2025년 4분기"
+    assert latest["row_count"] == 35513
+
+
+def test_operational_batches_empty_when_nothing_imported():
+    assert operational_batches(_session()) == []

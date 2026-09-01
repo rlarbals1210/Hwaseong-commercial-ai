@@ -15,7 +15,7 @@ from typing import Any
 from sqlalchemy import case, distinct, func
 from sqlalchemy.orm import Session
 
-from ..models import CommercialQuarter
+from ..models import CommercialQuarter, DataBatch
 
 
 EMPTY_SUMMARY: dict[str, Any] = {
@@ -79,3 +79,32 @@ def current_data_summary(db: Session) -> dict[str, Any]:
         "analysis_cell_count": int(analysis_cell_count or 0),
         "sample_sufficient_cell_count": int(sufficient_count or 0),
     }
+
+
+def operational_batches(db: Session, limit: int = 20) -> list[dict[str, Any]]:
+    """운영 DB에 실제로 적재된 배치 이력.
+
+    시각은 ``data_batches.imported_at``을 그대로 쓴다. 이 컬럼은 재적재 시
+    갱신 대상에서 빠져 있어(``import_normalized_db._upsert``의 update_columns 참조)
+    해당 배치가 처음 들어온 시각을 유지한다. 화면을 여는 시각으로 대체하면
+    이력표가 사실과 다른 시각을 기록하게 되므로 하지 않는다.
+    """
+    rows = (
+        db.query(DataBatch)
+        .order_by(DataBatch.imported_at.desc(), DataBatch.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return [
+        {
+            "batch_key": row.batch_key,
+            "source_name": row.source_name,
+            "method_version": row.method_version,
+            "quarter_start_label": quarter_label_ko(row.source_start_quarter),
+            "quarter_end_label": quarter_label_ko(row.source_end_quarter),
+            "row_count": row.row_count,
+            "quality_notes": row.quality_notes,
+            "imported_at": row.imported_at.isoformat() if row.imported_at else None,
+        }
+        for row in rows
+    ]

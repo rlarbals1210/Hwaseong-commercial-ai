@@ -16,7 +16,7 @@ from ..services.manual_uploads import (
     store_validated_upload,
     upload_root,
 )
-from ..services.operational_data import current_data_summary
+from ..services.operational_data import current_data_summary, operational_batches
 
 
 router = APIRouter(
@@ -30,10 +30,15 @@ router = APIRouter(
 def get_data_management(db: Session = Depends(get_db)):
     """운영 반영 현황 + 업로드 스테이징 현황을 한 번에 내려준다.
 
-    화면이 두 번 조회하지 않도록 합친다. ``current_data``는 DB만, 나머지는
-    업로드 디렉터리만 읽으므로 두 숫자가 섞이지 않는다.
+    화면이 두 번 조회하지 않도록 합친다. ``current_data``와
+    ``operational_batches``는 DB만, ``datasets``·``uploads``는 업로드
+    디렉터리만 읽으므로 반영된 것과 대기 중인 것이 섞이지 않는다.
     """
-    return {"current_data": current_data_summary(db), **management_payload()}
+    return {
+        "current_data": current_data_summary(db),
+        "operational_batches": operational_batches(db),
+        **management_payload(),
+    }
 
 
 @router.post("/uploads/{dataset_type}", status_code=201)

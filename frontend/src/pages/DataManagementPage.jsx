@@ -278,42 +278,77 @@ function CurrentDataSummary({ data }) {
   );
 }
 
-function UploadHistory({ uploads }) {
+// 운영 반영 배치와 업로드 대기 파일을 한 표에 섞되, 시각으로만 정렬하고 상태
+// 배지로 구분한다. 두 표로 나누면 "무엇이 먼저 들어왔는가"를 눈으로 못 쫓는다.
+function historyRows(batches, uploads) {
+  const fromBatches = (batches ?? []).map((batch) => ({
+    key: `batch:${batch.batch_key}`,
+    at: batch.imported_at,
+    title: batch.source_name,
+    detail: [batch.quarter_start_label, batch.quarter_end_label].filter(Boolean).join(" ~ "),
+    detailSub: batch.method_version,
+    result: [
+      batch.row_count != null ? `${Number(batch.row_count).toLocaleString("ko-KR")}행` : null,
+      batch.quality_notes,
+    ].filter(Boolean).join(" · "),
+    actor: "파이프라인 적재",
+    status: { label: "운영 반영 완료", className: "data-status-live" },
+  }));
+  const fromUploads = (uploads ?? []).map((upload) => ({
+    key: `upload:${upload.upload_id}`,
+    at: upload.uploaded_at_utc,
+    title: upload.dataset_title,
+    detail: upload.original_filename,
+    detailSub: formatBytes(upload.size_bytes),
+    result: validationSummary(upload).join(" · ") || "형식 검증 완료",
+    actor: upload.uploaded_by,
+    status: { label: "반영 대기", className: "data-status-pending" },
+  }));
+  return [...fromBatches, ...fromUploads].sort(
+    (a, b) => String(b.at ?? "").localeCompare(String(a.at ?? "")),
+  );
+}
+
+function UploadHistory({ batches, uploads }) {
+  const rows = historyRows(batches, uploads);
   return (
     <section className="data-upload-history card">
       <div className="data-upload-section-head">
         <div>
-          <h2 className="t-title">최근 업로드 이력</h2>
-          <p className="t-body-sm">파일은 덮어쓰지 않고 시간별 버전으로 보관됩니다.</p>
+          <h2 className="t-title">데이터 반영·업로드 이력</h2>
+          <p className="t-body-sm">
+            운영에 반영된 적재 배치와, 올렸지만 아직 반영되지 않은 파일을 함께 보여줍니다.
+            파일은 덮어쓰지 않고 시간별 버전으로 보관됩니다.
+          </p>
         </div>
-        <span className="badge badge-neutral">{uploads.length}건</span>
+        <span className="badge badge-neutral">{rows.length}건</span>
       </div>
-      {uploads.length ? (
+      {rows.length ? (
         <div className="data-upload-table-wrap">
           <table className="data-upload-table">
             <thead>
               <tr>
                 <th>데이터</th>
-                <th>파일</th>
-                <th>검증 결과</th>
-                <th>업로드</th>
+                <th>대상</th>
+                <th>내용</th>
+                <th>시각</th>
                 <th>상태</th>
               </tr>
             </thead>
             <tbody>
-              {uploads.map((upload) => (
-                <tr key={upload.upload_id}>
-                  <td><b>{upload.dataset_title}</b></td>
+              {rows.map((row) => (
+                <tr key={row.key}>
+                  <td><b>{row.title}</b></td>
                   <td>
-                    <span>{upload.original_filename}</span>
-                    <small>{formatBytes(upload.size_bytes)}</small>
+                    <span>{row.detail || "—"}</span>
+                    {row.detailSub && <small>{row.detailSub}</small>}
                   </td>
-                  <td>{validationSummary(upload).join(" · ") || "형식 검증 완료"}</td>
+                  <td>{row.result || "—"}</td>
                   <td>
-                    <span>{formatDateTime(upload.uploaded_at_utc)}</span>
-                    <small>{upload.uploaded_by}</small>
+                    <span>{formatDateTime(row.at)}</span>
+                    <small>{row.actor}</small>
                   </td>
-                  <td><span className="badge data-status-pending">반영 대기</span></td>
+                  <td><span className={`badge ${row.status.className}`}>{row.status.label}</span></td>
                 </tr>
               ))}
             </tbody>
@@ -322,7 +357,7 @@ function UploadHistory({ uploads }) {
       ) : (
         <div className="data-upload-empty">
           <span className="material-symbols-outlined" aria-hidden="true">history</span>
-          <span>업로드 이력이 없습니다.</span>
+          <span>반영·업로드 이력이 없습니다.</span>
         </div>
       )}
     </section>
@@ -330,7 +365,7 @@ function UploadHistory({ uploads }) {
 }
 
 export default function DataManagementPage() {
-  const [payload, setPayload] = useState({ current_data: null, datasets: [], uploads: [], notice: "" });
+  const [payload, setPayload] = useState({ current_data: null, operational_batches: [], datasets: [], uploads: [], notice: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -397,7 +432,7 @@ export default function DataManagementPage() {
               <UploadCard key={dataset.dataset_type} dataset={dataset} onUploaded={handleUploaded} />
             ))}
           </section>
-          <UploadHistory uploads={payload.uploads ?? []} />
+          <UploadHistory batches={payload.operational_batches ?? []} uploads={payload.uploads ?? []} />
         </>
       )}
     </div>
