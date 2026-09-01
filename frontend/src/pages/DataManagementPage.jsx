@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { apiFetchJson, describeApiError } from "../lib/api";
 
 
@@ -453,17 +453,72 @@ function BatchDetail({ state }) {
   );
 }
 
+function HistoryDialog({ row, state, onClose }) {
+  const panelRef = useRef(null);
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (event.key === "Escape") onClose();
+    };
+    document.addEventListener("keydown", onKeyDown);
+    // 뒤 목록이 같이 스크롤되면 어느 줄을 열었는지 놓친다.
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    panelRef.current?.focus();
+    return () => {
+      document.removeEventListener("keydown", onKeyDown);
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [onClose]);
+
+  return (
+    <div className="data-history-modal" onClick={onClose}>
+      <div
+        ref={panelRef}
+        className="data-history-modal-panel"
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${row.title} 상세`}
+        tabIndex={-1}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <header className="data-history-modal-head">
+          <div>
+            <span className={`badge ${row.status.className}`}>{row.status.label}</span>
+            <h3 className="t-title">{row.title}</h3>
+            <p className="t-caption">
+              {formatDateTime(row.at)} · {row.actor}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="data-history-modal-close"
+            onClick={onClose}
+            aria-label="닫기"
+          >
+            <span className="material-symbols-outlined" aria-hidden="true">close</span>
+          </button>
+        </header>
+        <div className="data-history-modal-body">
+          {row.kind === "batch"
+            ? <BatchDetail state={state} />
+            : <UploadDetail upload={row.upload} />}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function UploadHistory({ batches, uploads }) {
   const rows = historyRows(batches, uploads);
   const [openKey, setOpenKey] = useState(null);
-  // 펼친 배치의 상세는 클릭할 때 한 번만 받아 캐시한다. 접었다 펴도 다시 안 부른다.
+  // 배치 상세는 처음 열 때 한 번만 받아 캐시한다. 닫았다 다시 열어도 재조회하지 않는다.
   const [details, setDetails] = useState({});
+  const openRow = rows.find((row) => row.key === openKey) ?? null;
 
-  const toggle = (row) => {
-    if (openKey === row.key) {
-      setOpenKey(null);
-      return;
-    }
+  const close = useCallback(() => setOpenKey(null), []);
+
+  const open = (row) => {
     setOpenKey(row.key);
     if (row.kind !== "batch" || details[row.key]) return;
     setDetails((prev) => ({ ...prev, [row.key]: { status: "loading" } }));
@@ -502,49 +557,41 @@ function UploadHistory({ batches, uploads }) {
               </tr>
             </thead>
             <tbody>
-              {rows.map((row) => {
-                const open = openKey === row.key;
-                return (
-                  <Fragment key={row.key}>
-                    <tr className={`data-history-row${open ? " is-open" : ""}`}>
-                      <td>
-                        <button
-                          type="button"
-                          className="data-history-toggle"
-                          aria-expanded={open}
-                          onClick={() => toggle(row)}
-                        >
-                          <span className="material-symbols-outlined" aria-hidden="true">
-                            {open ? "expand_more" : "chevron_right"}
-                          </span>
-                          <b>{row.title}</b>
-                        </button>
-                      </td>
-                      <td>
-                        <span>{row.detail || "—"}</span>
-                        {row.detailSub && <small>{row.detailSub}</small>}
-                      </td>
-                      <td>{row.result || "—"}</td>
-                      <td>
-                        <span>{formatDateTime(row.at)}</span>
-                        <small>{row.actor}</small>
-                      </td>
-                      <td><span className={`badge ${row.status.className}`}>{row.status.label}</span></td>
-                    </tr>
-                    {open && (
-                      <tr className="data-history-detail-row">
-                        <td colSpan={5}>
-                          <div className="data-history-detail">
-                            {row.kind === "batch"
-                              ? <BatchDetail state={details[row.key]} />
-                              : <UploadDetail upload={row.upload} />}
-                          </div>
-                        </td>
-                      </tr>
-                    )}
-                  </Fragment>
-                );
-              })}
+              {rows.map((row) => (
+                <tr
+                  key={row.key}
+                  className="data-history-row"
+                  role="button"
+                  tabIndex={0}
+                  aria-haspopup="dialog"
+                  onClick={() => open(row)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      open(row);
+                    }
+                  }}
+                >
+                  <td><b>{row.title}</b></td>
+                  <td>
+                    <span>{row.detail || "—"}</span>
+                    {row.detailSub && <small>{row.detailSub}</small>}
+                  </td>
+                  <td>{row.result || "—"}</td>
+                  <td>
+                    <span>{formatDateTime(row.at)}</span>
+                    <small>{row.actor}</small>
+                  </td>
+                  <td>
+                    <span className="data-history-status">
+                      <span className={`badge ${row.status.className}`}>{row.status.label}</span>
+                      <span className="material-symbols-outlined data-history-more" aria-hidden="true">
+                        open_in_full
+                      </span>
+                    </span>
+                  </td>
+                </tr>
+              ))}
             </tbody>
           </table>
         </div>
@@ -553,6 +600,10 @@ function UploadHistory({ batches, uploads }) {
           <span className="material-symbols-outlined" aria-hidden="true">history</span>
           <span>반영·업로드 이력이 없습니다.</span>
         </div>
+      )}
+
+      {openRow && (
+        <HistoryDialog row={openRow} state={details[openRow.key]} onClose={close} />
       )}
     </section>
   );
