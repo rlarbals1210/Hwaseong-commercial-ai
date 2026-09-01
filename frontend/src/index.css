@@ -2603,6 +2603,9 @@ a { color: var(--primary); }
 
 .data-current-metric {
   display: grid;
+  /* 카드 높이는 그리드가 맞추되 내용은 위로 붙인다. stretch로 두면 보조 문구가
+     있는 카드만 행이 늘어나 숫자 밑줄이 다른 카드와 어긋난다. */
+  align-content: start;
   gap: 9px;
   min-width: 0;
   padding: 15px 16px;
