@@ -239,10 +239,14 @@ function CurrentDataSummary({ data }) {
           <h2 className="t-title">현재 서비스 반영 데이터</h2>
           <p className="t-body-sm">지금 화면과 분석이 실제로 사용하고 있는 데이터입니다.</p>
         </div>
-        <span className="badge data-status-live">
-          <span className="material-symbols-outlined" aria-hidden="true">check_circle</span>
-          운영 반영 중
-        </span>
+        {/* 적재된 데이터가 없는데 "운영 반영 중"을 띄우면 바로 아래 "반영된 데이터 없음"과
+            서로 어긋난다. 반영할 것이 있을 때만 붙인다. */}
+        {hasData && (
+          <span className="badge data-status-live">
+            <span className="material-symbols-outlined" aria-hidden="true">check_circle</span>
+            운영 반영 중
+          </span>
+        )}
       </div>
 
       {hasData ? (
@@ -443,8 +447,10 @@ function BatchDetail({ state }) {
             {d.quarters.map((q) => (
               <li key={q.quarter_code}>
                 <span>{q.quarter_label ?? q.quarter_code}</span>
-                <b>{Number(q.cell_count).toLocaleString("ko-KR")}</b>
-                <small>표본충분 {Number(q.sample_sufficient_cell_count).toLocaleString("ko-KR")}</small>
+                <div>
+                  <b>{Number(q.cell_count).toLocaleString("ko-KR")}</b>
+                  <small>표본충분 {Number(q.sample_sufficient_cell_count).toLocaleString("ko-KR")}</small>
+                </div>
               </li>
             ))}
           </ul>

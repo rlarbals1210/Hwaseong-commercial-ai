@@ -3191,30 +3191,34 @@ a { color: var(--primary); }
 
 .data-history-quarters {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(132px, 1fr));
   gap: 7px;
   margin: 0;
   padding: 0;
   list-style: none;
 }
 
+/* 분기 라벨과 수치를 한 줄에 넣으면 "2025년 4분기"가 잘려 어느 분기인지 사라진다.
+   라벨을 윗줄로 올린다. */
 .data-history-quarters li {
-  display: flex;
-  align-items: baseline;
-  gap: 6px;
+  display: grid;
+  gap: 3px;
   padding: 8px 10px;
   background: #f8fafc;
   border: 1px solid rgba(15, 23, 42, 0.07);
   border-radius: 8px;
 }
 
-.data-history-quarters span {
-  flex: 1 1 auto;
+.data-history-quarters li > div {
+  display: flex;
+  align-items: baseline;
+  gap: 5px;
   min-width: 0;
-  overflow: hidden;
+}
+
+.data-history-quarters span {
   color: var(--ink-muted);
   font-size: 11px;
-  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
