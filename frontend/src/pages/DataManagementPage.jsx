@@ -198,6 +198,74 @@ function UploadCard({ dataset, onUploaded }) {
   );
 }
 
+const formatCount = (value) => {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toLocaleString("ko-KR") : "—";
+};
+
+function CurrentDataSummary({ data }) {
+  const hasData = Boolean(data) && data.latest_quarter_code != null;
+  const metrics = [
+    {
+      key: "latest_quarter",
+      icon: "event_available",
+      label: "최신 반영 분기",
+      value: data?.latest_quarter_label ?? "—",
+      unit: "",
+      accent: true,
+    },
+    { key: "quarter_count", icon: "database", label: "적재된 분기", value: formatCount(data?.quarter_count), unit: "개" },
+    { key: "area_count", icon: "location_on", label: "행정동", value: formatCount(data?.area_count), unit: "개" },
+    { key: "industry_count", icon: "storefront", label: "업종", value: formatCount(data?.industry_count), unit: "개" },
+    { key: "cell_count", icon: "grid_view", label: "분석 셀", value: formatCount(data?.analysis_cell_count), unit: "개" },
+  ];
+
+  return (
+    <section className="data-current card" aria-label="현재 서비스 반영 데이터">
+      <div className="data-current-head">
+        <div>
+          <h2 className="t-title">현재 서비스 반영 데이터</h2>
+          <p className="t-body-sm">지금 화면과 분석이 실제로 사용하고 있는 데이터입니다.</p>
+        </div>
+        <span className="badge data-status-live">
+          <span className="material-symbols-outlined" aria-hidden="true">check_circle</span>
+          운영 반영 중
+        </span>
+      </div>
+
+      {hasData ? (
+        <dl className="data-current-grid">
+          {metrics.map((metric) => (
+            <div key={metric.key} className={`data-current-metric${metric.accent ? " is-accent" : ""}`}>
+              <dt>
+                <span className="material-symbols-outlined" aria-hidden="true">{metric.icon}</span>
+                {metric.label}
+              </dt>
+              <dd>
+                <b>{metric.value}</b>
+                {metric.unit && <small>{metric.unit}</small>}
+              </dd>
+            </div>
+          ))}
+        </dl>
+      ) : (
+        <div className="data-current-empty">
+          <span className="material-symbols-outlined" aria-hidden="true">inbox</span>
+          <div>
+            <b>반영된 데이터 없음</b>
+            <span>운영 DB에 적재된 분기가 아직 없습니다.</span>
+          </div>
+        </div>
+      )}
+
+      <p className="data-current-note">
+        <span className="material-symbols-outlined" aria-hidden="true">info</span>
+        업로드 후 반영 대기 중인 파일은 포함되지 않은 운영 데이터 기준입니다.
+      </p>
+    </section>
+  );
+}
+
 function UploadHistory({ uploads }) {
   return (
     <section className="data-upload-history card">
@@ -250,7 +318,7 @@ function UploadHistory({ uploads }) {
 }
 
 export default function DataManagementPage() {
-  const [payload, setPayload] = useState({ datasets: [], uploads: [], notice: "" });
+  const [payload, setPayload] = useState({ current_data: null, datasets: [], uploads: [], notice: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -307,10 +375,11 @@ export default function DataManagementPage() {
       {loading ? (
         <div className="data-management-loading">
           <span className="material-symbols-outlined" aria-hidden="true">progress_activity</span>
-          업로드 현황을 불러오는 중…
+          데이터 현황을 불러오는 중…
         </div>
       ) : (
         <>
+          <CurrentDataSummary data={payload.current_data} />
           <section className="data-upload-grid" aria-label="수동 데이터 업로드">
             {payload.datasets.map((dataset) => (
               <UploadCard key={dataset.dataset_type} dataset={dataset} onUploaded={handleUploaded} />

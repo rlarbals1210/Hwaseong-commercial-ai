@@ -3,8 +3,10 @@ import tempfile
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from sqlalchemy.orm import Session
 
 from ..auth.dependencies import get_current_official
+from ..database import get_db
 from ..services.manual_uploads import (
     ManualUploadError,
     get_dataset_spec,
@@ -14,6 +16,7 @@ from ..services.manual_uploads import (
     store_validated_upload,
     upload_root,
 )
+from ..services.operational_data import current_data_summary
 
 
 router = APIRouter(
@@ -24,8 +27,13 @@ router = APIRouter(
 
 
 @router.get("")
-def get_data_management():
-    return management_payload()
+def get_data_management(db: Session = Depends(get_db)):
+    """운영 반영 현황 + 업로드 스테이징 현황을 한 번에 내려준다.
+
+    화면이 두 번 조회하지 않도록 합친다. ``current_data``는 DB만, 나머지는
+    업로드 디렉터리만 읽으므로 두 숫자가 섞이지 않는다.
+    """
+    return {"current_data": current_data_summary(db), **management_payload()}
 
 
 @router.post("/uploads/{dataset_type}", status_code=201)
