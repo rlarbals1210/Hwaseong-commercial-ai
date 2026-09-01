@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
 
 
@@ -471,7 +472,11 @@ function HistoryDialog({ row, state, onClose }) {
     };
   }, [onClose]);
 
-  return (
+  // document.body로 빼서 띄운다. `.official-page > *`에 걸린 진입 애니메이션
+  // officialRise가 fill-mode: both라 끝나도 transform: translateY(0)이 남고,
+  // 그러면 그 카드가 position: fixed의 기준 블록이 되어 팝업이 카드 안에 갇힌다
+  // (.data-upload-history의 overflow: hidden까지 겹쳐 잘린다).
+  return createPortal(
     <div className="data-history-modal" onClick={onClose}>
       <div
         ref={panelRef}
@@ -505,7 +510,8 @@ function HistoryDialog({ row, state, onClose }) {
             : <UploadDetail upload={row.upload} />}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
 
