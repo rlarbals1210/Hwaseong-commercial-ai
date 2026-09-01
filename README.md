@@ -1,6 +1,6 @@
 # 화성시 소상공인 AI 정책지원 플랫폼
 
-화성시 소상공인 폐업 위험을 AI로 조기경보하고 정책자금 배분 우선순위를 제시하는 웹앱.
+화성시 소상공인 폐업 위험을 AI로 조기경보하고 현장점검 우선순위를 제시하는 웹앱.
 
 ## 기술 스택
 
@@ -50,6 +50,10 @@ JWT_SECRET_KEY=       ← openssl rand -hex 32 로 각자 생성. 절대 커밋 
 JWT_ALGORITHM=HS256
 JWT_EXPIRE_MINUTES=480
 ```
+
+공공데이터 API 키를 이용한 수집은 루트 [`.env.example`](.env.example)과
+[자동수집 운영 문서](docs/public-data-automation.md)를 따른다. 수집 결과는 기존 모델 입력을
+덮어쓰지 않고 `data/raw/api_staging/`에 버전별로 저장된다.
 
 ## 로그인 계정 — 팀원 필독
 
