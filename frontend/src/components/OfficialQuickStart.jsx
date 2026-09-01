@@ -36,6 +36,13 @@ const GUIDES = [
     action: "상권 비교에서 두 지역·업종을 선택하세요.",
     outcome: "폐업률과 주요 지표의 차이, 그 차이가 유의한지 확인할 수 있습니다.",
   },
+  {
+    path: "/data-management",
+    menu: "데이터 관리",
+    goal: "새로 받은 카드매출 파일을 추가하고 싶어요",
+    action: "데이터 유형에 맞는 CSV 또는 Excel 파일을 놓고 '업로드 후 검증'을 누르세요.",
+    outcome: "기존 파일을 덮어쓰지 않고 형식 검증 결과와 업로드 이력을 남길 수 있습니다.",
+  },
 ];
 
 export default function OfficialQuickStart({ open, onClose, path }) {

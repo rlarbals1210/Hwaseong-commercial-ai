@@ -30,8 +30,9 @@ API 키가 발급돼도 수집 결과가 곧바로 모델이나 PostgreSQL에 �
 | 경기데이터드림 유동인구 | `GG_OPENAPI_KEY` | `TB25BPTPOPDAYDONGM` | 기존 정상판과 월·행정동 커버리지 대조 필요 |
 | KOSIS 등록인구 | `KOSIS_API_KEY` + 통계표 파라미터 | 분기말 읍면동 등록인구 | 2026년 구 신설 전후 행정구역 중복 대조 필요 |
 
-카드매출 `card_sales_hwaseong.csv`와 카드 업종 코드표는 현재 파일 제공 방식이므로 이 수집기의
-대상이 아니다.
+카드매출 `card_sales_hwaseong.csv`와 카드 업종 코드표는 현재 파일 제공 방식이므로 이 API 수집기의
+대상이 아니다. 두 파일은 공무원 로그인 후 **데이터 관리** 화면에서 업로드하며,
+`data/raw/manual_uploads/`에 검증된 버전으로 보관된다.
 
 ## 키 발급 전
 

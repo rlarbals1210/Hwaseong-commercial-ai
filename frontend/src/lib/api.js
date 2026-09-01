@@ -84,7 +84,16 @@ export async function apiFetchJson(path, options = {}) {
       }
       window.dispatchEvent(new Event(UNAUTHORIZED_EVENT));
     }
-    throw new ApiError(response.status);
+    let message;
+    if (response.status < 500) {
+      try {
+        const payload = await response.json();
+        if (typeof payload?.detail === "string") message = payload.detail;
+      } catch {
+        /* JSON 응답이 아니면 기존 상태 문구를 사용한다 */
+      }
+    }
+    throw new ApiError(response.status, message);
   }
   return response.json();
 }

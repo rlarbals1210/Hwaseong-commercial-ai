@@ -11,11 +11,12 @@ import BrowsePage from "./pages/BrowsePage";
 import TrendPage from "./pages/TrendPage";
 import ReportPage from "./pages/ReportPage";
 import LandingPage from "./pages/LandingPage";
+import DataManagementPage from "./pages/DataManagementPage";
 import RequireRole from "./components/RequireRole";
 import OfficialQuickStart from "./components/OfficialQuickStart";
 import { useAuth } from "./context/auth-context";
 import { apiFetchJson } from "./lib/api";
-import { OFFICIAL_ROUTES, safeNext } from "./lib/officialRoutes";
+import { DATA_MANAGEMENT_ROUTE, OFFICIAL_ROUTES, safeNext } from "./lib/officialRoutes";
 
 // 공무원 정책 의사결정 지원 전용.
 // 시민(소상공인) 직접조회 화면은 2026-08-18 설계 결정으로 제외했다 — 상세 사유는 CLAUDE.md '설계 결정' 절 참조.
@@ -75,6 +76,18 @@ function Sidebar({ nav, pathname, username, onLogout, onOpenQuickStart }) {
       {/* 계정 + 로그아웃 */}
       <div className="official-sidebar-footer">
         <div className="official-sidebar-divider" />
+        <Link
+          to={DATA_MANAGEMENT_ROUTE.path}
+          data-quickstart-path={DATA_MANAGEMENT_ROUTE.path}
+          className={`official-nav-link official-data-link${pathname === DATA_MANAGEMENT_ROUTE.path ? " active" : ""}`}
+          aria-current={pathname === DATA_MANAGEMENT_ROUTE.path ? "page" : undefined}
+          title={DATA_MANAGEMENT_ROUTE.label}
+        >
+          <span className={`material-symbols-outlined${pathname === DATA_MANAGEMENT_ROUTE.path ? " fill" : ""}`}>
+            {DATA_MANAGEMENT_ROUTE.icon}
+          </span>
+          <span className="official-nav-label">{DATA_MANAGEMENT_ROUTE.label}</span>
+        </Link>
         <button
           type="button"
           onClick={onOpenQuickStart}
@@ -153,7 +166,7 @@ export default function App() {
   const isPublicPage = PUBLIC_PATHS.includes(pathname);
   const [manualQuickStartOpen, setManualQuickStartOpen] = useState(false);
   const [dismissedQuickStartKeys, setDismissedQuickStartKeys] = useState(() => new Set());
-  const isGuidePath = NAV.some((item) => item.path === pathname);
+  const isGuidePath = NAV.some((item) => item.path === pathname) || pathname === DATA_MANAGEMENT_ROUTE.path;
   const quickStartKey = `${loginSequence}:${pathname}`;
   const shouldAutoOpenQuickStart = isOfficial
     && loginSequence > 0
@@ -205,6 +218,14 @@ export default function App() {
           }
         />
       ))}
+      <Route
+        path={DATA_MANAGEMENT_ROUTE.path}
+        element={
+          <RequireRole role="official">
+            <DataManagementPage />
+          </RequireRole>
+        }
+      />
       {/* 셀 상세는 사이드바에 노출하지 않는다 — 목록에서 클릭해 들어오는 종착지다 */}
       <Route
         path="/cells/:areaId/:industryId"
@@ -218,7 +239,8 @@ export default function App() {
   );
 
   if (isOfficial && !isPublicPage) {
-    const current = NAV.find((n) => n.path === pathname);
+    const current = NAV.find((n) => n.path === pathname)
+      ?? (pathname === DATA_MANAGEMENT_ROUTE.path ? DATA_MANAGEMENT_ROUTE : null);
     const topBarTitle = current?.label ?? (pathname.startsWith("/cells/") ? "상권 상세" : "조기경보 대시보드");
     return (
       <div className="official-shell">

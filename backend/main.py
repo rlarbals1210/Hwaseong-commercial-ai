@@ -2,7 +2,8 @@ import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .routers import (
-    alerts, cells, compare, policy, analysis, auth, workflow, public, recommend, trends, report,
+    alerts, cells, compare, data_management, policy, analysis, auth, workflow, public, recommend,
+    trends, report,
 )
 
 app = FastAPI(title="화성시 소상공인 AI 정책지원 플랫폼", version="1.0.0")
@@ -29,6 +30,7 @@ app.include_router(compare.router)
 app.include_router(policy.router)
 app.include_router(analysis.router)
 app.include_router(workflow.router)
+app.include_router(data_management.router)
 
 # 공개 라우터 — 인증 가드 없음.
 #   public.py    관측치 기반 조회(둘러보기·지도·업종 계층)

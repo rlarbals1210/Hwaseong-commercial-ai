@@ -35,7 +35,14 @@ export const OFFICIAL_ROUTES = [
   },
 ];
 
-const ALLOWED = new Set(OFFICIAL_ROUTES.map((r) => r.path));
+// 주요 분석 흐름과 분리된 공무원 전용 유틸리티. 사이드바 하단에 따로 노출한다.
+export const DATA_MANAGEMENT_ROUTE = {
+  path: "/data-management",
+  label: "데이터 관리",
+  icon: "database_upload",
+};
+
+const ALLOWED = new Set([...OFFICIAL_ROUTES.map((r) => r.path), DATA_MANAGEMENT_ROUTE.path]);
 
 // 로그인 뒤 돌아갈 경로(?next=)는 반드시 이 화이트리스트를 통과해야 한다.
 // 외부 주소나 프로토콜 상대 경로(//example.com)가 들어오면 무시하고 기본값으로 보낸다.
