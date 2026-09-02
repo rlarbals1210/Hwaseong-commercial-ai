@@ -430,6 +430,10 @@ export default function BrowsePage() {
   const [detailTab, setDetailTab] = useState("conditions");
   const [error, setError] = useState("");
   const [mapError, setMapError] = useState("");
+  // 지도 인스턴스 생성 완료 신호. 폴리곤·클러스터 효과가 이 값을 기다린다.
+  const [mapReady, setMapReady] = useState(false);
+  // 경계 파일은 2.8MB다. 내용을 state에 담지 않고 ref에 두고, 도착 사실만 숫자로 알린다.
+  const [geojsonVersion, setGeojsonVersion] = useState(0);
 
   const closeIntro = useCallback(() => {
     setShowIntro(false);
@@ -464,7 +468,6 @@ export default function BrowsePage() {
   const mapInstanceRef = useRef(null);
   const polygonsRef = useRef([]);
   const clusterMarkersRef = useRef([]);
-  const zoomListenerRef = useRef(null);
   const boundsFitRef = useRef(false);
   const geojsonRef = useRef(null);
   const drawerScrollRef = useRef(null);
@@ -582,53 +585,46 @@ export default function BrowsePage() {
     resize();
     window.addEventListener("resize", resize);
     return () => window.removeEventListener("resize", resize);
-  }, [areaId, drawerMode, focusVersion, focusMapOnArea]);
+  }, [areaId, drawerMode, focusVersion, focusMapOnArea, mapReady, geojsonVersion]);
 
   useEffect(() => { drawerScrollRef.current?.scrollTo({ top: 0 }); }, [drawerMode, areaId, industryId]);
 
-  const drawPolygons = useCallback((map, geojson) => {
-    polygonsRef.current.forEach((polygon) => polygon.setMap(null));
-    polygonsRef.current = [];
+  // 폴리곤을 실제로 다시 그릴지 판단하는 비교용 열쇠.
+  const styleKeyOf = (options) => (
+    `${options.fillColor}|${options.fillOpacity}|${options.strokeColor}|${options.strokeWeight}|${options.clickable}`
+  );
 
-    geojson.features.forEach((feature) => {
-      const name = featureName(feature);
-      const info = colorByName[name];
-      const inScope = !showFilteredMap || areaFilterSet.has(info?.area_id ?? options?.areas?.find((area) => area.name === name)?.id);
-      const color = info?.color || "#c1c6d5";
-      const selected = inScope && info?.area_id === areaId;
-      const recommended = recommendedAreaIds.has(info?.area_id);
-      const baseOpacity = !inScope ? 0.08 : !info ? 0.3 : info.sample_insufficient ? 0.5 : 0.74;
+  // 한 읍면동이 지금 어떤 모습이어야 하는지. 생성과 갱신이 같은 규칙을 쓰도록 한 곳에 둔다.
+  const styleFor = useCallback((name) => {
+    const info = colorByName[name];
+    const fallbackId = options?.areas?.find((area) => area.name === name)?.id;
+    const inScope = !showFilteredMap || areaFilterSet.has(info?.area_id ?? fallbackId);
+    const selected = inScope && info?.area_id === areaId;
+    const recommended = recommendedAreaIds.has(info?.area_id);
+    const baseOpacity = !inScope ? 0.08 : !info ? 0.3 : info.sample_insufficient ? 0.5 : 0.74;
+    return {
+      info,
+      inScope,
+      options: {
+        fillColor: info?.color || "#c1c6d5",
+        fillOpacity: selected ? 0.95 : baseOpacity,
+        strokeColor: selected ? "#005db2" : recommended ? "#7c3aed" : "#fff",
+        strokeWeight: selected ? 4 : recommended ? 2.5 : 1.5,
+        clickable: inScope,
+      },
+    };
+  }, [colorByName, options, showFilteredMap, areaFilterSet, areaId, recommendedAreaIds]);
 
-      featurePaths(feature).forEach((path) => {
-        const polygon = new window.naver.maps.Polygon({
-          map,
-          paths: [path],
-          fillColor: color,
-          fillOpacity: selected ? 0.95 : baseOpacity,
-          strokeColor: selected ? "#005db2" : recommended ? "#7c3aed" : "#fff",
-          strokeWeight: selected ? 4 : recommended ? 2.5 : 1.5,
-          clickable: inScope,
-        });
-        polygonsRef.current.push(polygon);
-        if (!inScope) return;
-        window.naver.maps.Event.addListener(polygon, "mouseover", (event) => {
-          polygon.setOptions({ fillOpacity: 0.94 });
-          setTooltip({ name, info, x: event.pointerEvent.clientX, y: event.pointerEvent.clientY });
-        });
-        window.naver.maps.Event.addListener(polygon, "mousemove", (event) => {
-          setTooltip((current) => current ? { ...current, x: event.pointerEvent.clientX, y: event.pointerEvent.clientY } : null);
-        });
-        window.naver.maps.Event.addListener(polygon, "mouseout", () => {
-          polygon.setOptions({ fillOpacity: selected ? 0.95 : baseOpacity });
-          setTooltip(null);
-        });
-        window.naver.maps.Event.addListener(polygon, "click", () => {
-          const clickedId = info?.area_id ?? options?.areas?.find((item) => item.name === name)?.id;
-          if (clickedId) (entryMode === "area" ? chooseAreaFirst : selectArea)(clickedId);
-        });
-      });
-    });
-  }, [areaId, colorByName, recommendedAreaIds, selectArea, options, entryMode, chooseAreaFirst, showFilteredMap, areaFilterSet]);
+  // 폴리곤 이벤트 핸들러는 폴리곤을 만들 때 한 번만 붙는다. 그래서 최신 값을 클로저에
+  // 가두면 안 되고 ref로 읽어야 한다 — 이 두 효과가 매 렌더 ref를 갱신한다.
+  // 선언 순서가 곧 실행 순서라, 아래 폴리곤 효과들보다 반드시 위에 있어야 한다.
+  const styleForRef = useRef(styleFor);
+  useEffect(() => { styleForRef.current = styleFor; }, [styleFor]);
+
+  const clickContextRef = useRef(null);
+  useEffect(() => {
+    clickContextRef.current = { colorByName, options, entryMode, selectArea, chooseAreaFirst };
+  }, [colorByName, options, entryMode, selectArea, chooseAreaFirst]);
 
   const drawStoreClusters = useCallback((map) => {
     clusterMarkersRef.current.forEach((marker) => marker.setMap(null));
@@ -649,12 +645,15 @@ export default function BrowsePage() {
     });
   }, [clusterData, showFilteredMap]);
 
+  const drawClustersRef = useRef(drawStoreClusters);
+  useEffect(() => { drawClustersRef.current = drawStoreClusters; }, [drawStoreClusters]);
+
+  // ① 지도 인스턴스 — 화면당 한 번만 만든다.
   useEffect(() => {
-    if (!NAVER_CLIENT_ID || !mapData) return;
+    if (!NAVER_CLIENT_ID) return;
     let cancelled = false;
     loadNaverMap().then(() => {
-      if (cancelled) return;
-      if (!mapRef.current) return;
+      if (cancelled || !mapRef.current) return;
       if (!mapInstanceRef.current) {
         mapInstanceRef.current = new window.naver.maps.Map(mapRef.current, {
           center: new window.naver.maps.LatLng(37.1997, 126.8312),
@@ -664,31 +663,108 @@ export default function BrowsePage() {
           scaleControl: true,
         });
       }
-      fetch("/hwaseong_emd.geojson")
-        .then((response) => response.json())
-        .then((geojson) => {
-          if (cancelled) return;
-          geojsonRef.current = geojson;
-          drawPolygons(mapInstanceRef.current, geojson);
-          if (!boundsFitRef.current) {
-            const bounds = new window.naver.maps.LatLngBounds();
-            geojson.features.forEach((feature) => featurePaths(feature).forEach((path) => path.forEach((point) => bounds.extend(point))));
-            mapInstanceRef.current.fitBounds(bounds);
-            boundsFitRef.current = true;
-          }
-          if (zoomListenerRef.current) window.naver.maps.Event.removeListener(zoomListenerRef.current);
-          zoomListenerRef.current = window.naver.maps.Event.addListener(
-            mapInstanceRef.current,
-            "zoom_changed",
-            () => drawStoreClusters(mapInstanceRef.current),
-          );
-          drawStoreClusters(mapInstanceRef.current);
-          if (drawerMode === "detail" && areaId) focusMapOnArea(areaId);
-        })
-        .catch(() => { if (!cancelled) setMapError("지도 경계 파일을 불러오지 못했습니다."); });
+      setMapReady(true);
     }).catch((err) => { if (!cancelled) setMapError(err.message); });
     return () => { cancelled = true; };
-  }, [drawPolygons, drawStoreClusters, mapData, drawerMode, areaId, focusMapOnArea]);
+  }, []);
+
+  // ② 경계 파일 — 2.8MB에 좌표 6만 개다. 한 번만 받아 ref에 캐시한다.
+  //    예전에는 이 fetch가 지도 효과 안에 있어서 지역을 고를 때마다 다시 받고 다시 파싱했다.
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/hwaseong_emd.geojson")
+      .then((response) => response.json())
+      .then((data) => {
+        if (cancelled) return;
+        geojsonRef.current = data;
+        setGeojsonVersion((value) => value + 1);
+      })
+      .catch(() => { if (!cancelled) setMapError("지도 경계 파일을 불러오지 못했습니다."); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // ③ 폴리곤 생성 — 지도와 경계 파일이 준비됐을 때만. 색·선택 상태가 바뀐다고 다시 만들지 않는다.
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const geojson = geojsonRef.current;
+    if (!mapReady || !map || !geojson) return undefined;
+
+    polygonsRef.current.forEach((entry) => entry.polygon.setMap(null));
+    polygonsRef.current = [];
+
+    geojson.features.forEach((feature) => {
+      const name = featureName(feature);
+      featurePaths(feature).forEach((path) => {
+        const polygon = new window.naver.maps.Polygon({
+          map,
+          paths: [path],
+          ...styleForRef.current(name).options,
+        });
+        polygonsRef.current.push({ polygon, name, styleKey: styleKeyOf(styleForRef.current(name).options) });
+
+        window.naver.maps.Event.addListener(polygon, "mouseover", (event) => {
+          const state = styleForRef.current(name);
+          if (!state.inScope) return;
+          polygon.setOptions({ fillOpacity: 0.94 });
+          setTooltip({ name, info: state.info, x: event.pointerEvent.clientX, y: event.pointerEvent.clientY });
+        });
+        window.naver.maps.Event.addListener(polygon, "mousemove", (event) => {
+          setTooltip((current) => current ? { ...current, x: event.pointerEvent.clientX, y: event.pointerEvent.clientY } : null);
+        });
+        window.naver.maps.Event.addListener(polygon, "mouseout", () => {
+          polygon.setOptions({ fillOpacity: styleForRef.current(name).options.fillOpacity });
+          setTooltip(null);
+        });
+        window.naver.maps.Event.addListener(polygon, "click", () => {
+          if (!styleForRef.current(name).inScope) return;
+          const context = clickContextRef.current;
+          if (!context) return;
+          const clickedId = context.colorByName[name]?.area_id
+            ?? context.options?.areas?.find((item) => item.name === name)?.id;
+          if (clickedId) (context.entryMode === "area" ? context.chooseAreaFirst : context.selectArea)(clickedId);
+        });
+      });
+    });
+
+    if (!boundsFitRef.current) {
+      const bounds = new window.naver.maps.LatLngBounds();
+      geojson.features.forEach((feature) => featurePaths(feature).forEach((path) => path.forEach((point) => bounds.extend(point))));
+      map.fitBounds(bounds);
+      boundsFitRef.current = true;
+    }
+
+    return () => {
+      polygonsRef.current.forEach((entry) => entry.polygon.setMap(null));
+      polygonsRef.current = [];
+    };
+  }, [mapReady, geojsonVersion]);
+
+  // ④ 스타일 갱신 — 선택·추천·필터·업종이 바뀌면 옵션만 바꾼다. 폴리곤은 그대로 둔다.
+  useEffect(() => {
+    if (!mapReady) return;
+    polygonsRef.current.forEach((entry) => {
+      const next = styleFor(entry.name).options;
+      const key = styleKeyOf(next);
+      // 업종을 바꿔도 색이 그대로인 읍면동이 대부분이다. 실제로 달라진 것만 다시 그린다.
+      if (entry.styleKey === key) return;
+      entry.styleKey = key;
+      entry.polygon.setOptions(next);
+    });
+  }, [styleFor, mapReady, geojsonVersion]);
+
+  // ⑤ 점포 클러스터 — 줌 리스너는 한 번만 붙이고, 최신 그리기 함수는 ref로 읽는다.
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!mapReady || !map) return undefined;
+    const listener = window.naver.maps.Event.addListener(map, "zoom_changed", () => drawClustersRef.current(map));
+    return () => window.naver.maps.Event.removeListener(listener);
+  }, [mapReady]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!mapReady || !map) return;
+    drawStoreClusters(map);
+  }, [mapReady, drawStoreClusters]);
 
   const resetMap = () => {
     const map = mapInstanceRef.current;
