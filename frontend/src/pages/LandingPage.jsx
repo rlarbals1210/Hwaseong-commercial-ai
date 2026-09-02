@@ -329,7 +329,7 @@ export default function LandingPage() {
       <nav className="lp-nav" aria-label="주요 메뉴">
         <div className="lp-nav-inner">
           <Link to="/" className="lp-nav-brand">
-            <span className="lp-nav-mark">RN</span>
+            <span className="lp-nav-mark">HS</span>
             <span className="lp-nav-name">화성시 소상공인 조기경보</span>
           </Link>
 
