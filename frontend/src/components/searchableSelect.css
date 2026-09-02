@@ -1,26 +1,57 @@
-.search-select { width: 240px; max-width: 100%; min-width: 0; border: 1px solid #cddfdc; border-radius: 10px; background: #eff6f5; color: #315d59; font-size: 12px; }
+/* 검색형 선택 상자.
+   색은 변수로 뺀다 — 처음엔 공무원 필터바 전용이라 청록색이 박혀 있었는데,
+   사이트 전체(트렌드·보고서·사각지대·상권 비교)로 퍼지면서 화면마다 강조색이 다르다.
+   기본값은 앱의 토큰 시스템을 따르고, 원래 청록이던 두 곳만 아래에서 되돌린다. */
+.search-select {
+  --sel-line: var(--hairline, #e6e6e6);
+  --sel-surface: var(--surface-container-low, #f3f3f3);
+  --sel-ink: var(--on-surface-variant, #414753);
+  --sel-muted: var(--ink-muted, #615d59);
+  --sel-accent: var(--primary, #005db2);
+  --sel-accent-soft: var(--primary-fixed, #d5e3ff);
+
+  width: 240px; max-width: 100%; min-width: 0;
+  border: 1px solid var(--sel-line); border-radius: 10px;
+  background: var(--sel-surface); color: var(--sel-ink); font-size: 12px;
+}
 .search-select > summary { display: flex; align-items: center; gap: 10px; padding: 12px; cursor: pointer; list-style: none; }
 .search-select > summary::-webkit-details-marker { display: none; }
-.search-select > summary::after { content: "+"; font-size: 19px; color: #617c79; }
+.search-select > summary::after { content: "+"; font-size: 19px; color: var(--sel-muted); }
 .search-select[open] > summary::after { content: "−"; }
 .search-select-heading { display: grid; gap: 5px; flex: 1; min-width: 0; }
 .search-select-heading b { display: flex; align-items: center; gap: 6px; font-size: 12px; }
 .search-select-heading b > span { font-size: 17px; }
-.search-select-heading > small { color: #526b69; font-size: 12px; overflow-wrap: anywhere; }
-.search-select-count { padding: 4px 7px; border-radius: 5px; background: #deeeea; font-size: 11px; white-space: nowrap; }
-.search-select .search-select-content { padding: 12px; border-top: 1px solid #cddfdc; background: #fff; border-radius: 0 0 10px 10px; }
+.search-select-heading > small { color: var(--sel-muted); font-size: 12px; overflow-wrap: anywhere; }
+.search-select-count { padding: 4px 7px; border-radius: 5px; background: var(--sel-accent-soft); font-size: 11px; white-space: nowrap; }
+.search-select .search-select-content { padding: 12px; border-top: 1px solid var(--sel-line); background: var(--surface-container-lowest, #fff); border-radius: 0 0 10px 10px; }
 .search-select-content > label { display: block; margin-bottom: 7px; font-weight: 600; }
-.search-select-content > input { width: 100%; min-width: 0; padding: 10px; border: 1px solid #c6d7d4; border-radius: 7px; font: inherit; background: white; color: #243b48; }
-.search-select .search-select-reset { width: 100%; padding: 9px; margin: 9px 0 0; border: 1px solid #cddfdc; border-radius: 7px; background: #f4f9f8; color: #236b61; font: inherit; cursor: pointer; }
+.search-select-content > input { width: 100%; min-width: 0; padding: 10px; border: 1px solid var(--sel-line); border-radius: 7px; font: inherit; background: var(--surface-container-lowest, #fff); color: var(--on-surface, #243b48); }
+.search-select .search-select-reset { width: 100%; padding: 9px; margin: 9px 0 0; border: 1px solid var(--sel-line); border-radius: 7px; background: var(--sel-surface); color: var(--sel-accent); font: inherit; cursor: pointer; }
 .search-select-content fieldset { margin: 12px 0 0; padding: 0; border: 0; min-width: 0; }
-.search-select-content legend { padding: 0 0 7px; font-size: 11px; color: #64748b; }
+.search-select-content legend { padding: 0 0 7px; font-size: 11px; color: var(--sel-muted); }
 .search-select-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; max-height: 220px; overflow-y: auto; overscroll-behavior: contain; }
-.search-select-options > label { display: flex; align-items: flex-start; gap: 6px; padding: 9px 5px; border-radius: 5px; color: #344e59; cursor: pointer; overflow-wrap: anywhere; }
-.search-select-options > label:has(:checked) { background: #eaf5f2; color: #166b62; font-weight: 600; }
-.search-select-options input { flex: 0 0 15px; width: 15px; height: 15px; margin: 2px 0 0; accent-color: #16766f; }
-.search-select-options small { display: block; color: #667888; font-size: 10px; margin-top: 3px; }
-.search-select-options > p { grid-column: 1 / -1; margin: 8px 0; color: #64748b; }
-.search-select :focus-visible { outline: 2px solid #16766f; outline-offset: 2px; }
+.search-select-options > label { display: flex; align-items: flex-start; gap: 6px; padding: 9px 5px; border-radius: 5px; color: var(--sel-ink); cursor: pointer; overflow-wrap: anywhere; }
+.search-select-options > label:has(:checked) { background: var(--sel-accent-soft); color: var(--sel-accent); font-weight: 600; }
+.search-select-options input { flex: 0 0 15px; width: 15px; height: 15px; margin: 2px 0 0; accent-color: var(--sel-accent); }
+.search-select-options small { display: block; color: var(--sel-muted); font-size: 10px; margin-top: 3px; }
+.search-select-options > p { grid-column: 1 / -1; margin: 8px 0; color: var(--sel-muted); }
+.search-select :focus-visible { outline: 2px solid var(--sel-accent); outline-offset: 2px; }
 .search-select.is-disabled { opacity: .6; }.search-select.is-disabled > summary { cursor: default; }
+
+/* 원래 청록이던 두 곳 — 공무원 필터바와 상권 선택 창. 보이는 모습은 그대로 둔다. */
+.official-search-filters > .search-select,
+.cell-picker-fields > .search-select {
+  --sel-line: #cddfdc;
+  --sel-surface: #eff6f5;
+  --sel-ink: #315d59;
+  --sel-muted: #526b69;
+  --sel-accent: #16766f;
+  --sel-accent-soft: #deeeea;
+}
+
 .official-search-filters { display: flex; gap: 12px; align-items: flex-start; flex-wrap: wrap; }
 @media (max-width: 600px) { .official-search-filters { width: 100%; }.official-search-filters > .search-select { width: 100%; } }
+
+/* 표·차트 위 조건 줄에 들어갈 때는 칸을 꽉 채운다 — 240px 고정이면 그리드가 어긋난다. */
+.select-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 10px; align-items: start; }
+.select-row > .search-select { width: 100%; }

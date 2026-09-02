@@ -1,4 +1,5 @@
 import ToolHeading from "./ToolHeading";
+import SearchableSelect from "../SearchableSelect";
 
 const number = (value, suffix = "", digits = 1) => (
   typeof value === "number" && Number.isFinite(value) ? `${value.toLocaleString("ko-KR", { maximumFractionDigits: digits })}${suffix}` : "—"
@@ -20,13 +21,13 @@ export default function AreaComparison({ data, loading, error, areaIds, onChange
     <p>{data ? `${data.industry_name} · ${data.quarter_label}` : "선택 업종의 자료를 불러옵니다."}</p>
     {loading && <p role="status">비교 자료를 불러오는 중…</p>}{error && <p role="alert">{error}</p>}
     {data && <>
-      <div className="explore-form-grid">{[0, 1].map((index) => <label className="explore-input" key={index}>
-        <span>{index === 0 ? "기준 지역" : "비교 지역"}</span>
-        <select value={areaIds[index] ?? ""} onChange={(event) => { const next = [...areaIds]; next[index] = Number(event.target.value) || null; onChange(next); }}>
-          <option value="">지역 선택</option>
-          {[...data.results].sort((a, b) => a.area_name.localeCompare(b.area_name, "ko")).map((item) =>
-            <option key={item.area_id} value={item.area_id} disabled={item.area_id === areaIds[1 - index]}>{item.area_name}</option>)}
-        </select></label>)}</div>
+      <div className="select-row">{[0, 1].map((index) => <SearchableSelect key={index}
+        label={index === 0 ? "기준 지역" : "비교 지역"} icon="location_on" unit="곳" placeholder="지역 선택"
+        options={[...data.results].sort((a, b) => a.area_name.localeCompare(b.area_name, "ko"))
+          .filter((item) => item.area_id !== areaIds[1 - index])
+          .map((item) => ({ value: item.area_id, label: item.area_name }))}
+        value={areaIds[index] ?? ""}
+        onChange={(next) => { const ids = [...areaIds]; ids[index] = next === "" ? null : next; onChange(ids); }} />)}</div>
       {!ready && <p className="explore-status">두 지역을 고르면 조건과 관측 지표를 나란히 볼 수 있습니다.</p>}
       {ready && <>
         <table className="explore-comparison-table"><caption>{items[0].area_name}과 {items[1].area_name} 비교</caption>

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import useGradeNotice from "../hooks/useGradeNotice";
+import SearchableSelect from "../components/SearchableSelect";
 
 // 매일 여는 업무 화면이다. 산출 방식·한계 고지는 하단 「산출 기준」 한 곳에 모으고
 // 본문에는 값과 판정만 둔다. 근거를 본문에 흩으면 두 번째 방문부터는 읽지 않는다.
@@ -593,10 +594,10 @@ export default function BlindspotPage() {
                 nearMin={nearMin}
                 sampleMin={sampleMin}
               />
-              <select value={dong} onChange={(e) => setParam("dong", e.target.value)} style={{ minWidth: 130 }}>
-                <option value="">읍면동 전체</option>
-                {dongs.map((d) => (<option key={d} value={d}>{d}</option>))}
-              </select>
+              <SearchableSelect label="읍면동" icon="location_on" unit="곳"
+                options={dongs.map((d) => ({ value: d, label: d }))}
+                value={dong} emptyLabel="읍면동 전체"
+                onChange={(value) => setParam("dong", value)} />
             </div>
           }
         />

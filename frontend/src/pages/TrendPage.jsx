@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import PublicNav from "../components/PublicNav";
+import SearchableSelect from "../components/SearchableSelect";
 import { apiFetchJson, describeApiError } from "../lib/api";
 
 const COLORS = ["#005db2", "#dd5b00", "#2a9d99", "#4958aa"];
@@ -241,13 +242,13 @@ export default function TrendPage() {
 
         <section className="card" style={{ marginTop: 16, padding: 24 }}>
           <h2 className="t-h3">읍면동 × 업종 흐름</h2>
-          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginTop: 16 }}>
-            <select value={industryId ?? ""} onChange={(event) => setIndustryId(Number(event.target.value))} style={{ flex: "1 1 240px" }}>
-              {(options?.industries ?? []).map((industry) => <option key={industry.id} value={industry.id}>{industry.name}</option>)}
-            </select>
-            <select value={areaId ?? ""} onChange={(event) => setAreaId(Number(event.target.value))} style={{ flex: "1 1 200px" }}>
-              {availableAreas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
-            </select>
+          <div className="select-row" style={{ marginTop: 16 }}>
+            <SearchableSelect label="업종" icon="storefront" placeholder="업종 선택"
+              options={(options?.industries ?? []).map((industry) => ({ value: industry.id, label: industry.name }))}
+              value={industryId ?? ""} onChange={setIndustryId} />
+            <SearchableSelect label="읍면동" icon="location_on" unit="곳" placeholder="읍면동 선택"
+              options={availableAreas.map((area) => ({ value: area.id, label: area.name }))}
+              value={areaId ?? ""} onChange={setAreaId} />
           </div>
           <div style={{ marginTop: 18 }}><LineChart series={cell?.series} metrics={metrics} /></div>
           {cell && <p className="t-caption" style={{ color: "var(--ink-faint)", margin: "12px 0 0" }}>{cell.area_name} · {cell.industry_name}</p>}

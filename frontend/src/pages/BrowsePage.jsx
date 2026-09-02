@@ -6,6 +6,7 @@ import AreaComparison from "../components/exploration/AreaComparison";
 import AreaFilter from "../components/exploration/AreaFilter";
 import { EMPTY_STARTUP_INPUT } from "../lib/startupCosts";
 import IndustryExplorer from "../components/exploration/IndustryExplorer";
+import FloatingPicker from "../components/exploration/FloatingPicker";
 import ExplorationTools from "../components/exploration/ExplorationTools";
 import "../components/exploration/exploration.css";
 import "../components/exploration/browseSections.css";
@@ -93,139 +94,6 @@ function MapLegend({ mapData, recommendationVisible, recommendationCount }) {
       {recommendationVisible && recommendationCount > 0 && (
         <p><b style={{ color: "#7c3aed" }}>보라색 테두리</b>는 선택 조건에 맞는 추천 {recommendationCount ?? 0}곳입니다.</p>
       )}
-    </div>
-  );
-}
-
-function IndustryPicker({ industries, coverageByIndustry, totalAreaCount, value, onChange }) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [menuPosition, setMenuPosition] = useState(null);
-  const rootRef = useRef(null);
-  const triggerRef = useRef(null);
-  const selected = industries.find((industry) => industry.id === value) ?? null;
-  const filtered = industries.filter((industry) => industry.name.toLocaleLowerCase("ko").includes(query.trim().toLocaleLowerCase("ko")));
-
-  const updateMenuPosition = useCallback(() => {
-    const rect = triggerRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    const margin = 16;
-    const gap = 12;
-    const availableRight = window.innerWidth - rect.right - gap - margin;
-    const fitsRight = availableRight >= 240;
-    const width = fitsRight
-      ? Math.min(460, availableRight)
-      : Math.min(420, window.innerWidth - margin * 2);
-    const left = fitsRight ? rect.right + gap : window.innerWidth - width - margin;
-    const top = Math.max(68, Math.min(rect.top, window.innerHeight - 280));
-    setMenuPosition({
-      left: Math.round(left),
-      top: Math.round(top),
-      width: Math.round(width),
-      maxHeight: Math.max(260, Math.round(window.innerHeight - top - margin)),
-      pointsRight: fitsRight,
-    });
-  }, []);
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const onPointerDown = (event) => {
-      if (!rootRef.current?.contains(event.target)) setOpen(false);
-    };
-    const onKeyDown = (event) => {
-      if (event.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    window.addEventListener("resize", updateMenuPosition);
-    window.addEventListener("scroll", updateMenuPosition, true);
-    return () => {
-      document.removeEventListener("mousedown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-      window.removeEventListener("resize", updateMenuPosition);
-      window.removeEventListener("scroll", updateMenuPosition, true);
-    };
-  }, [open, updateMenuPosition]);
-
-  const choose = (industryId) => {
-    onChange(industryId);
-    setOpen(false);
-    setQuery("");
-  };
-
-  const toggle = () => {
-    if (!open) updateMenuPosition();
-    setOpen((current) => !current);
-  };
-
-  return (
-    <div className="nodaji-field">
-      <span className="nodaji-step-label"><b>1</b> 어떤 업종을 준비하고 있나요?</span>
-      <div className="nodaji-industry-picker" ref={rootRef}>
-        <button
-          type="button"
-          className={`nodaji-industry-trigger${open ? " open" : ""}`}
-          onClick={toggle}
-          ref={triggerRef}
-          aria-haspopup="listbox"
-          aria-expanded={open}
-        >
-          <span className="nodaji-industry-icon material-symbols-outlined" aria-hidden="true">storefront</span>
-          <span className="nodaji-industry-current">
-            <small>선택한 업종</small>
-            <strong>{selected?.name ?? "업종을 선택해주세요"}</strong>
-          </span>
-          {selected && <em>전체 {totalAreaCount}곳 확인</em>}
-          <span className="nodaji-industry-chevron material-symbols-outlined" aria-hidden="true">expand_more</span>
-        </button>
-
-        {open && menuPosition && (
-          <div
-            className={`nodaji-industry-menu${menuPosition.pointsRight ? " points-right" : ""}`}
-            style={{
-              left: menuPosition.left,
-              top: menuPosition.top,
-              width: menuPosition.width,
-              maxHeight: menuPosition.maxHeight,
-            }}
-          >
-            <label className="nodaji-industry-search">
-              <span className="material-symbols-outlined" aria-hidden="true">search</span>
-              <input
-                autoFocus
-                value={query}
-                onChange={(event) => setQuery(event.target.value)}
-                placeholder="업종 이름으로 검색"
-                aria-label="업종 검색"
-              />
-            </label>
-            <div className="nodaji-industry-options" role="listbox" aria-label="업종 목록">
-              {filtered.map((industry) => {
-                const coverage = coverageByIndustry[industry.id] ?? { observed: 0, sufficient: 0 };
-                return (
-                  <button
-                    key={industry.id}
-                    type="button"
-                    role="option"
-                    aria-selected={industry.id === value}
-                    className={industry.id === value ? "active" : ""}
-                    onClick={() => choose(industry.id)}
-                  >
-                    <span>
-                      <b>{industry.name}</b>
-                      <small>관측 {coverage.observed}곳 · 근거 충분 {coverage.sufficient}곳</small>
-                    </span>
-                    <span className="material-symbols-outlined" aria-hidden="true">
-                      {industry.id === value ? "check_circle" : "arrow_forward"}
-                    </span>
-                  </button>
-                );
-              })}
-              {!filtered.length && <p>검색 결과가 없습니다.</p>}
-            </div>
-          </div>
-        )}
-      </div>
     </div>
   );
 }
@@ -448,6 +316,15 @@ export default function BrowsePage() {
   const recommendationQuery = usePublicQuery(industryId ? `/api/recommend/areas?industry_id=${industryId}&preset=${encodeURIComponent(preset)}&limit=30` : null);
   const { data: recommendations, loading: recommendationLoading } = recommendationQuery;
   const areaFilterSet = useMemo(() => new Set(areaFilterIds), [areaFilterIds]);
+  // 업종·지역 선택기는 같은 FloatingPicker를 쓴다. 목록은 여기서 한 번만 만든다.
+  const industryOptions = useMemo(() => (options?.industries ?? [])
+    .filter((industry) => coverageByIndustry[industry.id]?.observed)
+    .map((industry) => {
+      const coverage = coverageByIndustry[industry.id] ?? { observed: 0, sufficient: 0 };
+      return { id: industry.id, name: industry.name, hint: `관측 ${coverage.observed}곳 · 근거 충분 ${coverage.sufficient}곳` };
+    }), [options, coverageByIndustry]);
+  const areaOptions = useMemo(() => (options?.areas ?? [])
+    .map((area) => ({ id: area.id, name: area.name, hint: `관측 업종 ${area.industries?.length ?? 0}개` })), [options]);
   const recommendationResults = useMemo(() => (recommendations?.results ?? []).filter((item) => (
     !areaFilterSet.size || areaFilterSet.has(item.area_id)
   )), [recommendations, areaFilterSet]);
@@ -796,20 +673,40 @@ export default function BrowsePage() {
               setDrawerMode(key === "area" && areaId ? "industries" : null);
             }}>{label}</button>)}
         </div>
-        {entryMode !== "industry" && <label className="explore-area-picker">{entryMode === "direct" ? "원하는 지역" : "어느 지역에서 시작할까요?"}
-          <select value={areaId ?? ""} onChange={(event) => entryMode === "direct" ? setAreaId(Number(event.target.value)) : chooseAreaFirst(Number(event.target.value))}>
-            <option value="" disabled>읍면동 선택</option>
-            {(options?.areas ?? []).map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
-          </select>
-          {mapData && <small className="explore-map-industry">현재 지도 표시 업종: {mapData.industry_name}</small>}
-        </label>}
-        {entryMode !== "area" && <IndustryPicker
-          industries={(options?.industries ?? []).filter((industry) => coverageByIndustry[industry.id]?.observed)}
-          coverageByIndustry={coverageByIndustry}
-          totalAreaCount={options?.areas?.length ?? 0}
-          value={industryId}
-          onChange={chooseIndustry}
-        />}
+        {entryMode !== "industry" && (
+          <div className="nodaji-field">
+            <span className="nodaji-step-label">{entryMode === "direct" ? "원하는 지역" : "어느 지역에서 시작할까요?"}</span>
+            <FloatingPicker
+              icon="location_on"
+              label="선택한 지역"
+              placeholder="읍면동 선택"
+              options={areaOptions}
+              value={areaId}
+              onChange={(nextId) => (entryMode === "direct" ? setAreaId(nextId) : chooseAreaFirst(nextId))}
+              searchPlaceholder="읍면동 이름으로 검색"
+              searchLabel="읍면동 검색"
+              listLabel="읍면동 목록"
+            />
+            {mapData && <small className="explore-map-industry">현재 지도 표시 업종: {mapData.industry_name}</small>}
+          </div>
+        )}
+        {entryMode !== "area" && (
+          <div className="nodaji-field">
+            <span className="nodaji-step-label"><b>1</b> 어떤 업종을 준비하고 있나요?</span>
+            <FloatingPicker
+              icon="storefront"
+              label="선택한 업종"
+              placeholder="업종을 선택해주세요"
+              badge={`전체 ${options?.areas?.length ?? 0}곳 확인`}
+              options={industryOptions}
+              value={industryId}
+              onChange={chooseIndustry}
+              searchPlaceholder="업종 이름으로 검색"
+              searchLabel="업종 검색"
+              listLabel="업종 목록"
+            />
+          </div>
+        )}
 
         <PriorityPicker data={presetOptions} value={preset} onChange={choosePreset} />
 

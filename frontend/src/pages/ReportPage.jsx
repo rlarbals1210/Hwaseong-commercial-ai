@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import PublicNav from "../components/PublicNav";
+import SearchableSelect from "../components/SearchableSelect";
 import { apiFetchJson, describeApiError } from "../lib/api";
 
 const SECTION_TONES = {
@@ -123,18 +124,12 @@ export default function ReportPage() {
 
         <section className="card report-controls" style={{ marginTop: 24, padding: 20 }}>
           <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
-            <label className="t-caption" style={{ display: "grid", gap: 7, color: "var(--ink-muted)" }}>
-              업종
-              <select value={industryId ?? ""} onChange={(event) => setIndustryId(Number(event.target.value))}>
-                {(options?.industries ?? []).map((industry) => <option key={industry.id} value={industry.id}>{industry.name}</option>)}
-              </select>
-            </label>
-            <label className="t-caption" style={{ display: "grid", gap: 7, color: "var(--ink-muted)" }}>
-              읍면동
-              <select value={areaId ?? ""} onChange={(event) => setAreaId(Number(event.target.value))}>
-                {availableAreas.map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
-              </select>
-            </label>
+            <SearchableSelect label="업종" icon="storefront" placeholder="업종 선택"
+              options={(options?.industries ?? []).map((industry) => ({ value: industry.id, label: industry.name }))}
+              value={industryId ?? ""} onChange={setIndustryId} />
+            <SearchableSelect label="읍면동" icon="location_on" unit="곳" placeholder="읍면동 선택"
+              options={availableAreas.map((area) => ({ value: area.id, label: area.name }))}
+              value={areaId ?? ""} onChange={setAreaId} />
             <label className="t-caption" style={{ display: "grid", gap: 7, color: "var(--ink-muted)" }}>
               판단 기준
               <select value={preset} onChange={(event) => setPreset(event.target.value)}>

@@ -130,13 +130,9 @@ function RankingTable({ rows, loading, error, category, categories, categoryErro
               </button>
             ))}
           </div>
-          <label className="t-caption" style={{ color: "var(--ink-secondary)", fontWeight: 600 }}>업종</label>
-          <select value={category} onChange={(e) => onCategoryChange(e.target.value)} style={{ minWidth: 180 }}>
-            <option value="">전체 업종</option>
-            {categories.map((c) => (
-              <option key={c} value={c}>{c}</option>
-            ))}
-          </select>
+          <SearchableSelect label="업종" icon="storefront"
+            options={categories.map((c) => ({ value: c, label: c }))}
+            value={category} emptyLabel="전체 업종" onChange={onCategoryChange} />
           {/* 서랍으로 열리는 표라 닫는 길이 표 안에도 있어야 한다. 지도 위 버튼까지
               마우스를 올려보내지 않게 한다. */}
           {onClose && (
