@@ -24,14 +24,14 @@ const EMPTY_DATA = {
 const QUADRANT_META = {
   Q1: {
     axis: "위험 기준 이상 × 영향 큼",
-    label: "우선 현장 확인",
+    label: "우선 검토",
     tone: "var(--error)",
     soft: "var(--error-soft)",
     desc: "위험 등급이고 영향 점포가 중위값 이상인 상권",
   },
   Q2: {
     axis: "위험 기준 이상 × 영향 작음",
-    label: "개별 현장 확인",
+    label: "개별 검토",
     tone: "var(--accent-orange)",
     soft: "var(--orange-soft)",
     desc: "위험 등급이고 영향 점포가 중위값 미만인 상권",
@@ -344,6 +344,9 @@ export default function PolicyPage() {
   const [data, setData] = useState(EMPTY_DATA);
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("");
+  // 담당자는 시 전체가 아니라 담당 구역만 본다. 조기경보와 같은 목록(/api/analysis/dongs)을 쓴다.
+  const [dong, setDong] = useState("");
+  const [dongs, setDongs] = useState([]);
   const [error, setError] = useState("");
   const [selectedQuadrant, setSelectedQuadrant] = useState(null);
   const { categories, error: categoryError } = useCategories("policy");
@@ -351,8 +354,17 @@ export default function PolicyPage() {
   const { meta: gradeMeta, sampleMin } = useGradeNotice();
 
   useEffect(() => {
+    let alive = true;
+    apiFetchJson("/api/analysis/dongs")
+      .then((d) => { if (alive) setDongs(Array.isArray(d.dongs) ? d.dongs : []); })
+      .catch(() => { if (alive) setDongs([]); });
+    return () => { alive = false; };
+  }, []);
+
+  useEffect(() => {
     const params = new URLSearchParams();
     if (category) params.set("category", category);
+    if (dong) params.set("dong", dong);
     apiFetchJson(`/api/policy/inspection-priority?${params}`)
       .then((result) => {
         if (!["Q1", "Q2", "Q3", "Q4"].every((key) => Array.isArray(result[key]))) {
@@ -365,7 +377,7 @@ export default function PolicyPage() {
         setError(describeApiError(err));
       })
       .finally(() => setLoading(false));
-  }, [category]);
+  }, [category, dong]);
 
   const allItems = QUADRANT_ORDER.flatMap((key) => data[key]);
   const total = allItems.length;
@@ -383,8 +395,8 @@ export default function PolicyPage() {
   return (
     <div className="official-page official-policy-page">
       <PageHeader
-        title="현장 확인 우선순위"
-        desc="최근 1년 누적 폐업률(4분기 합산 관측치) × 영향 점포 수 기준 확인 순서입니다."
+        title="지원 검토 우선순위"
+        desc="최근 1년 누적 폐업률(4분기 합산 관측치) × 영향 점포 수 기준 검토 순서입니다."
       />
 
       {/* 대시보드의 예측 순위와 이 화면의 관측 사분면은 서로 다른 질문에 답한다. */}
@@ -408,30 +420,50 @@ export default function PolicyPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 16 }}>
           <StatCard label="분석 대상 읍면동" value={dongCount} unit="개" />
           <StatCard label="영향 점포 수" value={affectedStores.toLocaleString()} unit="개소" tone="var(--error)" />
-          <StatCard label="우선 현장 확인" value={data.Q1.length} unit="개" tone="var(--primary)" />
+          <StatCard label="우선 검토" value={data.Q1.length} unit="개" tone="var(--primary)" />
           <StatCard label="전체 분석 건수" value={total} unit="건" />
         </div>
       )}
 
       <div style={{ display: "flex", gap: 16, alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", marginBottom: 16 }}>
         <div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <label className="t-caption" style={{ color: "var(--ink-secondary)", fontWeight: 600 }}>업종</label>
-            <select
-              value={category}
-              onChange={(e) => {
-                setLoading(true);
-                setError("");
-                setSelectedQuadrant(null);
-                setCategory(e.target.value);
-              }}
-              style={{ minWidth: 180 }}
-            >
-              <option value="">전체 업종</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
+          <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <label className="t-caption" style={{ color: "var(--ink-secondary)", fontWeight: 600 }}>읍면동</label>
+              <select
+                value={dong}
+                onChange={(e) => {
+                  setLoading(true);
+                  setError("");
+                  setSelectedQuadrant(null);
+                  setDong(e.target.value);
+                }}
+                style={{ minWidth: 140 }}
+              >
+                <option value="">전체 읍면동</option>
+                {dongs.map((d) => (
+                  <option key={d} value={d}>{d}</option>
+                ))}
+              </select>
+            </div>
+            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+              <label className="t-caption" style={{ color: "var(--ink-secondary)", fontWeight: 600 }}>업종</label>
+              <select
+                value={category}
+                onChange={(e) => {
+                  setLoading(true);
+                  setError("");
+                  setSelectedQuadrant(null);
+                  setCategory(e.target.value);
+                }}
+                style={{ minWidth: 180 }}
+              >
+                <option value="">전체 업종</option>
+                {categories.map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </select>
+            </div>
           </div>
           <div className="t-caption" style={{ marginTop: 7, color: categoryError ? "var(--error)" : "var(--ink-faint)" }}>
             {categoryError
@@ -442,8 +474,8 @@ export default function PolicyPage() {
 
         <button className="btn-utility" onClick={() =>
             downloadCsv({
-              filename: "화성시_현장확인_우선순위",
-              subtitle: "현장 확인 우선순위 — 관측 폐업률 x 영향 점포 수",
+              filename: "화성시_지원검토_우선순위",
+              subtitle: "지원 검토 우선순위 — 관측 폐업률 x 영향 점포 수",
               headers: CSV_HEADERS,
               rows: csvRows(data),
               meta: gradeMeta,
@@ -460,10 +492,10 @@ export default function PolicyPage() {
       ) : error ? (
         <EmptyState icon="error" title={error} tone="var(--error)" />
       ) : total === 0 ? (
-        category ? (
+        category || dong ? (
           <EmptyState
             icon="filter_alt_off"
-            title="선택한 업종은 분석 가능 표본이 부족합니다"
+            title="선택한 조건에 해당하는 상권이 없습니다"
             desc={`최신 분기 점포 수가 ${sampleMin}개 미만이라 통계 판단을 보류합니다.`}
           />
         ) : (
@@ -504,10 +536,10 @@ export default function PolicyPage() {
             lightbulb
           </span>
           <p className="t-body-sm" style={{ margin: 0, color: "var(--ink-secondary)", lineHeight: 1.65 }}>
-            우선 현장 확인군 중 <b style={{ color: "var(--on-surface)" }}>{topQ1.dong} · {topQ1.category}</b>의 최근 1년 누적 폐업률이{" "}
+            우선 검토군 중 <b style={{ color: "var(--on-surface)" }}>{topQ1.dong} · {topQ1.category}</b>의 최근 1년 누적 폐업률이{" "}
             <b style={{ color: "var(--error)", fontVariantNumeric: "tabular-nums" }}>{displayPct(topQ1.actual_closure_rate_pct)}%</b>로 가장 높습니다.
-            해당 상권부터 현장 확인을 우선 검토하세요.{" "}
-            <span style={{ color: "var(--ink-muted)" }}>지원 여부는 현장 확인 결과에 따라 담당자가 판단합니다.</span>
+            해당 상권부터 지원 여부를 우선 검토하세요.{" "}
+            <span style={{ color: "var(--ink-muted)" }}>지원 여부는 담당자가 최종 판단합니다.</span>
           </p>
         </div>
       )}

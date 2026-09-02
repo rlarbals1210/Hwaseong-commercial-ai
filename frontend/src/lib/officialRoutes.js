@@ -17,9 +17,9 @@ export const OFFICIAL_ROUTES = [
   },
   {
     path: "/policy",
-    label: "현장 확인 우선순위",
+    label: "지원 검토 우선순위",
     icon: "grid_view",
-    summary: "관측된 폐업률과 영향 점포 수로 확인 순서를 정합니다.",
+    summary: "관측된 폐업률과 영향 점포 수로 검토 순서를 정합니다.",
   },
   {
     path: "/blindspots",
