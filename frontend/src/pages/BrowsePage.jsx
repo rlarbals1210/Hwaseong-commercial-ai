@@ -735,8 +735,6 @@ export default function BrowsePage() {
           onChange={chooseIndustry}
         />}
 
-        {entryMode === "industry" && <AreaFilter areas={options?.areas ?? []} selectedIds={areaFilterIds} onChange={setAreaFilterIds} />}
-
         <PriorityPicker data={presetOptions} value={preset} onChange={choosePreset} />
 
         {mapData && (

@@ -1,5 +1,4 @@
 .explore-area-filter { border: 1px solid #dbe4ef; border-radius: 10px; background: #fff; margin-bottom: 18px; color: #334155; }
-.nodaji-control-card > .explore-area-filter { margin: 16px 18px; }
 .explore-area-filter > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; cursor: pointer; list-style: none; }
 .explore-area-filter > summary::-webkit-details-marker { display: none; }
 .explore-area-filter > summary::after { content: "+"; font-size: 19px; color: #64748b; }
