@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 import { Link } from "react-router-dom";
-import { OFFICIAL_ROUTES } from "../lib/officialRoutes";
+import { OFFICIAL_HOME_PATH, OFFICIAL_ROUTES } from "../lib/officialRoutes";
 import { useAuth } from "../context/auth-context";
 
 // 공개 진입 화면. 두 트랙(공무원 / 예비 창업자)의 공통 현관이다.
@@ -297,8 +297,8 @@ export default function LandingPage() {
   const { isAuthenticated, role } = useAuth();
   const isOfficial = isAuthenticated && role === "official";
 
-  const enterHref = isOfficial ? "/dashboard" : "/login/official";
-  const enterLabel = isOfficial ? "대시보드로 이동" : "공무원 로그인";
+  const enterHref = isOfficial ? OFFICIAL_HOME_PATH : "/login/official";
+  const enterLabel = isOfficial ? "공무원 화면으로 이동" : "공무원 로그인";
 
   useEffect(() => {
     const targets = document.querySelectorAll(".lp-reveal");

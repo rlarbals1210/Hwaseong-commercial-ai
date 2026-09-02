@@ -4,16 +4,16 @@
 // App.jsx가 path로 짝지어 붙인다.
 export const OFFICIAL_ROUTES = [
   {
-    path: "/dashboard",
-    label: "조기경보 대시보드",
-    icon: "dashboard",
-    summary: "모델이 2분기 뒤 위험으로 본 상권을 순위로 봅니다.",
-  },
-  {
     path: "/map",
     label: "상권 위험 지도",
     icon: "map",
     summary: "읍면동별 위험 업종 비율을 지도에서 확인합니다.",
+  },
+  {
+    path: "/dashboard",
+    label: "조기경보 대시보드",
+    icon: "dashboard",
+    summary: "모델이 2분기 뒤 위험으로 본 상권을 순위로 봅니다.",
   },
   {
     path: "/policy",
@@ -44,9 +44,13 @@ export const DATA_MANAGEMENT_ROUTE = {
 
 const ALLOWED = new Set([...OFFICIAL_ROUTES.map((r) => r.path), DATA_MANAGEMENT_ROUTE.path]);
 
+// 공무원이 로그인한 직후 도착하는 화면. 지도에서 지역 전체를 먼저 보고 들어가는 흐름이라
+// 사이드바 첫 항목과 같은 곳을 가리킨다 — 둘이 어긋나면 "맨 위 메뉴"와 "첫 화면"이 달라진다.
+export const OFFICIAL_HOME_PATH = "/map";
+
 // 로그인 뒤 돌아갈 경로(?next=)는 반드시 이 화이트리스트를 통과해야 한다.
 // 외부 주소나 프로토콜 상대 경로(//example.com)가 들어오면 무시하고 기본값으로 보낸다.
-export function safeNext(next, fallback = "/dashboard") {
+export function safeNext(next, fallback = OFFICIAL_HOME_PATH) {
   if (typeof next !== "string" || !ALLOWED.has(next)) return fallback;
   return next;
 }

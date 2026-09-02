@@ -38,7 +38,7 @@ export default function OfficialLoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
   // 랜딩에서 기능 카드를 눌러 온 경우 그 화면으로 돌려보낸다. 화이트리스트를 통과하지
-  // 못한 값(외부 주소 등)은 조용히 대시보드로 떨어진다.
+  // 못한 값(외부 주소 등)은 조용히 기본 화면(상권 위험 지도)으로 떨어진다.
   const [searchParams] = useSearchParams();
   const next = safeNext(searchParams.get("next"));
   const nextRoute = officialRoute(next);
