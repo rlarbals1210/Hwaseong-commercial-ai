@@ -30,9 +30,9 @@ python -m ai.import_weekday_flow
 
 ### 검색 트렌드 키 연결 (선택)
 
-키가 없어도 다른 기능은 동작하며 검색 화면에 **API 키 연결 대기**가 표시됩니다. 나중에 [네이버 개발자센터](https://developers.naver.com/apps/#/register)에서 **데이터랩(검색어트렌드)** 사용이 설정된 애플리케이션을 등록한 뒤, 루트 `.env`에 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`을 입력하고 백엔드를 재시작하세요. NCP 지도 키와 다르며 `VITE_` 변수에 넣지 않습니다.
+키가 없어도 다른 기능은 동작하며 검색 화면에 **API 키 연결 대기**가 표시됩니다. 나중에 [NAVER API HUB](https://console.ncloud.com/naver-api-hub/application)에서 **Data Lab · 검색어트렌드** API를 추가한 Application을 등록한 뒤, 그 Application의 인증 정보(Client ID / Client Secret)를 루트 `.env`의 `NAVER_CLIENT_ID`, `NAVER_CLIENT_SECRET`에 입력하고 백엔드를 재시작하세요. NCP 지도 키와 다르며 `VITE_` 변수에 넣지 않습니다. (구 developers.naver.com 오픈 API는 NAVER API HUB로 이관됐고 기존 키는 2027-06-30에 정지됩니다.)
 
-`backend/services/search_interest.py`의 명시적 대표 검색어 매핑을 사용합니다(현재 20개 중분류 지원, 미지원 업종은 별도 안내). 원본 행정데이터나 지역 정보는 외부로 보내지 않고 일반 검색어와 기간만 전송합니다. 최근 완료된 12개 달을 조회하며 기간 내 최대값 100인 전국 상대지수로, 검색 건수·화성시 수요를 의미하지 않습니다. [네이버 검색 API 명세](https://developers.naver.com/docs/serviceapi/datalab/search/search.md)를 따릅니다.
+`backend/services/search_interest.py`의 명시적 대표 검색어 매핑을 사용합니다(현재 20개 중분류 지원, 미지원 업종은 별도 안내). 원본 행정데이터나 지역 정보는 외부로 보내지 않고 일반 검색어와 기간만 전송합니다. 최근 완료된 12개 달을 조회하며 기간 내 최대값 100인 전국 상대지수로, 검색 건수·화성시 수요를 의미하지 않습니다. `POST https://naverapihub.apigw.ntruss.com/search-trend/v1/search`([검색어 트렌드 조회 명세](https://api.ncloud-docs.com/docs/naver-api-hub-search-trend))를 따릅니다.
 
 외부 호출은 프로세스 메모리에 최대 128개, 정상 응답 24시간 캐시합니다. 실패 시 5분간 재호출을 억제하고 기존 같은 기간 자료가 있으면 이전 수집 시각과 함께 표시합니다. 서버 재시작 시 캐시가 비워지고 다중 worker 간에는 공유되지 않습니다. 자동 주기 수집은 하지 않습니다. 외부 인증 실패는 앱 로그인 실패(401/403)로 전달하지 않습니다.
 

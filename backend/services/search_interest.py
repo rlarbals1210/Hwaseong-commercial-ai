@@ -38,11 +38,13 @@ def complete_month_range(today=None):
 def _fetch(keywords, start, end):
     body = {"startDate": start.isoformat(), "endDate": end.isoformat(), "timeUnit": "month",
             "keywordGroups": [{"groupName": "업종 관심도", "keywords": keywords}]}
-    request = Request("https://openapi.naver.com/v1/datalab/search",
+    # 구 developers.naver.com 오픈 API는 NAVER API HUB로 이관됐다. 게이트웨이 헤더·경로만
+    # 다르고 요청 body와 응답 구조는 동일하다.
+    request = Request("https://naverapihub.apigw.ntruss.com/search-trend/v1/search",
                       data=json.dumps(body).encode(), method="POST", headers={
                           "Content-Type": "application/json",
-                          "X-Naver-Client-Id": os.environ["NAVER_CLIENT_ID"],
-                          "X-Naver-Client-Secret": os.environ["NAVER_CLIENT_SECRET"],
+                          "X-NCP-APIGW-API-KEY-ID": os.environ["NAVER_CLIENT_ID"],
+                          "X-NCP-APIGW-API-KEY": os.environ["NAVER_CLIENT_SECRET"],
                       })
     with urlopen(request, timeout=8) as response:
         payload = json.load(response)
