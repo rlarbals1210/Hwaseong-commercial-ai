@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import FitScorePanel from "../components/FitScorePanel";
 import AreaComparison from "../components/exploration/AreaComparison";
+import AreaFilter from "../components/exploration/AreaFilter";
 import { EMPTY_STARTUP_INPUT } from "../lib/startupCosts";
 import IndustryExplorer from "../components/exploration/IndustryExplorer";
 import ExplorationTools from "../components/exploration/ExplorationTools";
@@ -17,7 +18,7 @@ import { NAVER_CLIENT_ID, loadNaverMap, featureName, featurePaths, fitBoundsTigh
 const fmt = (value, digits = 1) => (
   typeof value === "number" && Number.isFinite(value) ? value.toFixed(digits) : "—"
 );
-const hasRecommendationEvidence = (item) => ["sufficient", "medium"].includes(item?.evidence_key);
+const hasRecommendationEvidence = (item) => Number.isFinite(item?.score) && ["sufficient", "medium"].includes(item?.evidence_key);
 
 const SAVED_INDUSTRY_KEY = "nodaji:browse:industry";
 const SAVED_PRESET_KEY = "nodaji:browse:preset";
@@ -291,28 +292,33 @@ function cautionFor(item) {
   return "AI 전망은 상대 비교이므로 임대료와 유동인구 등 현장 조건을 함께 확인해야 합니다.";
 }
 
-function RecommendationList({ data, priorityLabel, selectedAreaId, onOpenDetail }) {
+function RecommendationList({ data, results, areas, areaFilterIds, onAreaFilterChange, priorityLabel, selectedAreaId, onOpenDetail }) {
   if (!data) return null;
-  const scored = data.results.filter((item) => typeof item.score === "number");
+  const filtered = areaFilterIds.length > 0;
+  const scopeLabel = filtered ? "선택 지역" : "화성시 전체";
+  const scored = results.filter((item) => typeof item.score === "number");
   const featured = scored.filter(hasRecommendationEvidence).slice(0, 3);
   const tenure = (quarters) => (
     typeof quarters === "number" ? `${(quarters / 4).toFixed(1)}년` : "—"
   );
   return (
     <div className="nodaji-recommendations">
+      <AreaFilter areas={areas} selectedIds={areaFilterIds} onChange={onAreaFilterChange} />
       <div className="nodaji-drawer-heading">
         <div>
           <small>{data.quarter_label} 기준 · {data.industry_name} · {priorityLabel}</small>
-          <h2>{featured.length ? `추천 상권 ${featured.length}곳` : "추천 보류 · 전체 지역"}</h2>
+          <h2>{featured.length ? `추천 상권 ${featured.length}곳` : filtered ? "선택 범위 내 추천 보류" : "추천 보류 · 전체 지역"}</h2>
         </div>
-        <span>점수 비교 {data.ranked_count} / {data.total_count}곳</span>
+        <span>점수 비교 {scored.length} / {results.length}곳</span>
       </div>
 
-      <div className="nodaji-comparison-notice">{data.comparison_notice}</div>
+      <div className="nodaji-comparison-notice">{filtered
+        ? `선택한 ${results.length}곳 중 관측값이 있는 ${scored.length}곳을 비교합니다. 점수와 순위는 화성시 전체 기준이며, 필터에 따라 다시 계산하지 않습니다. 점포 ${data.sample_min}곳 미만은 점수를 50점 쪽으로 보정하고 미관측 지역은 순위를 매기지 않습니다.`
+        : data.comparison_notice}</div>
 
       {!featured.length && (
         <div role="alert" className="nodaji-drawer-alert">
-          이 업종은 근거 보통 이상인 지역이 없어 추천 3곳을 고르지 않았습니다. 아래 전체 지역 목록에서 근거 부족을 함께 확인해주세요.
+          {scopeLabel}에 이 업종의 추천 근거가 충분한 후보가 없습니다. {filtered ? "아래 목록에서 근거 수준을 확인하거나 읍면동 필터를 넓혀주세요." : "아래 목록에서 근거 수준을 확인하거나 다른 업종을 선택해주세요."}
         </div>
       )}
 
@@ -353,14 +359,14 @@ function RecommendationList({ data, priorityLabel, selectedAreaId, onOpenDetail 
 
       <details className="nodaji-all-area-list" open={!featured.length}>
         <summary>
-          <span>화성시 전체 {data.total_count}곳 목록</span>
-          <small>관측 {data.ranked_count}곳 · 미관측 {data.unobserved_count}곳</small>
+          <span>{scopeLabel} {results.length}곳 목록</span>
+          <small>관측 {scored.length}곳 · 미관측 {results.length - scored.length}곳</small>
         </summary>
         <div className="nodaji-all-area-head" aria-hidden="true">
-          <span>순위</span><span>지역과 근거</span><span>점수</span><span>상세</span>
+          <span>시 순위</span><span>지역과 근거</span><span>점수</span><span>상세</span>
         </div>
         <div className="nodaji-all-area-rows">
-          {data.results.map((item) => {
+          {results.map((item) => {
             const scoreable = typeof item.score === "number";
             return (
               <div key={item.area_id} className={scoreable ? "" : "unobserved"}>
@@ -377,7 +383,7 @@ function RecommendationList({ data, priorityLabel, selectedAreaId, onOpenDetail 
         </div>
       </details>
 
-      <p className="nodaji-drawer-note">{data.relative_notice} {data.disclaimer}</p>
+      <p className="nodaji-drawer-note">{data.relative_notice.replace("이 목록 안에서", "화성시 전체 지역 안에서")} {data.disclaimer}</p>
     </div>
   );
 }
@@ -410,6 +416,7 @@ export default function BrowsePage() {
   const [preset, setPreset] = useState("균형");
   const [drawerMode, setDrawerMode] = useState(null);
   const [entryMode, setEntryMode] = useState("industry");
+  const [areaFilterIds, setAreaFilterIds] = useState([]);
   const [compareAreaIds, setCompareAreaIds] = useState([null, null]);
   const [costDrafts, setCostDrafts] = useState({});
   const [focusVersion, setFocusVersion] = useState(0);
@@ -423,6 +430,16 @@ export default function BrowsePage() {
   const { data: clusterData } = usePublicQuery(industryId ? `/api/recommend/clusters?industry_id=${industryId}` : null);
   const recommendationQuery = usePublicQuery(industryId ? `/api/recommend/areas?industry_id=${industryId}&preset=${encodeURIComponent(preset)}&limit=30` : null);
   const { data: recommendations, loading: recommendationLoading } = recommendationQuery;
+  const areaFilterSet = useMemo(() => new Set(areaFilterIds), [areaFilterIds]);
+  const recommendationResults = useMemo(() => (recommendations?.results ?? []).filter((item) => (
+    !areaFilterSet.size || areaFilterSet.has(item.area_id)
+  )), [recommendations, areaFilterSet]);
+  const filteredRankedCount = recommendationResults.filter((item) => typeof item.score === "number").length;
+  const featuredCount = Math.min(3, recommendationResults.filter(hasRecommendationEvidence).length);
+  const showRecommendationScope = entryMode === "industry" || drawerMode === "recommendations";
+  const displayedRankedCount = recommendations ? (showRecommendationScope ? filteredRankedCount : recommendations.ranked_count) : "—";
+  const displayedTotalCount = showRecommendationScope && recommendations ? recommendationResults.length : mapData?.total_count;
+  const showFilteredMap = areaFilterSet.size > 0 && (drawerMode === "recommendations" || (!drawerMode && entryMode === "industry"));
   const hasObservedCell = options?.areas?.find((area) => area.id === areaId)?.industries.some((industry) => industry.id === industryId);
   const cellQuery = usePublicQuery(hasObservedCell ? `/api/public/cell?area_id=${areaId}&industry_id=${industryId}` : null);
   const { data: cell, loading: cellLoading } = cellQuery;
@@ -527,10 +544,10 @@ export default function BrowsePage() {
   const recommendedAreaIds = useMemo(
     () => new Set(
       drawerMode === "recommendations"
-        ? (recommendations?.results ?? []).filter(hasRecommendationEvidence).slice(0, 3).map((item) => item.area_id)
+        ? recommendationResults.filter(hasRecommendationEvidence).slice(0, 3).map((item) => item.area_id)
         : [],
     ),
-    [drawerMode, recommendations],
+    [drawerMode, recommendationResults],
   );
 
   const focusMapOnArea = useCallback((targetId) => {
@@ -563,10 +580,11 @@ export default function BrowsePage() {
     geojson.features.forEach((feature) => {
       const name = featureName(feature);
       const info = colorByName[name];
+      const inScope = !showFilteredMap || areaFilterSet.has(info?.area_id ?? options?.areas?.find((area) => area.name === name)?.id);
       const color = info?.color || "#c1c6d5";
-      const selected = info?.area_id === areaId;
+      const selected = inScope && info?.area_id === areaId;
       const recommended = recommendedAreaIds.has(info?.area_id);
-      const baseOpacity = !info ? 0.3 : info.sample_insufficient ? 0.5 : 0.74;
+      const baseOpacity = !inScope ? 0.08 : !info ? 0.3 : info.sample_insufficient ? 0.5 : 0.74;
 
       featurePaths(feature).forEach((path) => {
         const polygon = new window.naver.maps.Polygon({
@@ -576,8 +594,10 @@ export default function BrowsePage() {
           fillOpacity: selected ? 0.95 : baseOpacity,
           strokeColor: selected ? "#005db2" : recommended ? "#7c3aed" : "#fff",
           strokeWeight: selected ? 4 : recommended ? 2.5 : 1.5,
-          clickable: true,
+          clickable: inScope,
         });
+        polygonsRef.current.push(polygon);
+        if (!inScope) return;
         window.naver.maps.Event.addListener(polygon, "mouseover", (event) => {
           polygon.setOptions({ fillOpacity: 0.94 });
           setTooltip({ name, info, x: event.pointerEvent.clientX, y: event.pointerEvent.clientY });
@@ -593,15 +613,14 @@ export default function BrowsePage() {
           const clickedId = info?.area_id ?? options?.areas?.find((item) => item.name === name)?.id;
           if (clickedId) (entryMode === "area" ? chooseAreaFirst : selectArea)(clickedId);
         });
-        polygonsRef.current.push(polygon);
       });
     });
-  }, [areaId, colorByName, recommendedAreaIds, selectArea, options, entryMode, chooseAreaFirst]);
+  }, [areaId, colorByName, recommendedAreaIds, selectArea, options, entryMode, chooseAreaFirst, showFilteredMap, areaFilterSet]);
 
   const drawStoreClusters = useCallback((map) => {
     clusterMarkersRef.current.forEach((marker) => marker.setMap(null));
     clusterMarkersRef.current = [];
-    if (!clusterData?.clusters?.length || map.getZoom() < 14) return;
+    if (showFilteredMap || !clusterData?.clusters?.length || map.getZoom() < 14) return;
 
     clusterMarkersRef.current = clusterData.clusters.map((item) => {
       const diameter = Math.max(28, Math.min(48, 24 + Math.log2(item.store_count + 1) * 5));
@@ -615,7 +634,7 @@ export default function BrowsePage() {
         },
       });
     });
-  }, [clusterData]);
+  }, [clusterData, showFilteredMap]);
 
   useEffect(() => {
     if (!NAVER_CLIENT_ID || !mapData) return;
@@ -703,19 +722,19 @@ export default function BrowsePage() {
           onChange={chooseIndustry}
         />}
 
+        {entryMode === "industry" && <AreaFilter areas={options?.areas ?? []} selectedIds={areaFilterIds} onChange={setAreaFilterIds} />}
+
         <PriorityPicker data={presetOptions} value={preset} onChange={choosePreset} />
 
         {mapData && (
           <div className="nodaji-mini-stats">
-            <span><small>점수 비교</small><b>{recommendations?.ranked_count ?? "—"} / {recommendations?.total_count ?? mapData.total_count}곳</b></span>
-            <span><small>근거 충분 지역 평균</small><b>{fmt(mapData.industry_avg_pct)}%</b></span>
+            <span><small>{showRecommendationScope && areaFilterIds.length ? "선택 지역 점수 비교" : "점수 비교"}</small><b>{displayedRankedCount} / {displayedTotalCount}곳</b></span>
+            <span><small>시 전체 근거 충분 평균</small><b>{fmt(mapData.industry_avg_pct)}%</b></span>
           </div>
         )}
 
         {entryMode === "direct" ? <button type="button" className="nodaji-analyze-button" disabled={!areaId || !industryId} onClick={() => selectArea(areaId)}>선택한 지역·업종 상세 보기</button> : entryMode === "area" ? <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("industries")} disabled={!areaId}>이 지역에서 업종 탐색하기</button> : <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("recommendations")} disabled={!recommendations}>
-          {recommendations?.results?.some(hasRecommendationEvidence)
-            ? `추천 상권 ${Math.min(3, recommendations.results.filter(hasRecommendationEvidence).length)}곳 보기`
-            : "전체 지역 보기 · 추천 근거 부족"}
+          {featuredCount ? `추천 상권 ${featuredCount}곳 보기` : "지역 목록 보기 · 추천 근거 부족"}
         </button>}
 
         <button type="button" className="explore-open-comparison" onClick={openComparison} disabled={!industryId}>두 지역 따로 비교하기 →</button>
@@ -735,8 +754,10 @@ export default function BrowsePage() {
         <MapLegend
           mapData={mapData}
           recommendationVisible={drawerMode === "recommendations"}
-          recommendationCount={Math.min(3, recommendations?.results?.filter(hasRecommendationEvidence).length ?? 0)}
+          recommendationCount={featuredCount}
         />
+
+        {showFilteredMap && <p className="explore-filter-map-note">지도는 선택한 {areaFilterIds.length}개 읍면동을 강조합니다.</p>}
 
         {(queryError || mapError) && <div role="alert" className="nodaji-card-error">{queryError || mapError}</div>}
       </section>
@@ -759,6 +780,10 @@ export default function BrowsePage() {
                 ? <p className="nodaji-empty-copy">선택한 조건에 맞는 상권을 계산하는 중…</p>
                 : <RecommendationList
                     data={recommendations}
+                    results={recommendationResults}
+                    areas={options?.areas ?? []}
+                    areaFilterIds={areaFilterIds}
+                    onAreaFilterChange={setAreaFilterIds}
                     priorityLabel={presetOptions?.presets.find((item) => item.key === preset)?.label ?? preset}
                     selectedAreaId={areaId}
                     onOpenDetail={selectArea}
@@ -768,7 +793,7 @@ export default function BrowsePage() {
               <ExplorationTools key={`${areaId}:${industryId}`} areaId={areaId} industryId={industryId}
                 areaName={options?.areas?.find((area) => area.id === areaId)?.name}
                 industryName={options?.industries?.find((industry) => industry.id === industryId)?.name}
-                preset={preset} onSelect={selectArea} onBroaden={() => setDrawerMode("recommendations")}
+                preset={preset} onSelect={selectArea} onBroaden={() => { setAreaFilterIds([]); setDrawerMode("recommendations"); }}
                 activeTab={detailTab} onTabChange={setDetailTab}
                 costInput={costDrafts[costKey] ?? EMPTY_STARTUP_INPUT} onCostChange={updateCostDraft}>
                 <FitScorePanel
@@ -788,7 +813,7 @@ export default function BrowsePage() {
         <div className="nodaji-map-ticker">
           <span>공개 통계</span>
           <b>{mapData.industry_name}</b>
-          <em>{recommendations?.ranked_count ?? mapData.total_count}곳 점수 비교 · {mapData.measured_count}곳 근거 충분</em>
+          <em>{showFilteredMap ? `선택 ${recommendationResults.length}곳 · ${filteredRankedCount}곳 점수 비교` : `${recommendations?.ranked_count ?? mapData.total_count}곳 점수 비교 · ${mapData.measured_count}곳 근거 충분`}</em>
         </div>
       )}
 
