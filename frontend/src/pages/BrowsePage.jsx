@@ -701,7 +701,7 @@ export default function BrowsePage() {
         </div>
 
         <div className="explore-entry-mode" aria-label="탐색 시작 방법">
-          {[["industry", "업종부터 찾기"], ["area", "지역부터 찾기"], ["direct", "지역·업종 선택"]].map(([key, label]) =>
+          {[["industry", "업종부터 찾기"], ["area", "지역부터 찾기"], ["direct", "적합도 확인"]].map(([key, label]) =>
             <button type="button" key={key} aria-pressed={entryMode === key} onClick={() => {
               setEntryMode(key);
               setDrawerMode(key === "area" && areaId ? "industries" : null);
@@ -733,7 +733,7 @@ export default function BrowsePage() {
           </div>
         )}
 
-        {entryMode === "direct" ? <button type="button" className="nodaji-analyze-button" disabled={!areaId || !industryId} onClick={() => selectArea(areaId)}>선택한 지역·업종 상세 보기</button> : entryMode === "area" ? <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("industries")} disabled={!areaId}>이 지역에서 업종 탐색하기</button> : <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("recommendations")} disabled={!recommendations}>
+        {entryMode === "direct" ? <button type="button" className="nodaji-analyze-button" disabled={!areaId || !industryId} onClick={() => selectArea(areaId)}>적합도 확인하기</button> : entryMode === "area" ? <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("industries")} disabled={!areaId}>이 지역에서 업종 탐색하기</button> : <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("recommendations")} disabled={!recommendations}>
           {featuredCount ? `추천 상권 ${featuredCount}곳 보기` : "지역 목록 보기 · 추천 근거 부족"}
         </button>}
 
