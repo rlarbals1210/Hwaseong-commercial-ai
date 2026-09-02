@@ -550,7 +550,6 @@ function UploadHistory({ batches, uploads }) {
         <div>
           <h2 className="t-title">데이터 반영·업로드 이력</h2>
           <p className="t-body-sm">
-            운영에 반영된 적재 배치와, 올렸지만 아직 반영되지 않은 파일을 함께 보여줍니다.
             줄을 누르면 자세한 내역이 열립니다.
           </p>
         </div>

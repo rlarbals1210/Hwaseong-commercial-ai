@@ -37,7 +37,7 @@ export default function AreaComparison({ data, loading, error, areaIds, onChange
         <div className="explore-form-grid">{items.map((item) => <button key={item.area_id} type="button" onClick={() => onOpenDetail(item.area_id)}>{item.area_name} 상세 →</button>)}</div>
         {items.some((item) => item.evidence_key !== "sufficient") && <p className="explore-status">표본이 작거나 업종이 관측되지 않은 지역이 포함돼 있습니다. 표시되지 않은 값은 0을 뜻하지 않습니다.</p>}
       </>}
-      <p>같은 업종의 화성시 전체 점수를 그대로 비교합니다. 특정 점포의 성공 가능성을 뜻하지 않습니다.</p>
+      <p>같은 업종의 화성시 전체 점수를 그대로 비교합니다.</p>
     </>}
   </section>;
 }

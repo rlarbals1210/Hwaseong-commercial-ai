@@ -183,7 +183,7 @@ function RecommendationList({ data, results, areas, areaFilterIds, onAreaFilterC
       </div>
 
       <div className="nodaji-comparison-notice">{filtered
-        ? `선택한 ${results.length}곳 중 관측값이 있는 ${scored.length}곳을 비교합니다. 점수와 순위는 화성시 전체 기준이며, 필터에 따라 다시 계산하지 않습니다. 점포 ${data.sample_min}곳 미만은 점수를 50점 쪽으로 보정하고 미관측 지역은 순위를 매기지 않습니다.`
+        ? `선택한 ${results.length}곳 중 관측값이 있는 ${scored.length}곳을 비교합니다. 점수와 순위는 화성시 전체 기준이며, 필터에 따라 다시 계산하지 않습니다.`
         : data.comparison_notice}</div>
 
       {!featured.length && (

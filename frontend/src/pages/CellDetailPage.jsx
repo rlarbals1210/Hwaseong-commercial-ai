@@ -928,7 +928,7 @@ export default function CellDetailPage() {
                   )}
                 </div>
                 <div className="t-caption" style={{ color: "var(--ink-faint)" }}>
-                  개별 점포의 상호·연락처는 입력하지 마세요. 이 기록은 상권 단위입니다.
+                  개별 점포의 상호·연락처는 입력하지 마세요.
                 </div>
               </form>
             )}

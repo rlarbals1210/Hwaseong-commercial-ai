@@ -269,7 +269,7 @@ function ScatterPlot({ data, dangerThreshold, medianStores, activeQuadrant, onOp
         </text>
       </svg>
       <p className="policy-scatter-note">
-        기준선을 중앙에 두어 네 영역을 같은 크기로 표시했습니다. 각 영역에는 폐업률 상위 4개와 영향 점포 수 상위 4개만 점으로 표시하며, 전체 목록은 사분면을 클릭해 확인할 수 있습니다.
+        각 영역에는 폐업률 상위 4개와 영향 점포 수 상위 4개만 점으로 표시합니다. 전체 목록은 사분면을 클릭해 확인할 수 있습니다.
       </p>
     </div>
   );

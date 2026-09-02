@@ -225,9 +225,6 @@ export default function TrendPage() {
       <div style={{ maxWidth: 1120, margin: "0 auto", padding: "28px 24px 64px" }}>
         <PublicNav />
         <h1 className="t-h1">상권 트렌드</h1>
-        <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "8px 0 0", lineHeight: 1.7 }}>
-        상권의 분기별 트렌드를 확인해보세요.
-        </p>
         {error && <div role="alert" className="t-body-sm" style={{ color: "var(--accent-orange)", marginTop: 16 }}>{error}</div>}
 
         <section className="card" style={{ marginTop: 24, padding: 24 }}>

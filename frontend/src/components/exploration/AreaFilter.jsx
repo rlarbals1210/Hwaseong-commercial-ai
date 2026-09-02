@@ -21,7 +21,7 @@ export default function AreaFilter({ areas, selectedIds, onChange }) {
         {matches.map((area) => <label key={area.id}><input type="checkbox" checked={selectedIds.includes(area.id)} onChange={() => toggle(area.id)} /><span>{area.name}</span></label>)}
         {!matches.length && <p role="status">일치하는 읍면동이 없습니다.</p>}
       </div></fieldset>
-      <p>선택하면 바로 반영됩니다. 선택을 모두 해제하면 화성시 전체를 보여줍니다.</p>
+      <p>선택을 모두 해제하면 화성시 전체를 보여줍니다.</p>
     </div>
   </details>;
 }

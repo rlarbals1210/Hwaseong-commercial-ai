@@ -39,7 +39,6 @@ export default function CellPickerDialog({ title, options, value, onApply, onClo
       <header><h2 id={titleId}>{title}</h2><button type="button" onClick={onClose} aria-label="선택 창 닫기">
         <span className="material-symbols-outlined" aria-hidden="true">close</span>
       </button></header>
-      <p className="cell-picker-hint">지역과 업종을 고른 뒤 적용하세요. 취소하면 기존 선택을 유지합니다.</p>
       <div className="cell-picker-fields">
         <SearchableSelect label="읍면동" icon="location_on" unit="곳" options={areas.map((item) => ({ value: item.id, label: item.name }))}
           value={draft.areaId} placeholder="지역을 선택해주세요" onChange={chooseArea} />

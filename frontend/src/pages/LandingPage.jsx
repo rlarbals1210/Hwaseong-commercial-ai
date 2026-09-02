@@ -348,7 +348,6 @@ export default function LandingPage() {
 
           <p className="lp-hero-sub lp-reveal lp-d2">
             읍면동 × 업종 단위로 폐업 위험을 예측하고, 담당 공무원이 어디부터 확인할지 좁혀 줍니다.
-            시민이 행정을 찾아오게 하는 대신, 행정이 먼저 찾아가게 만드는 도구입니다.
           </p>
 
           <div className="lp-facts lp-reveal lp-d4">
@@ -367,7 +366,7 @@ export default function LandingPage() {
           <p className="lp-eyebrow lp-reveal">HOW IT WORKS</p>
           <h2 id="flow-heading" className="lp-section-title lp-reveal lp-d1">어떻게 작동하나요</h2>
           <p className="lp-section-desc lp-reveal lp-d2">
-            담당자가 분기마다 밟는 네 단계입니다. 각 단계가 하나의 화면에 대응합니다.
+            담당자가 분기마다 밟는 네 단계입니다.
           </p>
 
           <div className="lp-steps">
@@ -391,9 +390,6 @@ export default function LandingPage() {
         <div className="lp-section-inner">
           <p className="lp-eyebrow lp-reveal">PRINCIPLES</p>
           <h2 id="principles-heading" className="lp-section-title lp-reveal lp-d1">이 서비스가 하지 않는 것</h2>
-          <p className="lp-section-desc lp-reveal lp-d2">
-            행정에서 실제로 쓰이려면, 무엇을 할 수 있는지보다 무엇을 하지 않는지가 분명해야 합니다.
-          </p>
 
           <div className="lp-principle-grid">
             {PRINCIPLES.map((item, i) => (
@@ -434,7 +430,6 @@ export default function LandingPage() {
 
       <footer className="lp-footer">
         <p>제1회 화성 AI·DATA 기반 솔루션 경진대회 출품작 · 데이터 출처: 소상공인시장진흥공단 상가(상권)정보</p>
-        <p>모든 출력은 읍면동 × 업종 집계 단위입니다. AI는 확인 범위를 좁혀 줄 뿐, 최종 판단은 담당자가 합니다.</p>
       </footer>
     </div>
   );

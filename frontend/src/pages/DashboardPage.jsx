@@ -494,10 +494,9 @@ export default function DashboardPage() {
               <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "8px 0 0", lineHeight: 1.65 }}>
                 {lookupMode ? (
                   <>
-                    해당 조건의 상권을 순위와 무관하게 모두 표시합니다. 시 전체 예측 순위 기준
-                    상위 {meta?.validated_top_pct ?? 10}%
-                    {validatedRank ? `(${validatedRank}위)` : ""} 밖에 해당하는 상권은 흐리게
-                    표시하였으며, 해당 구간의 순서는 검증 대상이 아닙니다.
+                    해당 조건의 상권을 순위와 무관하게 모두 표시합니다. 시 전체 상위{" "}
+                    {meta?.validated_top_pct ?? 10}%{validatedRank ? `(${validatedRank}위)` : ""}{" "}
+                    밖은 흐리게 표시했으며, 그 구간의 순서는 검증 대상이 아닙니다.
                   </>
                 ) : (
                   <>

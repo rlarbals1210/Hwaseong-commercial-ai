@@ -555,9 +555,6 @@ export default function BlindspotPage() {
           title="판단 보류 범위"
           count={coverage?.items?.length ? `읍면동 ${coverage.items.length} · 업종 ${industries?.industry_total ?? "—"}` : undefined}
         />
-        <p className="t-caption" style={{ margin: "-6px 0 14px", color: "var(--ink-muted)", lineHeight: 1.65 }}>
-          커버율은 표본 기준을 충족해 등급을 계산할 수 있는 업종의 비율입니다. 낮다고 해서 위험한 지역은 아닙니다.
-        </p>
         {coverage?.zero_coverage_dongs?.length > 0 && (
           <p className="t-caption" style={{ margin: "0 0 14px", color: "var(--ink-secondary)" }}>
             <b>{coverage.zero_coverage_dongs.join(" · ")}</b>: 판단 가능한 업종 없음.

@@ -76,10 +76,6 @@ export default function BrowseIntroModal({ onClose }) {
           ))}
         </ol>
 
-        <p className="bim-note">
-          읍면동 × 업종 집계 기준입니다. 특정 점포나 상가의 성패는 예측하지 않습니다.
-        </p>
-
         <button type="button" className="bim-start" ref={startRef} onClick={onClose}>
           둘러보기 시작
         </button>
