@@ -39,6 +39,7 @@ from ..schemas import (
     RecommendationPresetsResponse,
     RecommendationScoreResponse,
     StoreClusterResponse,
+    NearbyRecommendationResponse,
 )
 from ..services import recommend as R
 from ..services.risk import SAMPLE_MIN, WINDOW_QUARTERS, pct, quarter_label
@@ -284,6 +285,34 @@ def recommend_areas(
         } for c in ranked],
         "relative_notice": _relative_notice(),
         "disclaimer": DISCLAIMER,
+    }
+
+
+@router.get("/nearby", response_model=NearbyRecommendationResponse)
+def recommend_nearby(
+    area_id: int = Query(...),
+    industry_id: int = Query(...),
+    preset: str | None = Query(None),
+    db: Session = Depends(get_db),
+):
+    from ..services.area_neighbors import area_neighbors
+
+    area = db.get(AdminArea, area_id)
+    if area is None:
+        raise HTTPException(status_code=404, detail="해당 읍면동을 찾을 수 없습니다")
+    # 시 전체 점수를 만든 뒤 필터링한다. 인접 지역만 재정규화하면 상세 점수와 달라진다.
+    data = recommend_areas(industry_id=industry_id, preset=preset, limit=db.query(AdminArea).count(), db=db)
+    names = area_neighbors().get(area.area_name, set())
+    eligible = [item for item in data["results"]
+                if item["area_name"] in names and item["evidence_key"] == "sufficient"]
+    return {
+        "area_id": area_id, "area_name": area.area_name, "industry_id": industry_id,
+        "quarter_label": data["quarter_label"], "preset": data["preset"],
+        "neighbor_count": len(names), "eligible_count": len(eligible), "results": eligible[:3],
+        "notice": (
+            "행정구역 경계선을 공유하는 지역 중 같은 업종의 표본이 충분한 곳을 최대 3곳 표시합니다. "
+            "점수·순위는 화성시 전체 비교와 같습니다. 현재 지역보다 유리하다는 보장이나 이동거리 순위는 아닙니다."
+        ),
     }
 
 

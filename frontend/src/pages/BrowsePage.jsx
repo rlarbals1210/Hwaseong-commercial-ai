@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import FitScorePanel from "../components/FitScorePanel";
+import IndustryExplorer from "../components/exploration/IndustryExplorer";
+import ExplorationTools from "../components/exploration/ExplorationTools";
+import "../components/exploration/exploration.css";
+import usePublicQuery from "../hooks/usePublicQuery";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { NAVER_CLIENT_ID, loadNaverMap, featureName, featurePaths } from "../lib/naverMap";
 
@@ -286,7 +290,7 @@ function cautionFor(item) {
 }
 
 function ComparisonPanel({ data, areaIds }) {
-  const items = areaIds.map((id) => data.results.find((item) => item.area_id === id)).filter(Boolean);
+  const items = areaIds.map((id) => data?.results.find((item) => item.area_id === id)).filter(Boolean);
   if (!items.length) return null;
   if (items.length === 1) {
     return <div className="nodaji-compare-hint"><b>{items[0].area_name}</b>과 비교할 지역을 한 곳 더 담아주세요.</div>;
@@ -452,22 +456,27 @@ export default function BrowsePage() {
   const [options, setOptions] = useState(null);
   const [coverageByIndustry, setCoverageByIndustry] = useState({});
   const [industryId, setIndustryId] = useState(null);
-  const [mapData, setMapData] = useState(null);
-  const [clusterData, setClusterData] = useState(null);
   const [areaId, setAreaId] = useState(null);
-  const [cell, setCell] = useState(null);
-  const [cellLoading, setCellLoading] = useState(false);
   const [presetOptions, setPresetOptions] = useState(null);
   const [preset, setPreset] = useState("균형");
-  const [recommendations, setRecommendations] = useState(null);
-  const [recommendationLoading, setRecommendationLoading] = useState(true);
-  const [score, setScore] = useState(null);
-  const [scoreLoading, setScoreLoading] = useState(false);
   const [drawerMode, setDrawerMode] = useState(null);
+  const [entryMode, setEntryMode] = useState("industry");
   const [compareAreaIds, setCompareAreaIds] = useState([]);
   const [error, setError] = useState("");
   const [mapError, setMapError] = useState("");
   const [tooltip, setTooltip] = useState(null);
+
+  const mapQuery = usePublicQuery(industryId ? `/api/public/industry-map?industry_id=${industryId}` : null);
+  const { data: mapData } = mapQuery;
+  const { data: clusterData } = usePublicQuery(industryId ? `/api/recommend/clusters?industry_id=${industryId}` : null);
+  const recommendationQuery = usePublicQuery(industryId ? `/api/recommend/areas?industry_id=${industryId}&preset=${encodeURIComponent(preset)}&limit=30` : null);
+  const { data: recommendations, loading: recommendationLoading } = recommendationQuery;
+  const hasObservedCell = options?.areas?.find((area) => area.id === areaId)?.industries.some((industry) => industry.id === industryId);
+  const cellQuery = usePublicQuery(hasObservedCell ? `/api/public/cell?area_id=${areaId}&industry_id=${industryId}` : null);
+  const { data: cell, loading: cellLoading } = cellQuery;
+  const scoreQuery = usePublicQuery(areaId && industryId ? `/api/recommend/score?area_id=${areaId}&industry_id=${industryId}&preset=${encodeURIComponent(preset)}` : null);
+  const { data: score, loading: scoreLoading } = scoreQuery;
+  const queryError = error || mapQuery.error || recommendationQuery.error || cellQuery.error || scoreQuery.error;
 
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -477,37 +486,42 @@ export default function BrowsePage() {
   const boundsFitRef = useRef(false);
 
   const selectArea = useCallback((nextAreaId) => {
-    setCellLoading(true);
-    setScoreLoading(true);
     setAreaId(nextAreaId);
+    setCompareAreaIds([]);
     setDrawerMode("detail");
   }, []);
 
   const showRecommendationOnMap = useCallback((nextAreaId) => {
-    setCellLoading(true);
-    setScoreLoading(true);
     setAreaId(nextAreaId);
   }, []);
 
   const chooseIndustry = useCallback((nextIndustryId) => {
     setAreaId(null);
-    setCell(null);
-    setScore(null);
     setDrawerMode(null);
     setCompareAreaIds([]);
     setError("");
-    setRecommendationLoading(true);
     setIndustryId(nextIndustryId);
     remember(SAVED_INDUSTRY_KEY, nextIndustryId);
   }, []);
 
   const choosePreset = useCallback((nextPreset) => {
-    setRecommendationLoading(true);
-    if (areaId) setScoreLoading(true);
     setPreset(nextPreset);
     setCompareAreaIds([]);
     remember(SAVED_PRESET_KEY, nextPreset);
-  }, [areaId]);
+  }, []);
+
+  const chooseAreaFirst = useCallback((nextAreaId) => {
+    setAreaId(nextAreaId);
+    setCompareAreaIds([]);
+    setDrawerMode("industries");
+  }, []);
+
+  const chooseIndustryInArea = (nextIndustryId) => {
+    setIndustryId(nextIndustryId);
+    remember(SAVED_INDUSTRY_KEY, nextIndustryId);
+    setCompareAreaIds([]);
+    setDrawerMode("detail");
+  };
 
   const toggleCompareArea = useCallback((nextAreaId) => {
     setCompareAreaIds((current) => (
@@ -548,44 +562,6 @@ export default function BrowsePage() {
       })
       .catch((err) => setError(describeApiError(err)));
   }, []);
-
-  useEffect(() => {
-    if (!industryId) return;
-    apiFetchJson(`/api/public/industry-map?industry_id=${industryId}`)
-      .then(setMapData)
-      .catch((err) => { setMapData(null); setError(describeApiError(err)); });
-  }, [industryId]);
-
-  useEffect(() => {
-    if (!industryId) return;
-    apiFetchJson(`/api/recommend/clusters?industry_id=${industryId}`)
-      .then(setClusterData)
-      .catch(() => setClusterData(null));
-  }, [industryId]);
-
-  useEffect(() => {
-    if (!industryId) return;
-    apiFetchJson(`/api/recommend/areas?industry_id=${industryId}&preset=${encodeURIComponent(preset)}&limit=30`)
-      .then(setRecommendations)
-      .catch((err) => { setRecommendations(null); setError(describeApiError(err)); })
-      .finally(() => setRecommendationLoading(false));
-  }, [industryId, preset]);
-
-  useEffect(() => {
-    if (!areaId || !industryId) return;
-    apiFetchJson(`/api/public/cell?area_id=${areaId}&industry_id=${industryId}`)
-      .then(setCell)
-      .catch((err) => { setCell(null); setError(describeApiError(err)); })
-      .finally(() => setCellLoading(false));
-  }, [areaId, industryId]);
-
-  useEffect(() => {
-    if (!areaId || !industryId) return;
-    apiFetchJson(`/api/recommend/score?area_id=${areaId}&industry_id=${industryId}&preset=${encodeURIComponent(preset)}`)
-      .then(setScore)
-      .catch((err) => { setScore(null); setError(describeApiError(err)); })
-      .finally(() => setScoreLoading(false));
-  }, [areaId, industryId, preset]);
 
   const colorByName = useMemo(
     () => Object.fromEntries((mapData?.areas ?? []).map((area) => [area.area_name, area])),
@@ -640,12 +616,13 @@ export default function BrowsePage() {
           setTooltip(null);
         });
         window.naver.maps.Event.addListener(polygon, "click", () => {
-          if (info) selectArea(info.area_id);
+          const clickedId = info?.area_id ?? options?.areas?.find((item) => item.name === name)?.id;
+          if (clickedId) (entryMode === "area" ? chooseAreaFirst : selectArea)(clickedId);
         });
         polygonsRef.current.push(polygon);
       });
     });
-  }, [areaId, colorByName, recommendedAreaIds, selectArea]);
+  }, [areaId, colorByName, recommendedAreaIds, selectArea, options, entryMode, chooseAreaFirst]);
 
   const drawStoreClusters = useCallback((map) => {
     clusterMarkersRef.current.forEach((marker) => marker.setMap(null));
@@ -724,14 +701,26 @@ export default function BrowsePage() {
           <span>{mapData?.quarter_label ?? "데이터 불러오는 중"}</span>
         </div>
 
-
-        <IndustryPicker
+        <div className="explore-entry-mode" aria-label="탐색 시작 방법">
+          {[["industry", "업종부터 찾기"], ["area", "지역부터 찾기"]].map(([key, label]) =>
+            <button type="button" key={key} aria-pressed={entryMode === key} onClick={() => {
+              setEntryMode(key);
+              setDrawerMode(key === "area" && areaId ? "industries" : null);
+            }}>{label}</button>)}
+        </div>
+        {entryMode === "area" ? <label className="explore-area-picker">어느 지역에서 시작할까요?
+          <select value={areaId ?? ""} onChange={(event) => chooseAreaFirst(Number(event.target.value))}>
+            <option value="" disabled>읍면동 선택</option>
+            {(options?.areas ?? []).map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
+          </select>
+          {mapData && <small className="explore-map-industry">현재 지도 표시 업종: {mapData.industry_name}</small>}
+        </label> : <IndustryPicker
           industries={(options?.industries ?? []).filter((industry) => coverageByIndustry[industry.id]?.observed)}
           coverageByIndustry={coverageByIndustry}
           totalAreaCount={options?.areas?.length ?? 0}
           value={industryId}
           onChange={chooseIndustry}
-        />
+        />}
 
         <PriorityPicker data={presetOptions} value={preset} onChange={choosePreset} />
 
@@ -742,11 +731,11 @@ export default function BrowsePage() {
           </div>
         )}
 
-        <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("recommendations")} disabled={!recommendations}>
+        {entryMode === "area" ? <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("industries")} disabled={!areaId}>이 지역에서 업종 탐색하기</button> : <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("recommendations")} disabled={!recommendations}>
           {recommendations?.results?.some(hasRecommendationEvidence)
             ? `추천 ${Math.min(3, recommendations.results.filter(hasRecommendationEvidence).length)}곳과 전체 비교 보기`
             : "전체 비교 보기 · 추천 근거 부족"}
-        </button>
+        </button>}
 
         {selectedMapArea && (
           <div className="nodaji-selected-summary">
@@ -766,17 +755,19 @@ export default function BrowsePage() {
           recommendationCount={Math.min(3, recommendations?.results?.filter(hasRecommendationEvidence).length ?? 0)}
         />
 
-        {(error || mapError) && <div role="alert" className="nodaji-card-error">{error || mapError}</div>}
+        {(queryError || mapError) && <div role="alert" className="nodaji-card-error">{queryError || mapError}</div>}
       </section>
 
       {drawerMode && (
         <aside className="nodaji-map-drawer" aria-label={drawerMode === "recommendations" ? "맞춤 상권 추천" : "선택 상권 상세"}>
-          <div className="nodaji-drawer-tabs">
+          <div className="nodaji-drawer-tabs explore-drawer-tabs">
+            <button type="button" className={drawerMode === "industries" ? "active" : ""} onClick={() => setDrawerMode("industries")} disabled={!areaId}>업종 탐색</button>
             <button type="button" className={drawerMode === "recommendations" ? "active" : ""} onClick={() => setDrawerMode("recommendations")}>맞춤 추천</button>
             <button type="button" className={drawerMode === "detail" ? "active" : ""} onClick={() => setDrawerMode("detail")} disabled={!areaId}>선택 상권</button>
             <button type="button" className="nodaji-drawer-close" onClick={() => setDrawerMode(null)} aria-label="패널 닫기">×</button>
           </div>
           <div className="nodaji-drawer-scroll">
+            {drawerMode === "industries" && <IndustryExplorer areaId={areaId} preset={preset} onSelect={chooseIndustryInArea} />}
             {drawerMode === "recommendations" && (
               recommendationLoading
                 ? <p className="nodaji-empty-copy">선택한 조건에 맞는 상권을 계산하는 중…</p>
@@ -791,7 +782,13 @@ export default function BrowsePage() {
                   />
             )}
             {drawerMode === "detail" && (
-              <>
+              <ExplorationTools key={`${areaId}:${industryId}`} areaId={areaId} industryId={industryId}
+                areaName={options?.areas?.find((area) => area.id === areaId)?.name}
+                industryName={options?.industries?.find((industry) => industry.id === industryId)?.name}
+                preset={preset} onSelect={selectArea} onBroaden={() => setDrawerMode("recommendations")}
+                onCompare={(otherId) => setCompareAreaIds([areaId, otherId])}
+                comparisonKey={compareAreaIds.length === 2 ? compareAreaIds.join(":") : ""}
+                comparison={compareAreaIds.length === 2 && !recommendationLoading && <ComparisonPanel data={recommendations} areaIds={compareAreaIds} />}>
                 <FitScorePanel
                   data={score}
                   loading={scoreLoading}
@@ -799,7 +796,7 @@ export default function BrowsePage() {
                 />
                 <ObservationSummary cell={cell} loading={cellLoading} />
                 {cell?.support_notice && <p className="nodaji-drawer-note">{cell.support_notice}</p>}
-              </>
+              </ExplorationTools>
             )}
           </div>
         </aside>

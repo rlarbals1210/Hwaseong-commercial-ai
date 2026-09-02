@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .routers import (
     alerts, cells, compare, data_management, policy, analysis, auth, workflow, public, recommend,
-    trends, report,
+    trends, report, exploration,
 )
 
 app = FastAPI(title="화성시 소상공인 AI 정책지원 플랫폼", version="1.0.0")
@@ -41,6 +41,7 @@ app.include_router(public.router)
 app.include_router(recommend.router)
 app.include_router(trends.router)
 app.include_router(report.router)
+app.include_router(exploration.router)
 
 
 @app.get("/")

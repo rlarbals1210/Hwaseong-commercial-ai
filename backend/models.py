@@ -486,6 +486,23 @@ class PolicyOutcome(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
 
+class AreaWeekdayFlow(Base):
+    """월 안의 요일 패턴만 저장. 업종별 분할·시계열 성장률에 사용하지 않는다."""
+    __tablename__ = "area_weekday_flows"
+    __table_args__ = (
+        UniqueConstraint("area_id", "month", "weekday", name="uq_area_month_weekday"),
+        CheckConstraint("weekday >= 0 AND weekday <= 6", name="ck_flow_weekday"),
+        CheckConstraint("relative_index >= 0", name="ck_flow_index"),
+    )
+    id = Column(Integer, primary_key=True)
+    area_id = Column(Integer, ForeignKey("admin_areas.id"), nullable=False, index=True)
+    month = Column(String(7), nullable=False, index=True)
+    weekday = Column(Integer, nullable=False)
+    relative_index = Column(Float, nullable=False)
+    source_sha256 = Column(String(64), nullable=False)
+    imported_at = Column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
 class AreaPopulationQuarter(Base):
     """읍면동 배후인구(등록인구) 분기 시계열 — KOSIS 주민등록인구.
 

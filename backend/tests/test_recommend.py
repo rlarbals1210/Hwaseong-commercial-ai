@@ -103,7 +103,7 @@ def test_demand_supply_gap_is_a_scoring_axis():
     assert candidates[0].rank == 1
 
 
-def test_public_recommendation_never_returns_absolute_prediction():
+def test_public_recommendation_never_returns_absolute_prediction(monkeypatch):
     engine = create_engine("sqlite:///:memory:")
     Base.metadata.create_all(
         engine,
@@ -218,6 +218,16 @@ def test_public_recommendation_never_returns_absolute_prediction():
     )
     assert by_industry["results"][0]["score"] == detail["score"]
     assert "grade" not in by_industry["results"][0]
+    from backend.routers.recommend import recommend_nearby
+    from backend.schemas import NearbyRecommendationResponse
+    monkeypatch.setattr("backend.services.area_neighbors.area_neighbors", lambda: {"테스트1동": {"테스트2동", "테스트3동", "테스트4동"}})
+    nearby = NearbyRecommendationResponse.model_validate(recommend_nearby(
+        area_id=areas[0].id, industry_id=industry.id, preset="균형", db=session,
+    ))
+    assert len(nearby.results) == 2  # 소표본 인접 지역은 비교 후보에서 제외
+    for candidate in nearby.results:
+        original = next(item for item in payload["results"] if item["area_id"] == candidate.area_id)
+        assert (candidate.score, candidate.rank) == (original["score"], original["rank"])
     clusters = store_clusters(industry_id=industry.id, limit=100, db=session)
     assert clusters["clusters"] == [{"lat": 37.201, "lng": 127.001, "store_count": 3}]
     assert clusters["suppressed_store_count"] == 1

@@ -439,6 +439,54 @@ class RecommendationIndustryListResponse(BaseModel):
     disclaimer: str
 
 
+class NearbyRecommendationResponse(BaseModel):
+    area_id: int
+    area_name: str
+    industry_id: int
+    quarter_label: str
+    preset: str
+    neighbor_count: int
+    eligible_count: int
+    results: list[RecommendationAreaResult]
+    notice: str
+
+
+class WeekdayFlowPoint(BaseModel):
+    weekday: int
+    label: str
+    index: float
+
+
+class WeekdayFlowResponse(BaseModel):
+    area_id: int
+    area_name: str
+    status: Literal["ready", "no_data"]
+    month: str | None = None
+    points: list[WeekdayFlowPoint] = Field(default_factory=list)
+    weekend_vs_weekday_pct: float | None = None
+    source: str = "경기데이터드림 · 읍면동별 요일별 유동인구"
+    source_url: str = "https://data.gg.go.kr/portal/data/service/selectServicePage.do?infId=QG3PQ8O43NXGS62A95GO38124431&infSeq=1"
+    notice: str
+
+
+class SearchTrendPoint(BaseModel):
+    month: str
+    index: float
+
+
+class SearchTrendResponse(BaseModel):
+    industry_id: int
+    industry_name: str
+    status: Literal["ready", "stale", "no_data", "unsupported", "not_configured", "unavailable"]
+    keywords: list[str] = Field(default_factory=list)
+    start_date: str
+    end_date: str
+    fetched_at: datetime | None = None
+    points: list[SearchTrendPoint] = Field(default_factory=list)
+    message: str
+    notice: str = "네이버 전국 검색의 상대지수입니다. 기간 내 최대값=100이며 화성시 방문객·매출·검색 건수를 뜻하지 않습니다."
+
+
 class RecommendationScoreResponse(BaseModel):
     quarter_code: int
     quarter_label: str
