@@ -1,4 +1,17 @@
-"""조기경보 정렬 방식 재검증 — 모델 단독 vs 관측 단독 vs 앙상블.
+"""레거시 학습 정답 정렬 진단 — 관측 폐업률 과거 검증으로 사용하지 않는다.
+
+2026-09-03 재점검:
+이 스크립트의 cell_train_table.폐업률은 label_h2 평균(B+2 정답)이다.
+아래의 '관측'/'미래' 이름은 과거 출력 재현을 위한 레거시 명칭이며 실제 시점의
+관측 폐업률을 뜻하지 않는다. 최신 두 분기의 정답 NaN도 합계에서 0처럼 취급되고,
+2024Q3은 모델 validation 정답 완성(2024Q4)보다 이르다. 따라서 아래 역사적
+설명과 출력 수치를 시점 누수 없는 성능 검증으로 인용하지 않는다.
+
+현재의 관측 정의·제약·부분 비교는 docs/recommendation-score-audit.md와
+python -m ai.audit_recommendation_scores를 참조한다. 원본의 재현을 위해 아래
+레거시 계산은 유지하며, 새 스크립트 역시 운영 변경을 정당화하는 미사용 시험은 아니다.
+
+이하 레거시 진단의 작성 배경
 
 왜 이 스크립트가 있나
 ────────────────────────────────────────────────────────────────────────────
@@ -73,6 +86,11 @@ def _cumulative(df: pd.DataFrame, quarters: list[int]) -> pd.DataFrame:
 
 
 def main() -> None:
+    print(
+        "주의: 레거시 label_h2 진단입니다. 관측 폐업률·미사용 과거 시험이 아닙니다. "
+        "docs/recommendation-score-audit.md를 먼저 확인하세요.",
+        file=sys.stderr,
+    )
     if not MODEL_PKL.exists() or not CELL_TABLE.exists():
         raise SystemExit(
             f"필요한 파일이 없습니다:\n  {MODEL_PKL}\n  {CELL_TABLE}\n"
