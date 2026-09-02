@@ -14,10 +14,6 @@ import { useAuth } from "../context/auth-context";
 // 공개 화면에서는 /api/alerts/grade-notice(인증 필요)를 부를 수 없어 화면이 낡은 값을
 // 계속 말하게 된다(DashboardPage에 CITY_AVG_PCT = 3.22가 박혀 있던 사고와 같은 구조).
 
-// 심사용 계정 — 배포 직전에 실제 값으로 채운다.
-// 둘 중 하나라도 비어 있으면 안내 상자를 그리지 않는다(빈 상자가 나가는 사고 방지).
-const REVIEW_ACCOUNT = { username: "", password: "" };
-
 // 랜딩을 거쳐 /browse로 들어왔다는 표시. BrowsePage가 이 값을 보고 사용법 팝업을 띄운다.
 // 라우터 state로 넘기므로 주소를 직접 입력해 들어온 재방문자에게는 뜨지 않는다.
 const BROWSE_ENTRY_STATE = { fromLanding: true };
@@ -241,16 +237,6 @@ const CSS = `
   .lp-cta .lp-section-desc { margin: 0 auto 40px; }
   .lp-cta .lp-actions { justify-content: center; }
 
-  .lp-account {
-    max-width: 620px; margin: 44px auto 0; text-align: left;
-    background: rgba(6,14,30,.6); border: 1px solid rgba(56,189,248,.16);
-    border-radius: 12px; padding: 18px 22px; display: flex; gap: 14px; align-items: flex-start;
-  }
-  .lp-account-title { font-size: 14px; font-weight: 700; color: #fff; margin: 0 0 6px; }
-  .lp-account-cred { font-size: 14px; color: #cbd5e1; margin: 0 0 6px; }
-  .lp-account-cred b { color: #7dd3fc; }
-  .lp-account-note { font-size: 12px; color: #64748b; line-height: 1.6; margin: 0; }
-
   /* ── 푸터 ───────────────────────────────────────────────────────── */
   .lp-footer {
     background: #060e1e; border-top: 1px solid rgba(255,255,255,.05);
@@ -291,7 +277,6 @@ function Icon({ name, size = 22 }) {
 }
 
 export default function LandingPage() {
-  const showAccount = Boolean(REVIEW_ACCOUNT.username && REVIEW_ACCOUNT.password);
   // 로그인한 담당자도 로고를 눌러 여기로 돌아온다. 그 사람에게 "공무원 로그인" 버튼을
   // 내밀면 이미 한 일을 또 하라는 말이 된다.
   const { isAuthenticated, role } = useAuth();
@@ -330,7 +315,7 @@ export default function LandingPage() {
         <div className="lp-nav-inner">
           <Link to="/" className="lp-nav-brand">
             <span className="lp-nav-mark">HS</span>
-            <span className="lp-nav-name">화성시 소상공인 조기경보</span>
+            <span className="lp-nav-name">폐업 위험 조기경보 &amp; 상권 추천 서비스</span>
           </Link>
 
           {/* 담당자 화면 바로가기. 로그인 상태면 ?next= 가 즉시 통과해 바로가기처럼 동작한다. */}
@@ -444,21 +429,6 @@ export default function LandingPage() {
               상권 둘러보기
             </Link>
           </div>
-
-          {showAccount && (
-            <div className="lp-account lp-reveal lp-d3">
-              <span style={{ color: "#7dd3fc", flexShrink: 0 }}><Icon name="key" size={20} /></span>
-              <div style={{ minWidth: 0 }}>
-                <p className="lp-account-title">심사용 계정</p>
-                <p className="lp-account-cred lp-num">
-                  아이디 <b>{REVIEW_ACCOUNT.username}</b> · 비밀번호 <b>{REVIEW_ACCOUNT.password}</b>
-                </p>
-                <p className="lp-account-note">
-                  심사 기간 열람용 계정입니다. 모든 화면은 읍면동 × 업종 집계 단위이며 개별 점포 정보는 포함하지 않습니다.
-                </p>
-              </div>
-            </div>
-          )}
         </div>
       </section>
 

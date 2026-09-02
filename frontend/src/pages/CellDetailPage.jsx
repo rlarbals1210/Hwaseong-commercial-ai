@@ -331,7 +331,7 @@ function ProgramCard({ p, tone }) {
             color: "var(--ink-secondary)",
           }}
         >
-          자격 요건은 실제 공고문으로 확인해야 합니다. 아직 입력되지 않았습니다.
+          자격 요건은 소관 부서 공고문으로 확인해야 합니다.
         </div>
       )}
     </div>

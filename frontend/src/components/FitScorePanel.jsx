@@ -82,18 +82,9 @@ export default function FitScorePanel({ data, loading, preferenceLabel }) {
           <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
             <BulletList title="강점" items={data.pros} tone="var(--badge-ok-ink)" />
             <BulletList title="유의점" items={data.cons} tone="var(--badge-warn-ink)" />
-            {!data.pros?.length && !data.cons?.length && (
-              <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: 0 }}>두드러진 강점이나 유의점이 없습니다.</p>
-            )}
           </div>
         )}
       </div>
-
-      {data.growth_spread_narrow && (
-        <div role="alert" className="t-caption" style={{ color: "var(--badge-warn-ink)", background: "var(--orange-soft)", borderRadius: "var(--radius-md)", padding: "10px 12px", lineHeight: 1.6, marginTop: 18 }}>
-          이 업종은 읍면동 간 예측 차이가 크지 않습니다. 성장 추세 점수 차이를 크게 해석하지 마세요.
-        </div>
-      )}
 
       {data.score_adjusted && data.adjustment_note && (
         <div role="note" className="t-caption" style={{ color: "#1d4ed8", background: "#eff6ff", borderRadius: "var(--radius-md)", padding: "10px 12px", lineHeight: 1.6, marginTop: 10 }}>

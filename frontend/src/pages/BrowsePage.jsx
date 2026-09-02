@@ -220,8 +220,8 @@ function RecommendationList({ data, results, areas, areaFilterIds, onAreaFilterC
                 <small>조건 적합도</small>
               </span>
             </div>
-            <p className="nodaji-result-reason"><b>맞는 이유</b>{item.reason}</p>
-            <p className="nodaji-result-caution"><b>확인할 점</b>{cautionFor(item)}</p>
+            <p className="nodaji-result-reason"><b>추천 이유</b>{item.reason}</p>
+            <p className="nodaji-result-caution"><b>확인 사항</b>{cautionFor(item)}</p>
             <span className="explore-card-link">지도와 상세 보기 →</span>
           </article>
         ))}

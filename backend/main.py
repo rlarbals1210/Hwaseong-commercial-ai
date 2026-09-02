@@ -6,7 +6,7 @@ from .routers import (
     trends, report, exploration,
 )
 
-app = FastAPI(title="화성시 소상공인 AI 정책지원 플랫폼", version="1.0.0")
+app = FastAPI(title="화성시 상권 지원", version="1.0.0")
 
 _origins = os.getenv(
     "CORS_ORIGINS",
@@ -46,4 +46,4 @@ app.include_router(exploration.router)
 
 @app.get("/")
 def root():
-    return {"status": "ok", "project": "화성시 소상공인 AI 정책지원 플랫폼"}
+    return {"status": "ok", "project": "화성시 상권 지원"}

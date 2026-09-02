@@ -46,7 +46,7 @@ function Sidebar({ nav, pathname, username, onLogout, onOpenQuickStart }) {
         <div className="official-brand-mark">HS</div>
         <div className="official-brand-copy">
           <strong>화성시 상권 지원</strong>
-          <span>소상공인 조기경보</span>
+          <span>소상공인 폐업위험 조기경보</span>
         </div>
       </Link>
 
@@ -158,6 +158,19 @@ function TopBar({ title }) {
 // 로그인 없이 열리는 경로. 공무원 셸(사이드바)을 씌우지 않고 전체화면으로 렌더한다.
 const PUBLIC_PATHS = ["/", "/browse", "/trends", "/report"];
 
+// 제품명은 3층이다 — 두 트랙을 덮는 우산 이름 하나, 트랙마다 하나씩.
+// 랜딩(/)은 두 트랙의 공통 현관이라 우산 이름을 쓰고, 그 아래는 각자의 이름을 쓴다.
+// 탭 제목이 화면 제목과 다르면 같은 서비스가 여러 개로 보인다.
+const SERVICE_NAME = "화성시 상권 지원";
+const OFFICIAL_TRACK_NAME = "화성시 소상공인 폐업위험 조기경보";
+const PUBLIC_TRACK_NAME = "화성시 소상공인 상권 추천 서비스";
+const PUBLIC_TRACK_PATHS = ["/browse", "/trends", "/report"];
+
+function trackTitle(pathname) {
+  if (pathname === "/") return SERVICE_NAME;
+  return PUBLIC_TRACK_PATHS.includes(pathname) ? PUBLIC_TRACK_NAME : OFFICIAL_TRACK_NAME;
+}
+
 export default function App() {
   const { pathname, search } = useLocation();
   const { isAuthenticated, role, username, loginSequence, logout } = useAuth();
@@ -173,6 +186,10 @@ export default function App() {
     && isGuidePath
     && !dismissedQuickStartKeys.has(quickStartKey);
   const quickStartOpen = isOfficial && isGuidePath && (manualQuickStartOpen || shouldAutoOpenQuickStart);
+
+  useEffect(() => {
+    document.title = trackTitle(pathname);
+  }, [pathname]);
 
   const closeQuickStart = () => {
     if (loginSequence > 0 && isGuidePath) {

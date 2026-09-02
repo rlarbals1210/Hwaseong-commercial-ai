@@ -24,7 +24,6 @@ function NearbyAreas({ areaId, industryId, preset, onSelect, onBroaden }) {
         <p>{item.reason}</p>
         <span className="explore-card-link">지도와 상세 보기 →</span>
       </article>)}
-      <p>{data.notice}</p>
       <button type="button" className="explore-secondary" onClick={onBroaden}>화성시 전체로 넓혀 보기</button>
     </>}
   </section>;
@@ -37,7 +36,7 @@ function WeekdayFlow({ areaId }) {
   return <section className="explore-section explore-visitors">
     <ToolHeading icon="calendar_month" title="요일별 유동인구 패턴" /><QueryState query={query} />
     {data && <>
-      <p>{data.area_name} 전체 · 기준월 {data.month ?? "자료 없음"} · 요일 평균 100</p>
+      <p>{data.area_name} 전체 · 기준월 {data.month ?? "자료 없음"}</p>
       {data.status === "ready" && <>
         <div className="explore-week-bars" role="img" aria-label={data.points.map((p) => `${p.label}요일 ${p.index}`).join(", ")}>
           {data.points.map((point) => <div key={point.weekday}>
@@ -46,7 +45,7 @@ function WeekdayFlow({ areaId }) {
         </div>
         <p className="explore-status">주말 일평균은 평일 일평균보다 {Math.abs(data.weekend_vs_weekday_pct).toFixed(1)}% {data.weekend_vs_weekday_pct >= 0 ? "높습니다" : "낮습니다"}.</p>
       </>}
-      <p>{data.notice}</p><a href={data.source_url} target="_blank" rel="noreferrer">{data.source}</a>
+      <a href={data.source_url} target="_blank" rel="noreferrer">{data.source}</a>
     </>}
   </section>;
 }
@@ -59,7 +58,7 @@ function SearchInterest({ industryId }) {
     {data && <>
       <p>{data.industry_name} · 전국 · {data.start_date.slice(0, 7)} ~ {data.end_date.slice(0, 7)}</p>
       {data.keywords.length > 0 && <p>대표 검색어: {data.keywords.join(" · ")}</p>}
-      <p className="explore-status" role="status">{data.message}</p>
+      {data.status !== "ready" && <p className="explore-status" role="status">{data.message}</p>}
       {data.points.length > 0 && <div className="explore-search-bars" aria-label="월별 검색지수">
         {data.points.map((point) => <div key={point.month}><time>{point.month}</time><span><i style={{ width: `${point.index}%` }} /></span><b>{point.index.toFixed(1)}</b></div>)}
       </div>}

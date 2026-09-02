@@ -68,7 +68,7 @@ def search_interest(industry_id, industry_name, today=None):
     base = dict(industry_id=industry_id, industry_name=industry_name, keywords=keywords,
                 start_date=start.isoformat(), end_date=end.isoformat())
     if not keywords:
-        return dict(base, status="unsupported", message="이 업종은 대표 검색어 연결을 아직 지원하지 않습니다.")
+        return dict(base, status="unsupported", message="이 업종은 검색 트렌드를 대표할 검색어가 지정되어 있지 않아 표시하지 않습니다.")
     if not all(os.getenv(key, "").strip() for key in ("NAVER_CLIENT_ID", "NAVER_CLIENT_SECRET")):
         return dict(base, status="not_configured", message="검색 트렌드 API 키 연결 대기 중입니다.")
     key = (tuple(keywords), start, end)
