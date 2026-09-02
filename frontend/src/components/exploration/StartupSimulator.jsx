@@ -1,5 +1,5 @@
 import { useId, useRef, useState } from "react";
-import { calculateStartupCosts, EMPTY_STARTUP_INPUT, SQM_PER_PYEONG } from "../../lib/startupCosts";
+import { calculateStartupCosts, DEFAULT_STARTUP_INPUT, SQM_PER_PYEONG } from "../../lib/startupCosts";
 import "./startupSimulator.css";
 import ToolHeading from "./ToolHeading";
 
@@ -103,6 +103,6 @@ export default function StartupSimulator({ areaName, industryName, input, onChan
       {step < 2 ? <button type="button" className="cost-next" onClick={next}>{step === 0 ? "월 운영비 입력" : "매출·결과 보기"} →</button>
         : <button type="button" onClick={() => go(0)}>입력 다시 살펴보기</button>}</div>
     <details className="cost-explanation"><summary>계산 방법과 입력 안내</summary><p>손익분기 매출 = 월 고정비 ÷ (1 − 변동비율). 보증금·예비자금은 초기 지출과 구분합니다. 입력하지 않은 세금·감가상각·금융비용 등은 반영하지 않으며 투자금 회수기간 계산이 아닙니다. 실제 시세나 매출을 자동 추정하지 않습니다.</p></details>
-    <div className="cost-draft-note"><small>같은 지역·업종의 입력은 페이지를 새로고침하기 전까지 유지됩니다.</small><button type="button" onClick={() => { onChange({ ...EMPTY_STARTUP_INPUT }); go(0); }}>입력 초기화</button></div>
+    <div className="cost-draft-note"><small>같은 지역·업종의 입력은 페이지를 새로고침하기 전까지 유지됩니다.</small><button type="button" onClick={() => { onChange({ ...DEFAULT_STARTUP_INPUT }); go(0); }}>기본값으로 되돌리기</button></div>
   </section>;
 }

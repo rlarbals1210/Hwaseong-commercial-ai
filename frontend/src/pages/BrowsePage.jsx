@@ -4,7 +4,7 @@ import BrowseIntroModal from "../components/BrowseIntroModal";
 import FitScorePanel from "../components/FitScorePanel";
 import AreaComparison from "../components/exploration/AreaComparison";
 import AreaFilter from "../components/exploration/AreaFilter";
-import { EMPTY_STARTUP_INPUT } from "../lib/startupCosts";
+import { DEFAULT_STARTUP_INPUT } from "../lib/startupCosts";
 import IndustryExplorer from "../components/exploration/IndustryExplorer";
 import FloatingPicker from "../components/exploration/FloatingPicker";
 import ExplorationTools from "../components/exploration/ExplorationTools";
@@ -350,7 +350,7 @@ export default function BrowsePage() {
   const drawerScrollRef = useRef(null);
   const costKey = `${areaId}:${industryId}`;
   const updateCostDraft = (value) => setCostDrafts((current) => ({ ...current,
-    [costKey]: typeof value === "function" ? value(current[costKey] ?? EMPTY_STARTUP_INPUT) : value,
+    [costKey]: typeof value === "function" ? value(current[costKey] ?? DEFAULT_STARTUP_INPUT) : value,
   }));
 
   const selectArea = useCallback((nextAreaId) => {
@@ -779,7 +779,7 @@ export default function BrowsePage() {
                 industryName={options?.industries?.find((industry) => industry.id === industryId)?.name}
                 preset={preset} onSelect={selectArea} onBroaden={() => { setAreaFilterIds([]); setDrawerMode("recommendations"); }}
                 activeTab={detailTab} onTabChange={setDetailTab}
-                costInput={costDrafts[costKey] ?? EMPTY_STARTUP_INPUT} onCostChange={updateCostDraft}>
+                costInput={costDrafts[costKey] ?? DEFAULT_STARTUP_INPUT} onCostChange={updateCostDraft}>
                 <FitScorePanel
                   data={score}
                   loading={scoreLoading}
