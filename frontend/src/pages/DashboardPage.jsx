@@ -4,6 +4,8 @@ import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge, TypeBadge } from "../components/Badge";
 import { downloadCsv, csvNum } from "../lib/csv";
 import useCategories from "../hooks/useCategories";
+import useDongs from "../hooks/useDongs";
+import SearchableSelect from "../components/SearchableSelect";
 import useGradeNotice from "../hooks/useGradeNotice";
 
 const CSV_HEADERS = [
@@ -192,19 +194,14 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [category, setCategory] = useState("");
   const [dong, setDong] = useState("");
-  const [dongs, setDongs] = useState([]);
+  const { dongs, error: dongError } = useDongs();
   const [error, setError] = useState("");
   const { categories, error: categoryError } = useCategories("alert");
   // 기준선·고지 문구는 서버에서 받는다. 실패해도 화면은 폴백 값으로 그대로 뜬다.
   const { meta, sampleMin } = useGradeNotice();
 
   useEffect(() => {
-    apiFetchJson("/api/analysis/dongs")
-      .then((d) => setDongs(Array.isArray(d.dongs) ? d.dongs : Array.isArray(d) ? d : []))
-      .catch(() => setDongs([]));
-  }, []);
-
-  useEffect(() => {
+    let active = true;
     // 전체를 받는다. 예전에는 10개만 받아서 "더 보고 싶다"에 답할 방법이 없었고,
     // CSV 다운로드까지 화면에 뜬 10줄만 나갔다(담당자가 엑셀로 받아 자기 방식대로
     // 정렬하려는 게 제일 흔한 요구인데 10줄짜리가 내려갔다).
@@ -213,14 +210,17 @@ export default function DashboardPage() {
     if (dong) params.set("dong", dong);
     apiFetchJson(`/api/alerts/closure-risk?${params}`)
       .then((result) => {
+        if (!active) return;
         if (!Array.isArray(result)) throw new Error("Invalid alert response");
         setData(result);
       })
       .catch((err) => {
+        if (!active) return;
         setData([]);
         setError(describeApiError(err));
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [category, dong]);
 
   const filtered = Boolean(category || dong);
@@ -361,40 +361,11 @@ export default function DashboardPage() {
         }}
       >
         <div>
-          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-            <label className="t-caption" style={{ color: "var(--ink-secondary)", fontWeight: 600 }}>업종</label>
-            <select
-              value={category}
-              onChange={(e) => {
-                setLoading(true);
-                setError("");
-                setCategory(e.target.value);
-              }}
-              style={{ minWidth: 180 }}
-            >
-              <option value="">전체 업종</option>
-              {categories.map((c) => (
-                <option key={c} value={c}>{c}</option>
-              ))}
-            </select>
-
-            {/* 읍면동 필터 — 봉담읍 담당자는 봉담읍만 본다. 목록 길이를 늘리는 것보다
-                "내 담당 구역"으로 좁히는 쪽이 실사용에 가깝다. */}
-            <label className="t-caption" style={{ color: "var(--ink-secondary)", fontWeight: 600, marginLeft: 6 }}>읍면동</label>
-            <select
-              value={dong}
-              onChange={(e) => {
-                setLoading(true);
-                setError("");
-                setDong(e.target.value);
-              }}
-              style={{ minWidth: 150 }}
-            >
-              <option value="">전체 읍면동</option>
-              {dongs.map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </select>
+          <div className="official-search-filters">
+            <SearchableSelect label="업종" icon="storefront" options={categories.map((c) => ({ value: c, label: c }))}
+              value={category} emptyLabel="전체 업종" onChange={(next) => { setLoading(true); setError(""); setCategory(next); }} />
+            <SearchableSelect label="읍면동" icon="location_on" unit="곳" options={dongs.map((d) => ({ value: d, label: d }))}
+              value={dong} emptyLabel="전체 읍면동" onChange={(next) => { setLoading(true); setError(""); setDong(next); }} />
 
             {filtered && (
               <button
@@ -417,9 +388,9 @@ export default function DashboardPage() {
           </div>
           <div
             className="t-caption"
-            style={{ marginTop: 7, color: categoryError ? "var(--error)" : "var(--ink-faint)" }}
+            style={{ marginTop: 7, color: categoryError || dongError ? "var(--error)" : "var(--ink-faint)" }}
           >
-            {categoryError ? "업종 목록을 불러오지 못했습니다." : ""}
+            {dongError || (categoryError ? "업종 목록을 불러오지 못했습니다." : "")}
           </div>
         </div>
 

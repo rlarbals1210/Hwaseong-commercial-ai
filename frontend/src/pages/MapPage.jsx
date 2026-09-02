@@ -2,9 +2,13 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { Link } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge } from "../components/Badge";
-import { NAVER_CLIENT_ID, loadNaverMap, fitBoundsTight } from "../lib/naverMap";
+import { NAVER_CLIENT_ID, loadNaverMap, fitBoundsTight, featureName, featurePaths } from "../lib/naverMap";
 import useCategories from "../hooks/useCategories";
 import useGradeNotice from "../hooks/useGradeNotice";
+import useDongs from "../hooks/useDongs";
+import usePublicQuery from "../hooks/usePublicQuery";
+import SearchableSelect from "../components/SearchableSelect";
+import "./officialMapSearch.css";
 
 // 다른 화면과 같은 정의. 이 파일에만 사본이 없어 백엔드 raw 값(2자리)이 그대로 찍혔다 —
 // 같은 상권이 대시보드에서 7.1%, 여기서 7.14%로 보였다.
@@ -467,12 +471,17 @@ function AreaPanel({ selected, detail, loading, onClose }) {
 export default function MapPage() {
   const mapRef = useRef(null);
   const mapInstanceRef = useRef(null);
+  const detailPanelRef = useRef(null);
   const polygonsRef = useRef([]);
-  const boundsFitRef = useRef(false);
+  const geometryRef = useRef(null);
+  const areaPolygonsRef = useRef([]);
+  const [mapVersion, setMapVersion] = useState(0);
+  const [focusVersion, setFocusVersion] = useState(0);
+  const { dongs, error: dongError } = useDongs();
   const [riskData, setRiskData] = useState([]);
-  const [selected, setSelected] = useState(null);
-  const [detail, setDetail] = useState(null);
-  const [detailLoading, setDetailLoading] = useState(false);
+  const [selectedName, setSelectedName] = useState(null);
+  const selected = selectedName ? { name: selectedName, ...riskData.find((row) => row.dong === selectedName) } : null;
+  const detailQuery = usePublicQuery(selected?.area_id ? `/api/alerts/area/${selected.area_id}/detail` : null);
   const [tooltip, setTooltip] = useState(null);
   const [ranking, setRanking] = useState([]);
   const [rankingLoading, setRankingLoading] = useState(true);
@@ -518,9 +527,17 @@ export default function MapPage() {
       .finally(() => setRankingLoading(false));
   }, [category, rankSort]);
 
+  const selectArea = useCallback((name) => {
+    setRankingOpen(false);
+    setTooltip(null);
+    setSelectedName(name || null);
+    setFocusVersion((version) => version + 1);
+  }, []);
+
   const drawPolygons = useCallback((map, geojson, riskMap) => {
     polygonsRef.current.forEach((p) => p.setMap(null));
     polygonsRef.current = [];
+    areaPolygonsRef.current = [];
 
     geojson.features.forEach((feat) => {
       const name = feat.properties.dong_name || feat.properties.EMD_KOR_NM || "";
@@ -564,39 +581,14 @@ export default function MapPage() {
           setTooltip(null);
         });
         window.naver.maps.Event.addListener(polygon, "click", () => {
-          // 서랍과 상세 패널은 동시에 열지 않는다(위 렌더 주석 참조).
-          setRankingOpen(false);
-          setSelected(risk ? { name, ...risk } : { name });
+          selectArea(name);
         });
 
         polygonsRef.current.push(polygon);
+        areaPolygonsRef.current.push({ name, polygon, held });
       });
     });
-  }, []);
-
-  // 읍면동을 고르면 상세를 따로 부른다. 지도 payload는 29개 동을 한 번에 내려주므로
-  // 업종 목록까지 얹으면 첫 로딩이 무거워진다 — 고른 동만 그때 가져온다.
-  useEffect(() => {
-    const areaId = selected?.area_id;
-    if (!areaId) { setDetail(null); return; }
-    setDetailLoading(true);
-    setDetail(null);
-    apiFetchJson(`/api/alerts/area/${areaId}/detail`)
-      .then(setDetail)
-      .catch(() => setDetail(null))
-      .finally(() => setDetailLoading(false));
-  }, [selected?.area_id]);
-
-  // 패널이 열리고 닫힐 때 지도 칸의 폭이 바뀐다. 네이버 지도는 컨테이너 크기 변화를
-  // 스스로 알아채지 못해서 타일이 잘린 채 남는다. 레이아웃이 끝난 뒤 resize를 알린다.
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map || !window.naver?.maps) return;
-    const timer = setTimeout(() => {
-      window.naver.maps.Event.trigger(map, "resize");
-    }, 60);
-    return () => clearTimeout(timer);
-  }, [selected]);
+  }, [selectArea]);
 
   useEffect(() => {
     if (!NAVER_CLIENT_ID) return;
@@ -613,21 +605,9 @@ export default function MapPage() {
       fetch("/hwaseong_emd.geojson")
         .then((r) => r.json())
         .then((geojson) => {
+          geometryRef.current = geojson;
           drawPolygons(mapInstanceRef.current, geojson, riskMap);
-          if (!boundsFitRef.current) {
-            const bounds = new window.naver.maps.LatLngBounds();
-            geojson.features.forEach((feat) => {
-              const coords = feat.geometry.type === "Polygon"
-                ? [feat.geometry.coordinates]
-                : feat.geometry.coordinates;
-              coords.forEach((rings) => {
-                rings[0].forEach(([lng, lat]) => bounds.extend(new window.naver.maps.LatLng(lat, lng)));
-              });
-            });
-            // fitBounds는 정수 줌으로만 맞춰 한 단계 덜 당겨진다. lib/naverMap 참조.
-            fitBoundsTight(mapInstanceRef.current, bounds);
-            boundsFitRef.current = true;
-          }
+          setMapVersion((version) => version + 1);
         })
         .catch(() => {
           // console.warn만 하면 타일은 뜨는데 폴리곤이 하나도 없는 상태가 되고,
@@ -639,6 +619,47 @@ export default function MapPage() {
         });
     }).catch((err) => setMapError(err.message));
   }, [riskData, drawPolygons]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    const geojson = geometryRef.current;
+    if (!map || !geojson || !window.naver?.maps) return;
+    areaPolygonsRef.current.forEach(({ name, polygon, held }) => polygon.setOptions({
+      strokeColor: name === selectedName ? "#174f79" : held ? "#6b7280" : "#ffffff",
+      strokeWeight: name === selectedName ? 3.5 : held ? 1.2 : 1.5,
+      strokeStyle: name === selectedName ? "solid" : held ? "shortdash" : "solid",
+    }));
+    const features = selectedName ? geojson.features.filter((feature) => featureName(feature) === selectedName) : geojson.features;
+    if (!features.length) return;
+    const bounds = new window.naver.maps.LatLngBounds();
+    features.forEach((feature) => featurePaths(feature).forEach((path) => path.forEach((point) => bounds.extend(point))));
+    const focus = () => {
+      map.autoResize();
+      if (!selectedName) {
+        fitBoundsTight(map, bounds);
+        return;
+      }
+      const canvas = mapRef.current.getBoundingClientRect();
+      const panel = detailPanelRef.current?.getBoundingClientRect();
+      const narrow = window.matchMedia("(max-width: 1100px)").matches;
+      const margin = narrow
+        ? { top: 145, right: 24, bottom: panel ? canvas.bottom - panel.top + 20 : 24, left: 24 }
+        : { top: 105, right: panel ? canvas.right - panel.left + 24 : 24, bottom: 110, left: 28 };
+      map.fitBounds(bounds, margin);
+      // fitBounds의 비대칭 여백만으로는 패널을 피하지 못하므로 남은 공간의 중앙에 맞춘다.
+      const projection = map.getProjection();
+      const point = projection.fromCoordToOffset(bounds.getCenter());
+      const targetX = (margin.left + canvas.width - margin.right) / 2;
+      const targetY = (margin.top + canvas.height - margin.bottom) / 2;
+      map.setCenter(projection.fromOffsetToCoord(new window.naver.maps.Point(
+        canvas.width / 2 + point.x - targetX, canvas.height / 2 + point.y - targetY,
+      )));
+    };
+    let frame = requestAnimationFrame(focus);
+    const resize = () => { cancelAnimationFrame(frame); frame = requestAnimationFrame(focus); };
+    window.addEventListener("resize", resize);
+    return () => { cancelAnimationFrame(frame); window.removeEventListener("resize", resize); };
+  }, [selectedName, focusVersion, mapVersion]);
 
   return (
     <div className="official-page official-map-page">
@@ -666,6 +687,14 @@ export default function MapPage() {
                 <span style={{ fontSize: 14 }}>frontend/.env에 VITE_NAVER_MAP_CLIENT_ID를 설정하세요</span>
               </div>
             )}
+          </div>
+
+          <div className="official-map-search">
+            <SearchableSelect label="지역" icon="location_on" unit="곳"
+              options={dongs.map((name) => ({ value: name, label: name }))}
+              value={selected?.name ?? ""} emptyLabel="화성시 전체"
+              onChange={selectArea} />
+            {dongError && <p role="alert">{dongError}</p>}
           </div>
 
           <div className="official-map-legend">
@@ -702,7 +731,7 @@ export default function MapPage() {
             onClick={() => {
               setTooltip(null);
               setRankingOpen((open) => {
-                if (!open) setSelected(null);
+                if (!open) setSelectedName(null);
                 return !open;
               });
             }}
@@ -712,12 +741,13 @@ export default function MapPage() {
           </button>
 
           {selected && (
-            <div className="official-map-detail-panel">
+            <div ref={detailPanelRef} className="official-map-detail-panel">
+              {detailQuery.error && <p role="alert" className="official-map-detail-error">{detailQuery.error}</p>}
               <AreaPanel
                 selected={selected}
-                detail={detail}
-                loading={detailLoading}
-                onClose={() => setSelected(null)}
+                detail={detailQuery.data}
+                loading={detailQuery.loading}
+                onClose={() => setSelectedName(null)}
               />
             </div>
           )}

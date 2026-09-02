@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useRef, useState } from "react";
+import CellPickerDialog from "../components/CellPickerDialog";
+import usePublicQuery from "../hooks/usePublicQuery";
 import { apiFetchJson, describeApiError } from "../lib/api";
-import { GradeBadge, TypeBadge } from "../components/Badge";
 import { downloadCsv, csvNum } from "../lib/csv";
 
 // 상권 비교.
@@ -24,31 +24,6 @@ const RANK_COLS = "30px 84px 1fr 68px 74px";
 const fmt = (v, d = 1) =>
   typeof v === "number" && Number.isFinite(v) ? v.toFixed(d) : "—";
 const num = (v) => (typeof v === "number" && Number.isFinite(v) ? v.toLocaleString() : "—");
-
-function CellPicker({ label, options, areaId, industryId, onChange, compact }) {
-  const area = options?.areas.find((a) => a.id === areaId);
-  const names = useMemo(
-    () => Object.fromEntries((options?.industries ?? []).map((i) => [i.id, i.name])),
-    [options],
-  );
-  return (
-    <div style={{ flex: "1 1 240px", minWidth: 0 }}>
-      {label && <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 6 }}>{label}</div>}
-      <div style={{ display: "flex", gap: 8 }}>
-        <select value={areaId ?? ""} onChange={(e) => onChange(Number(e.target.value), null)} style={{ flex: "1 1 0", minWidth: 0 }}>
-          {(options?.areas ?? []).map((a) => (<option key={a.id} value={a.id}>{a.name}</option>))}
-        </select>
-        <select value={industryId ?? ""} onChange={(e) => onChange(areaId, Number(e.target.value))} style={{ flex: compact ? "1 1 0" : "1 1 0", minWidth: 0 }}>
-          {(area?.industries ?? []).map((i) => (
-            <option key={i.id} value={i.id}>
-              {names[i.id]}{i.sample_insufficient ? " (표본부족)" : ""}
-            </option>
-          ))}
-        </select>
-      </div>
-    </div>
-  );
-}
 
 /** 같은 업종 상권 순위.
  *
@@ -182,8 +157,7 @@ function IndustryRanking({ context, targetAreaId, onPick }) {
  *  화면 밖으로 사라졌다. 페이지가 3,400px이라 아래쪽에서는 무엇과 무엇을 비교하는 중인지
  *  알 수 없었다. 지금은 두 상권이 항상 화면 위에 붙어 있고, 슬롯을 누르면 고르는 창이 뜬다.
  */
-function CompareBar({ left, right, leftRank, rightRank, onEditLeft, onEditRight, onSwap, onCsv }) {
-  const Slot = ({ cell, rank, role, onEdit }) => (
+const CompareSlot = ({ cell, rank, role, onEdit }) => (
     <button
       type="button"
       onClick={onEdit}
@@ -215,6 +189,7 @@ function CompareBar({ left, right, leftRank, rightRank, onEditLeft, onEditRight,
     </button>
   );
 
+function CompareBar({ left, right, leftRank, rightRank, onEditLeft, onEditRight, onSwap, onCsv }) {
   return (
     <div
       style={{
@@ -226,7 +201,7 @@ function CompareBar({ left, right, leftRank, rightRank, onEditLeft, onEditRight,
         boxShadow: "var(--elev-1)",
       }}
     >
-      <Slot cell={left} rank={leftRank} role="기준 상권" onEdit={onEditLeft} />
+      <CompareSlot cell={left} rank={leftRank} role="기준 상권" onEdit={onEditLeft} />
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 6, flex: "0 0 auto" }}>
         <span className="t-caption" style={{ color: "var(--ink-faint)", fontWeight: 700 }}>VS</span>
         {left && right && (
@@ -240,7 +215,7 @@ function CompareBar({ left, right, leftRank, rightRank, onEditLeft, onEditRight,
           </button>
         )}
       </div>
-      <Slot cell={right} rank={rightRank} role="비교 상권" onEdit={onEditRight} />
+      <CompareSlot cell={right} rank={rightRank} role="비교 상권" onEdit={onEditRight} />
       {onCsv && (
         <button className="btn-utility" onClick={onCsv} style={{ flex: "0 0 auto", alignSelf: "center" }}>
           CSV
@@ -336,45 +311,6 @@ function Section({ title, caption, children }) {
       </div>
       <div style={{ marginTop: 12 }}>{children}</div>
     </section>
-  );
-}
-
-/** 상권 고르는 창. 팀원 제안대로 드롭다운을 화면에서 걷어내고 팝업 안으로 넣었다. */
-function PickerModal({ open, title, options, value, onPick, onClose, extra }) {
-  if (!open) return null;
-  return (
-    <div
-      onClick={onClose}
-      style={{
-        position: "fixed", inset: 0, zIndex: 200, background: "rgba(15,23,42,0.45)",
-        display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
-      }}
-    >
-      <div
-        onClick={(e) => e.stopPropagation()}
-        className="card"
-        style={{ width: "min(560px, 100%)", maxHeight: "82vh", overflowY: "auto", padding: 22 }}
-      >
-        <div style={{ display: "flex", alignItems: "center", marginBottom: 16 }}>
-          <h3 className="t-h3" style={{ margin: 0 }}>{title}</h3>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="닫기"
-            style={{ marginLeft: "auto", border: "none", background: "transparent", cursor: "pointer", color: "var(--ink-muted)", display: "flex" }}
-          >
-            <span className="material-symbols-outlined">close</span>
-          </button>
-        </div>
-        <CellPicker
-          options={options}
-          areaId={value?.areaId}
-          industryId={value?.industryId}
-          onChange={(a, i) => { onPick(a, i); onClose(); }}
-        />
-        {extra}
-      </div>
-    </div>
   );
 }
 
@@ -807,14 +743,11 @@ function MethodNote({ basis, notice, context }) {
 export default function ComparePage() {
   const [options, setOptions] = useState(null);
   const [base, setBase] = useState(null);       // 기준 상권 {areaId, industryId}
-  const [target, setTarget] = useState(null);   // 비교 상권
+  const [manualTarget, setManualTarget] = useState(null);
   const [manual, setManual] = useState(false);  // 비교 대상을 직접 고르는 모드
   const [picker, setPicker] = useState(null);   // "base" | "target" | null — 열려 있는 선택 창
-  const [context, setContext] = useState(null);
-  const [data, setData] = useState(null);
   const [thresholds, setThresholds] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [optionsError, setOptionsError] = useState("");
 
   useEffect(() => {
     apiFetchJson("/api/alerts/grade-notice").then(setThresholds).catch(() => setThresholds(null));
@@ -830,51 +763,29 @@ export default function ComparePage() {
         const first = (d.areas ?? [])[0];
         if (first) setBase({ areaId: first.id, industryId: first.industries[0]?.id });
       })
-      .catch((err) => setError(describeApiError(err)));
+      .catch((err) => setOptionsError(describeApiError(err)));
   }, []);
 
-  // 기준 상권이 바뀌면 비교 대상을 지우고 추천을 다시 받는다.
-  useEffect(() => {
-    if (!base?.areaId || !base?.industryId) return;
-    setTarget(null);
-    setData(null);
-    setContext(null);
-    setError("");
-    apiFetchJson(`/api/compare/context?cell=${base.areaId}:${base.industryId}`)
-      .then((d) => {
-        setContext(d);
-        if (!manual && d.contrast) {
-          setTarget({ areaId: d.contrast.area_id, industryId: d.contrast.industry_id });
-        }
-      })
-      .catch((err) => setError(describeApiError(err)));
-  }, [base]);   // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (!base?.areaId || !target?.areaId) return;
-    if (base.areaId === target.areaId && base.industryId === target.industryId) {
-      setData(null);
-      setError("서로 다른 두 상권을 골라주세요.");
-      return;
-    }
-    setLoading(true);
-    setError("");
-    const q = new URLSearchParams({
-      left: `${base.areaId}:${base.industryId}`,
-      right: `${target.areaId}:${target.industryId}`,
-    });
-    apiFetchJson(`/api/compare?${q}`)
-      .then(setData)
-      .catch((err) => { setData(null); setError(describeApiError(err)); })
-      .finally(() => setLoading(false));
-  }, [base, target]);
-
-  const pick = (setter, cur) => (areaId, industryId) => {
-    const area = options?.areas.find((a) => a.id === areaId);
-    const available = area?.industries.map((i) => i.id) ?? [];
-    const next = industryId ?? (available.includes(cur?.industryId) ? cur.industryId : available[0]);
-    setter({ areaId, industryId: next });
+  const contextQuery = usePublicQuery(base?.areaId && base?.industryId
+    ? `/api/compare/context?cell=${base.areaId}:${base.industryId}` : null);
+  const context = contextQuery.data;
+  const target = manual ? manualTarget : context?.contrast
+    ? { areaId: context.contrast.area_id, industryId: context.contrast.industry_id } : null;
+  const sameCell = Boolean(base && target && base.areaId === target.areaId && base.industryId === target.industryId);
+  const compareParams = base?.industryId && target?.industryId && !sameCell ? new URLSearchParams({
+    left: `${base.areaId}:${base.industryId}`, right: `${target.areaId}:${target.industryId}`,
+  }) : null;
+  const comparisonQuery = usePublicQuery(compareParams ? `/api/compare?${compareParams}` : null);
+  const data = comparisonQuery.data;
+  const loading = contextQuery.loading || comparisonQuery.loading;
+  const error = optionsError || contextQuery.error || (sameCell ? "서로 다른 두 상권을 골라주세요." : comparisonQuery.error);
+  const chooseBase = (next) => {
+    if (next.areaId === base?.areaId && next.industryId === base?.industryId) return;
+    setBase(next);
+    setManual(false);
+    setManualTarget(null);
   };
+  const setTarget = (next) => { setManual(true); setManualTarget(next); };
 
   const exportCsv = () => {
     if (!data) return;
@@ -907,7 +818,7 @@ export default function ComparePage() {
   const rankLabelFor = (cell) => {
     const rows = context?.distribution ?? [];
     const total = context?.industry_eligible_cells ?? rows.length;
-    if (!cell || !total) return null;
+    if (!cell || !total || cell.industry_id !== context?.industry_id) return null;
     const row = rows.find((r) => r.area_id === cell.area_id);
     return row ? `${total}곳 중 ${row.rank}위` : null;
   };
@@ -933,7 +844,7 @@ export default function ComparePage() {
         leftRank={data ? rankLabelFor(data.left) : rankLabel}
         rightRank={data ? rankLabelFor(data.right) : null}
         onEditLeft={() => setPicker("base")}
-        onEditRight={() => { setManual(true); setPicker("target"); }}
+        onEditRight={() => setPicker("target")}
         onSwap={() => {
           if (!data) return;
           const nextBase = { areaId: data.right.area_id, industryId: data.right.industry_id };
@@ -1053,53 +964,16 @@ export default function ComparePage() {
         </div>
       )}
 
-      <PickerModal
-        open={picker === "base"}
-        title="기준 상권 선택"
-        options={options}
-        value={base}
-        onPick={(a, i) => pick(setBase, base)(a, i)}
+      {picker === "base" && <CellPickerDialog
+        title="기준 상권 선택" options={options} value={base}
+        onApply={chooseBase}
         onClose={() => setPicker(null)}
-      />
-      <PickerModal
-        open={picker === "target"}
-        title="비교 상권 선택"
-        options={options}
-        value={target}
-        onPick={(a, i) => pick(setTarget, target)(a, i)}
-        onClose={() => setPicker(null)}
-        extra={
-          context?.peers?.length ? (
-            <div style={{ marginTop: 18 }}>
-              <div className="t-eyebrow" style={{ color: "var(--ink-faint)", marginBottom: 8 }}>추천 후보</div>
-              <div style={{ display: "grid", gap: 6 }}>
-                {context.peers.slice(0, 6).map((peer) => (
-                  <button
-                    key={peer.area_id}
-                    type="button"
-                    onClick={() => {
-                      setTarget({ areaId: peer.area_id, industryId: peer.industry_id });
-                      setPicker(null);
-                    }}
-                    style={{
-                      display: "flex", alignItems: "center", gap: 10, width: "100%", textAlign: "left",
-                      padding: "10px 12px", cursor: "pointer",
-                      border: "1px solid var(--hairline)", borderRadius: "var(--radius-sm)",
-                      background: "var(--surface-container-lowest)",
-                    }}
-                  >
-                    <span className="t-body-sm" style={{ fontWeight: 600 }}>{peer.area_name}</span>
-                    <span className="t-caption" style={{ color: "var(--ink-muted)" }}>점포 {num(peer.store_count)}곳</span>
-                    <span className="t-body-sm" style={{ marginLeft: "auto", fontVariantNumeric: "tabular-nums" }}>
-                      {fmt(peer.cumulative_closure_rate_pct, 1)}%
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-          ) : null
-        }
-      />
+      />}
+      {picker === "target" && <CellPickerDialog
+        title="비교 상권 선택" options={options} value={target}
+        onApply={setTarget}
+        onClose={() => setPicker(null)} peers={context?.peers ?? []}
+      />}
 
       <MethodNote basis={data?.basis} notice={data?.notice} context={context} />
     </div>

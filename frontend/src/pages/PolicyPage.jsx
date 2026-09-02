@@ -4,6 +4,8 @@ import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge, TypeBadge } from "../components/Badge";
 import { downloadCsv, csvNum } from "../lib/csv";
 import useCategories from "../hooks/useCategories";
+import useDongs from "../hooks/useDongs";
+import SearchableSelect from "../components/SearchableSelect";
 import useGradeNotice from "../hooks/useGradeNotice";
 
 const EMPTY_DATA = {
@@ -346,37 +348,34 @@ export default function PolicyPage() {
   const [category, setCategory] = useState("");
   // 담당자는 시 전체가 아니라 담당 구역만 본다. 조기경보와 같은 목록(/api/analysis/dongs)을 쓴다.
   const [dong, setDong] = useState("");
-  const [dongs, setDongs] = useState([]);
+  const { dongs, error: dongError } = useDongs();
   const [error, setError] = useState("");
   const [selectedQuadrant, setSelectedQuadrant] = useState(null);
   const { categories, error: categoryError } = useCategories("policy");
   // CSV 머리말에 붙일 기준선·고지 문구. 화면의 ProvisionalNotice와 같은 출처를 쓴다.
   const { meta: gradeMeta, sampleMin } = useGradeNotice();
 
-  useEffect(() => {
-    let alive = true;
-    apiFetchJson("/api/analysis/dongs")
-      .then((d) => { if (alive) setDongs(Array.isArray(d.dongs) ? d.dongs : []); })
-      .catch(() => { if (alive) setDongs([]); });
-    return () => { alive = false; };
-  }, []);
 
   useEffect(() => {
+    let active = true;
     const params = new URLSearchParams();
     if (category) params.set("category", category);
     if (dong) params.set("dong", dong);
     apiFetchJson(`/api/policy/inspection-priority?${params}`)
       .then((result) => {
+        if (!active) return;
         if (!["Q1", "Q2", "Q3", "Q4"].every((key) => Array.isArray(result[key]))) {
           throw new Error("Invalid policy response");
         }
         setData({ ...result, meta: result.meta ?? EMPTY_DATA.meta });
       })
       .catch((err) => {
+        if (!active) return;
         setData(EMPTY_DATA);
         setError(describeApiError(err));
       })
-      .finally(() => setLoading(false));
+      .finally(() => { if (active) setLoading(false); });
+    return () => { active = false; };
   }, [category, dong]);
 
   const allItems = QUADRANT_ORDER.flatMap((key) => data[key]);
@@ -427,47 +426,19 @@ export default function PolicyPage() {
 
       <div style={{ display: "flex", gap: 16, alignItems: "flex-end", justifyContent: "space-between", flexWrap: "wrap", marginBottom: 16 }}>
         <div>
-          <div style={{ display: "flex", gap: 14, alignItems: "center", flexWrap: "wrap" }}>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <label className="t-caption" style={{ color: "var(--ink-secondary)", fontWeight: 600 }}>읍면동</label>
-              <select
-                value={dong}
-                onChange={(e) => {
-                  setLoading(true);
-                  setError("");
-                  setSelectedQuadrant(null);
-                  setDong(e.target.value);
-                }}
-                style={{ minWidth: 140 }}
-              >
-                <option value="">전체 읍면동</option>
-                {dongs.map((d) => (
-                  <option key={d} value={d}>{d}</option>
-                ))}
-              </select>
-            </div>
-            <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-              <label className="t-caption" style={{ color: "var(--ink-secondary)", fontWeight: 600 }}>업종</label>
-              <select
-                value={category}
-                onChange={(e) => {
-                  setLoading(true);
-                  setError("");
-                  setSelectedQuadrant(null);
-                  setCategory(e.target.value);
-                }}
-                style={{ minWidth: 180 }}
-              >
-                <option value="">전체 업종</option>
-                {categories.map((c) => (
-                  <option key={c} value={c}>{c}</option>
-                ))}
-              </select>
-            </div>
+          <div className="official-search-filters">
+            <SearchableSelect label="읍면동" icon="location_on" unit="곳" options={dongs.map((d) => ({ value: d, label: d }))}
+              value={dong} emptyLabel="전체 읍면동" onChange={(next) => {
+                setLoading(true); setError(""); setSelectedQuadrant(null); setDong(next);
+              }} />
+            <SearchableSelect label="업종" icon="storefront" options={categories.map((c) => ({ value: c, label: c }))}
+              value={category} emptyLabel="전체 업종" onChange={(next) => {
+                setLoading(true); setError(""); setSelectedQuadrant(null); setCategory(next);
+              }} />
           </div>
-          <div className="t-caption" style={{ marginTop: 7, color: categoryError ? "var(--error)" : "var(--ink-faint)" }}>
-            {categoryError
-              ? "업종 목록을 불러오지 못했습니다."
+          <div className="t-caption" style={{ marginTop: 7, color: categoryError || dongError ? "var(--error)" : "var(--ink-faint)" }}>
+            {dongError || categoryError
+              ? (dongError || "업종 목록을 불러오지 못했습니다.")
               : `최신 분기 점포 수 ${sampleMin}개 이상인 ${categories.length}개 업종`}
           </div>
         </div>
