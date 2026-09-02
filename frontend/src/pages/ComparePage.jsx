@@ -306,7 +306,7 @@ function VerdictHeadline({ data }) {
         <p className="t-body-sm" style={{ margin: "10px 0 0", color: "var(--ink-secondary)", lineHeight: 1.7 }}>
           {separated
             ? "표본 크기를 감안해도 남는 차이입니다."
-            : "다만 표본이 작아 이 수치만으로는 판단하기 어렵습니다. 현장 확인이나 다른 자료를 함께 보십시오."}
+            : "다만 표본이 작아 이 수치만으로는 판단하기 어렵습니다. 다른 자료를 함께 보십시오."}
         </p>
       )}
 

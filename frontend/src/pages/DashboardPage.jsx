@@ -658,7 +658,7 @@ export default function DashboardPage() {
               marginBottom: 24,
             }}
           >
-            현장 확인 우선순위 보기
+            지원 검토 우선순위 보기
             <span className="material-symbols-outlined" style={{ fontSize: 18 }}>arrow_forward</span>
           </Link>
         </>

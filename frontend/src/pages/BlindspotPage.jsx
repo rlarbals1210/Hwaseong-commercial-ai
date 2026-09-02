@@ -544,7 +544,7 @@ export default function BlindspotPage() {
       <section style={{ marginTop: 36 }}>
         <SectionHead title="읍면동 단위 비교" count="판단 보류 점포 50% 이상" />
         <p className="t-caption" style={{ margin: "-6px 0 14px", color: "var(--ink-muted)", lineHeight: 1.65 }}>
-          개별 업종은 표본이 작아도 읍면동 전체를 합치면 비교할 수 있습니다. 위험 등급이 아니라 현장 확인을 돕는 보조 근거입니다.
+          개별 업종은 표본이 작아도 읍면동 전체를 합치면 비교할 수 있습니다. 위험 등급이 아니라 검토를 돕는 보조 근거입니다.
         </p>
         <PooledVerdict data={coverage} loading={shapeLoading} />
       </section>
