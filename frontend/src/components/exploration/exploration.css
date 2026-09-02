@@ -23,7 +23,7 @@
 .explore-area-picker { display: block; margin: 16px 18px; font-size: 13px; }
 .explore-area-picker select { margin-top: 8px; width: 100%; padding: 12px; background: white; border: 1px solid #dbe4ef; border-radius: 8px; color: #172b4d; font: inherit; }
 .explore-map-industry { display: block; margin-top: 9px; color: #64748b; font-size: 11px; }
-.nodaji-drawer-tabs.explore-drawer-tabs { grid-template-columns: 1fr 1fr 1fr 32px; }
+.nodaji-drawer-tabs.explore-drawer-tabs { grid-template-columns: 1fr 1fr 1fr 1fr 28px; }
 .nodaji-drawer-tabs.explore-drawer-tabs button { padding: 0 3px; font-size: 12px; }
 .explore-form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .explore-input { display: flex; min-width: 0; flex-direction: column; gap: 6px; font-size: 12px; }
@@ -47,3 +47,25 @@
 .explore-search-bars span { height: 8px; background: #f1f5f9; border-radius: 5px; overflow: hidden; }
 .explore-search-bars i { height: 100%; display: block; background: #539bd2; }
 .explore-search-bars b { text-align: right; }
+
+.explore-click-card { cursor: pointer; transition: border-color .15s, box-shadow .15s; }
+.explore-click-card:hover { border-color: #93b8ee; box-shadow: 0 3px 14px #2563eb12; }
+.explore-click-card:focus-visible { outline: 3px solid #93b8ee; outline-offset: 2px; }
+.explore-card-link { display: block; margin-top: 12px; color: #2563eb; font-size: 11px; font-weight: 600; }
+.explore-open-comparison { display: block; width: calc(100% - 36px); margin: 10px 18px 16px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: white; color: #334155; font: inherit; font-size: 12px; cursor: pointer; }
+.explore-comparison-table { width: 100%; table-layout: fixed; border-collapse: collapse; margin: 20px 0; font-size: 12px; }
+.explore-comparison-table caption { text-align: left; font-size: 11px; color: #64748b; padding-bottom: 10px; }
+.explore-comparison-table th, .explore-comparison-table td { text-align: right; padding: 14px 4px; border-bottom: 1px solid #e2e8f0; overflow-wrap: anywhere; }
+.explore-comparison-table tr > :first-child { text-align: left; font-size: 11px; font-weight: 500; color: #64748b; }
+.explore-comparison-table thead { color: #174c98; background: #f0f6ff; }
+.nodaji-map-page .nodaji-map-stage { z-index: 0; }
+.nodaji-map-page.is-detail .nodaji-map-stage { left: 808px; }
+@media (max-width: 1100px) {
+  .nodaji-map-page.has-drawer .nodaji-control-card { visibility: hidden; pointer-events: none; }
+  .nodaji-map-page.has-drawer .nodaji-map-drawer { left: 16px; z-index: 90; width: min(430px, calc(100vw - 32px)); }
+  .nodaji-map-page.is-detail .nodaji-map-stage { left: 0; bottom: 61vh; }
+  .nodaji-map-page.is-detail .nodaji-map-drawer { top: auto; bottom: 12px; width: calc(100vw - 32px); height: calc(61vh - 12px); }
+  .nodaji-map-page.is-costs .nodaji-map-drawer { top: 68px; bottom: 12px; height: calc(100vh - 80px); }
+  .nodaji-map-page.is-detail .nodaji-map-buttons { top: 68px; bottom: auto; }
+  .nodaji-map-page.is-detail .nodaji-map-source, .nodaji-map-page.is-detail .nodaji-map-ticker { display: none; }
+}

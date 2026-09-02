@@ -1,5 +1,9 @@
 export const SQM_PER_PYEONG = 3.305785;
 
+export const EMPTY_STARTUP_INPUT = Object.freeze({ area: "", areaUnit: "pyeong", deposit: "",
+  interiorPerPyeong: "", equipment: "", inventory: "", otherStartup: "", reserve: "",
+  rent: "", payroll: "", utilities: "", otherMonthly: "", variableRate: "", revenue: "" });
+
 // 돈의 단위는 모두 만원. 시세/매출 추정 없이 사용자가 입력한 시나리오만 계산한다.
 export function calculateStartupCosts(input) {
   const errors = {};

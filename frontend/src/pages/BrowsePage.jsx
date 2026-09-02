@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import FitScorePanel from "../components/FitScorePanel";
+import AreaComparison from "../components/exploration/AreaComparison";
+import { EMPTY_STARTUP_INPUT } from "../lib/startupCosts";
 import IndustryExplorer from "../components/exploration/IndustryExplorer";
 import ExplorationTools from "../components/exploration/ExplorationTools";
 import "../components/exploration/exploration.css";
 import usePublicQuery from "../hooks/usePublicQuery";
 import { apiFetchJson, describeApiError } from "../lib/api";
-import { NAVER_CLIENT_ID, loadNaverMap, featureName, featurePaths } from "../lib/naverMap";
+import { NAVER_CLIENT_ID, loadNaverMap, featureName, featurePaths, fitBoundsTight } from "../lib/naverMap";
 
 // 기존 서울 프로젝트 MapPage의 핵심 구조를 이식한 공개 상권 탐색 화면.
 // 전체화면 지도 + 52px 상단 바 + 좌측 부유 카드를 유지하되, 서울 격자나 개별 점포
@@ -289,43 +291,7 @@ function cautionFor(item) {
   return "AI 전망은 상대 비교이므로 임대료와 유동인구 등 현장 조건을 함께 확인해야 합니다.";
 }
 
-function ComparisonPanel({ data, areaIds }) {
-  const items = areaIds.map((id) => data?.results.find((item) => item.area_id === id)).filter(Boolean);
-  if (!items.length) return null;
-  if (items.length === 1) {
-    return <div className="nodaji-compare-hint"><b>{items[0].area_name}</b>과 비교할 지역을 한 곳 더 담아주세요.</div>;
-  }
-
-  const tenure = (value) => typeof value === "number" ? `${(value / 4).toFixed(1)}년` : "—";
-  const pctText = (value) => typeof value === "number" ? `${fmt(value)}%` : "—";
-  const rows = [
-    ["조건 적합도", `${fmt(items[0].score)}점`, `${fmt(items[1].score)}점`],
-    ["근거 수준", items[0].evidence_label, items[1].evidence_label],
-    ["최근 1년 폐업률", pctText(items[0].observed.closure_rate_cum4_pct), pctText(items[1].observed.closure_rate_cum4_pct)],
-    ["현재 점포", `${items[0].observed.store_count}곳`, `${items[1].observed.store_count}곳`],
-    ["평균 업력", tenure(items[0].observed.tenure_quarters), tenure(items[1].observed.tenure_quarters)],
-    ["최근 개업률", pctText(items[0].observed.opening_rate_pct), pctText(items[1].observed.opening_rate_pct)],
-  ];
-
-  return (
-    <section className="nodaji-compare-panel" aria-label="선택 상권 비교">
-      <div className="nodaji-section-label">두 지역 비교</div>
-      <div className="nodaji-compare-grid">
-        <span />
-        <b>{items[0].area_name}</b>
-        <b>{items[1].area_name}</b>
-        {rows.map(([label, left, right]) => (
-          <div className="nodaji-compare-row" key={label}>
-            <span>{label}</span><strong>{left}</strong><strong>{right}</strong>
-          </div>
-        ))}
-      </div>
-      <p>비교 수치는 후보를 좁히는 참고 자료이며, 특정 점포의 성공 가능성을 뜻하지 않습니다.</p>
-    </section>
-  );
-}
-
-function RecommendationList({ data, priorityLabel, selectedAreaId, compareAreaIds, onShowOnMap, onOpenDetail, onToggleCompare }) {
+function RecommendationList({ data, priorityLabel, selectedAreaId, onOpenDetail }) {
   if (!data) return null;
   const scored = data.results.filter((item) => typeof item.score === "number");
   const featured = scored.filter(hasRecommendationEvidence).slice(0, 3);
@@ -337,7 +303,7 @@ function RecommendationList({ data, priorityLabel, selectedAreaId, compareAreaId
       <div className="nodaji-drawer-heading">
         <div>
           <small>{data.quarter_label} 기준 · {data.industry_name} · {priorityLabel}</small>
-          <h2>{featured.length ? `추천 ${featured.length}곳과 전체 비교` : "추천 보류 · 전체 비교"}</h2>
+          <h2>{featured.length ? `추천 상권 ${featured.length}곳` : "추천 보류 · 전체 지역"}</h2>
         </div>
         <span>점수 비교 {data.ranked_count} / {data.total_count}곳</span>
       </div>
@@ -346,7 +312,7 @@ function RecommendationList({ data, priorityLabel, selectedAreaId, compareAreaId
 
       {!featured.length && (
         <div role="alert" className="nodaji-drawer-alert">
-          이 업종은 근거 보통 이상인 지역이 없어 추천 3곳을 고르지 않았습니다. 아래 전체 비교표에서 근거 부족을 함께 확인해주세요.
+          이 업종은 근거 보통 이상인 지역이 없어 추천 3곳을 고르지 않았습니다. 아래 전체 지역 목록에서 근거 부족을 함께 확인해주세요.
         </div>
       )}
 
@@ -358,7 +324,10 @@ function RecommendationList({ data, priorityLabel, selectedAreaId, compareAreaId
 
       <div className="nodaji-result-list">
         {featured.map((item) => (
-          <article key={item.area_id} className={item.area_id === selectedAreaId ? "active" : ""}>
+          <article key={item.area_id} className={`explore-click-card ${item.area_id === selectedAreaId ? "active" : ""}`}
+            role="button" tabIndex={0} aria-label={`${item.area_name} 지도 이동 및 상세 보기`}
+            onClick={() => onOpenDetail(item.area_id)}
+            onKeyDown={(event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); onOpenDetail(item.area_id); } }}>
             <div className="nodaji-result-topline">
               <span className="nodaji-rank">{item.rank}</span>
               <span className="nodaji-result-copy">
@@ -377,29 +346,18 @@ function RecommendationList({ data, priorityLabel, selectedAreaId, compareAreaId
             </div>
             <p className="nodaji-result-reason"><b>맞는 이유</b>{item.reason}</p>
             <p className="nodaji-result-caution"><b>확인할 점</b>{cautionFor(item)}</p>
-            <div className="nodaji-result-actions">
-              <button type="button" onClick={() => onShowOnMap(item.area_id)}>지도에서 보기</button>
-              <button type="button" onClick={() => onOpenDetail(item.area_id)}>상세 보기</button>
-              <button
-                type="button"
-                className={compareAreaIds.includes(item.area_id) ? "active" : ""}
-                onClick={() => onToggleCompare(item.area_id)}
-                disabled={compareAreaIds.length >= 2 && !compareAreaIds.includes(item.area_id)}
-              >
-                {compareAreaIds.includes(item.area_id) ? "비교 해제" : "비교 담기"}
-              </button>
-            </div>
+            <span className="explore-card-link">지도와 상세 보기 →</span>
           </article>
         ))}
       </div>
 
       <details className="nodaji-all-area-list" open={!featured.length}>
         <summary>
-          <span>화성시 전체 {data.total_count}곳 비교표</span>
+          <span>화성시 전체 {data.total_count}곳 목록</span>
           <small>관측 {data.ranked_count}곳 · 미관측 {data.unobserved_count}곳</small>
         </summary>
         <div className="nodaji-all-area-head" aria-hidden="true">
-          <span>순위</span><span>지역과 근거</span><span>점수</span><span>비교</span>
+          <span>순위</span><span>지역과 근거</span><span>점수</span><span>상세</span>
         </div>
         <div className="nodaji-all-area-rows">
           {data.results.map((item) => {
@@ -412,22 +370,13 @@ function RecommendationList({ data, priorityLabel, selectedAreaId, compareAreaId
                   <small className={`nodaji-evidence evidence-${item.evidence_key}`}>{item.evidence_label}</small>
                 </span>
                 <strong>{scoreable ? fmt(item.score) : "—"}</strong>
-                <button
-                  type="button"
-                  className={compareAreaIds.includes(item.area_id) ? "active" : ""}
-                  onClick={() => onToggleCompare(item.area_id)}
-                  disabled={!scoreable || (compareAreaIds.length >= 2 && !compareAreaIds.includes(item.area_id))}
-                  aria-label={`${item.area_name} ${compareAreaIds.includes(item.area_id) ? "비교 해제" : "비교 담기"}`}
-                >
-                  {compareAreaIds.includes(item.area_id) ? "해제" : "담기"}
-                </button>
+                <button type="button" onClick={() => onOpenDetail(item.area_id)} aria-label={`${item.area_name} 지도 이동 및 상세 보기`}>보기</button>
               </div>
             );
           })}
         </div>
       </details>
 
-      <ComparisonPanel data={data} areaIds={compareAreaIds} />
       <p className="nodaji-drawer-note">{data.relative_notice} {data.disclaimer}</p>
     </div>
   );
@@ -461,7 +410,10 @@ export default function BrowsePage() {
   const [preset, setPreset] = useState("균형");
   const [drawerMode, setDrawerMode] = useState(null);
   const [entryMode, setEntryMode] = useState("industry");
-  const [compareAreaIds, setCompareAreaIds] = useState([]);
+  const [compareAreaIds, setCompareAreaIds] = useState([null, null]);
+  const [costDrafts, setCostDrafts] = useState({});
+  const [focusVersion, setFocusVersion] = useState(0);
+  const [detailTab, setDetailTab] = useState("conditions");
   const [error, setError] = useState("");
   const [mapError, setMapError] = useState("");
   const [tooltip, setTooltip] = useState(null);
@@ -484,52 +436,51 @@ export default function BrowsePage() {
   const clusterMarkersRef = useRef([]);
   const zoomListenerRef = useRef(null);
   const boundsFitRef = useRef(false);
+  const geojsonRef = useRef(null);
+  const drawerScrollRef = useRef(null);
+  const costKey = `${areaId}:${industryId}`;
+  const updateCostDraft = (value) => setCostDrafts((current) => ({ ...current,
+    [costKey]: typeof value === "function" ? value(current[costKey] ?? EMPTY_STARTUP_INPUT) : value,
+  }));
 
   const selectArea = useCallback((nextAreaId) => {
     setAreaId(nextAreaId);
-    setCompareAreaIds([]);
+    setFocusVersion((value) => value + 1);
+    setTooltip(null);
+    setDetailTab("conditions");
     setDrawerMode("detail");
   }, []);
 
-  const showRecommendationOnMap = useCallback((nextAreaId) => {
-    setAreaId(nextAreaId);
-  }, []);
-
   const chooseIndustry = useCallback((nextIndustryId) => {
-    setAreaId(null);
+    if (entryMode !== "direct") setAreaId(null);
     setDrawerMode(null);
-    setCompareAreaIds([]);
+    setCompareAreaIds([null, null]);
     setError("");
     setIndustryId(nextIndustryId);
     remember(SAVED_INDUSTRY_KEY, nextIndustryId);
-  }, []);
+  }, [entryMode]);
 
   const choosePreset = useCallback((nextPreset) => {
     setPreset(nextPreset);
-    setCompareAreaIds([]);
     remember(SAVED_PRESET_KEY, nextPreset);
   }, []);
 
   const chooseAreaFirst = useCallback((nextAreaId) => {
     setAreaId(nextAreaId);
-    setCompareAreaIds([]);
     setDrawerMode("industries");
   }, []);
 
   const chooseIndustryInArea = (nextIndustryId) => {
     setIndustryId(nextIndustryId);
     remember(SAVED_INDUSTRY_KEY, nextIndustryId);
-    setCompareAreaIds([]);
-    setDrawerMode("detail");
+    setCompareAreaIds([null, null]);
+    selectArea(areaId);
   };
 
-  const toggleCompareArea = useCallback((nextAreaId) => {
-    setCompareAreaIds((current) => (
-      current.includes(nextAreaId)
-        ? current.filter((id) => id !== nextAreaId)
-        : current.length < 2 ? [...current, nextAreaId] : current
-    ));
-  }, []);
+  const openComparison = () => {
+    setCompareAreaIds((current) => current.some(Boolean) ? current : [areaId, null]);
+    setDrawerMode("compare");
+  };
 
   useEffect(() => {
     apiFetchJson("/api/recommend/presets")
@@ -581,6 +532,29 @@ export default function BrowsePage() {
     ),
     [drawerMode, recommendations],
   );
+
+  const focusMapOnArea = useCallback((targetId) => {
+    const map = mapInstanceRef.current;
+    const name = options?.areas?.find((area) => area.id === targetId)?.name;
+    const feature = geojsonRef.current?.features.find((item) => featureName(item) === name);
+    if (!map || !feature) return;
+    map.autoResize();
+    const bounds = new window.naver.maps.LatLngBounds();
+    featurePaths(feature).forEach((path) => path.forEach((point) => bounds.extend(point)));
+    fitBoundsTight(map, bounds, 24);
+  }, [options]);
+
+  useEffect(() => {
+    const resize = () => {
+      mapInstanceRef.current?.autoResize();
+      if (drawerMode === "detail" && areaId) focusMapOnArea(areaId);
+    };
+    resize();
+    window.addEventListener("resize", resize);
+    return () => window.removeEventListener("resize", resize);
+  }, [areaId, drawerMode, focusVersion, focusMapOnArea]);
+
+  useEffect(() => { drawerScrollRef.current?.scrollTo({ top: 0 }); }, [drawerMode, areaId, industryId]);
 
   const drawPolygons = useCallback((map, geojson) => {
     polygonsRef.current.forEach((polygon) => polygon.setMap(null));
@@ -636,7 +610,7 @@ export default function BrowsePage() {
         position: new window.naver.maps.LatLng(item.lat, item.lng),
         zIndex: 40,
         icon: {
-          content: `<div style="width:${diameter}px;height:${diameter}px;border-radius:999px;background:rgba(0,93,178,.88);border:2px solid white;color:white;display:flex;align-items:center;justify-content:center;font:600 12px Inter,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.18)">${Number(item.store_count)}</div>`,
+          content: `<div aria-hidden="true" style="width:${diameter}px;height:${diameter}px;border-radius:999px;background:rgba(0,93,178,.88);border:2px solid white;color:white;display:flex;align-items:center;justify-content:center;font:600 12px Inter,sans-serif;box-shadow:0 2px 8px rgba(0,0,0,.18)">${Number(item.store_count)}</div>`,
           anchor: new window.naver.maps.Point(diameter / 2, diameter / 2),
         },
       });
@@ -645,7 +619,9 @@ export default function BrowsePage() {
 
   useEffect(() => {
     if (!NAVER_CLIENT_ID || !mapData) return;
+    let cancelled = false;
     loadNaverMap().then(() => {
+      if (cancelled) return;
       if (!mapRef.current) return;
       if (!mapInstanceRef.current) {
         mapInstanceRef.current = new window.naver.maps.Map(mapRef.current, {
@@ -659,6 +635,8 @@ export default function BrowsePage() {
       fetch("/hwaseong_emd.geojson")
         .then((response) => response.json())
         .then((geojson) => {
+          if (cancelled) return;
+          geojsonRef.current = geojson;
           drawPolygons(mapInstanceRef.current, geojson);
           if (!boundsFitRef.current) {
             const bounds = new window.naver.maps.LatLngBounds();
@@ -673,10 +651,12 @@ export default function BrowsePage() {
             () => drawStoreClusters(mapInstanceRef.current),
           );
           drawStoreClusters(mapInstanceRef.current);
+          if (drawerMode === "detail" && areaId) focusMapOnArea(areaId);
         })
-        .catch(() => setMapError("지도 경계 파일을 불러오지 못했습니다."));
-    }).catch((err) => setMapError(err.message));
-  }, [drawPolygons, drawStoreClusters, mapData]);
+        .catch(() => { if (!cancelled) setMapError("지도 경계 파일을 불러오지 못했습니다."); });
+    }).catch((err) => { if (!cancelled) setMapError(err.message); });
+    return () => { cancelled = true; };
+  }, [drawPolygons, drawStoreClusters, mapData, drawerMode, areaId, focusMapOnArea]);
 
   const resetMap = () => {
     const map = mapInstanceRef.current;
@@ -686,7 +666,7 @@ export default function BrowsePage() {
   };
 
   return (
-    <div className="nodaji-map-page">
+    <div className={`nodaji-map-page ${drawerMode ? "has-drawer" : ""} ${drawerMode === "detail" ? "is-detail" : ""} ${drawerMode === "detail" && detailTab === "costs" ? "is-costs" : ""}`}>
       <div className="nodaji-map-stage">
         <div ref={mapRef} className="nodaji-map-canvas">
           {!NAVER_CLIENT_ID && <div className="nodaji-map-empty">지도를 표시할 수 없습니다.</div>}
@@ -702,19 +682,20 @@ export default function BrowsePage() {
         </div>
 
         <div className="explore-entry-mode" aria-label="탐색 시작 방법">
-          {[["industry", "업종부터 찾기"], ["area", "지역부터 찾기"]].map(([key, label]) =>
+          {[["industry", "업종부터 찾기"], ["area", "지역부터 찾기"], ["direct", "지역·업종 선택"]].map(([key, label]) =>
             <button type="button" key={key} aria-pressed={entryMode === key} onClick={() => {
               setEntryMode(key);
               setDrawerMode(key === "area" && areaId ? "industries" : null);
             }}>{label}</button>)}
         </div>
-        {entryMode === "area" ? <label className="explore-area-picker">어느 지역에서 시작할까요?
-          <select value={areaId ?? ""} onChange={(event) => chooseAreaFirst(Number(event.target.value))}>
+        {entryMode !== "industry" && <label className="explore-area-picker">{entryMode === "direct" ? "원하는 지역" : "어느 지역에서 시작할까요?"}
+          <select value={areaId ?? ""} onChange={(event) => entryMode === "direct" ? setAreaId(Number(event.target.value)) : chooseAreaFirst(Number(event.target.value))}>
             <option value="" disabled>읍면동 선택</option>
             {(options?.areas ?? []).map((area) => <option key={area.id} value={area.id}>{area.name}</option>)}
           </select>
           {mapData && <small className="explore-map-industry">현재 지도 표시 업종: {mapData.industry_name}</small>}
-        </label> : <IndustryPicker
+        </label>}
+        {entryMode !== "area" && <IndustryPicker
           industries={(options?.industries ?? []).filter((industry) => coverageByIndustry[industry.id]?.observed)}
           coverageByIndustry={coverageByIndustry}
           totalAreaCount={options?.areas?.length ?? 0}
@@ -731,11 +712,13 @@ export default function BrowsePage() {
           </div>
         )}
 
-        {entryMode === "area" ? <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("industries")} disabled={!areaId}>이 지역에서 업종 탐색하기</button> : <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("recommendations")} disabled={!recommendations}>
+        {entryMode === "direct" ? <button type="button" className="nodaji-analyze-button" disabled={!areaId || !industryId} onClick={() => selectArea(areaId)}>선택한 지역·업종 상세 보기</button> : entryMode === "area" ? <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("industries")} disabled={!areaId}>이 지역에서 업종 탐색하기</button> : <button type="button" className="nodaji-analyze-button" onClick={() => setDrawerMode("recommendations")} disabled={!recommendations}>
           {recommendations?.results?.some(hasRecommendationEvidence)
-            ? `추천 ${Math.min(3, recommendations.results.filter(hasRecommendationEvidence).length)}곳과 전체 비교 보기`
-            : "전체 비교 보기 · 추천 근거 부족"}
+            ? `추천 상권 ${Math.min(3, recommendations.results.filter(hasRecommendationEvidence).length)}곳 보기`
+            : "전체 지역 보기 · 추천 근거 부족"}
         </button>}
+
+        <button type="button" className="explore-open-comparison" onClick={openComparison} disabled={!industryId}>두 지역 따로 비교하기 →</button>
 
         {selectedMapArea && (
           <div className="nodaji-selected-summary">
@@ -759,14 +742,17 @@ export default function BrowsePage() {
       </section>
 
       {drawerMode && (
-        <aside className="nodaji-map-drawer" aria-label={drawerMode === "recommendations" ? "맞춤 상권 추천" : "선택 상권 상세"}>
+        <aside className="nodaji-map-drawer" aria-label={{ recommendations: "맞춤 상권 추천", compare: "지역 비교", industries: "업종 탐색", detail: "선택 상권 상세" }[drawerMode]}>
           <div className="nodaji-drawer-tabs explore-drawer-tabs">
+            <button type="button" className={drawerMode === "compare" ? "active" : ""} onClick={openComparison}>지역 비교</button>
             <button type="button" className={drawerMode === "industries" ? "active" : ""} onClick={() => setDrawerMode("industries")} disabled={!areaId}>업종 탐색</button>
             <button type="button" className={drawerMode === "recommendations" ? "active" : ""} onClick={() => setDrawerMode("recommendations")}>맞춤 추천</button>
             <button type="button" className={drawerMode === "detail" ? "active" : ""} onClick={() => setDrawerMode("detail")} disabled={!areaId}>선택 상권</button>
             <button type="button" className="nodaji-drawer-close" onClick={() => setDrawerMode(null)} aria-label="패널 닫기">×</button>
           </div>
-          <div className="nodaji-drawer-scroll">
+          <div ref={drawerScrollRef} className="nodaji-drawer-scroll">
+            {drawerMode === "compare" && <AreaComparison data={recommendations} loading={recommendationLoading} error={recommendationQuery.error}
+              areaIds={compareAreaIds} onChange={setCompareAreaIds} onOpenDetail={selectArea} />}
             {drawerMode === "industries" && <IndustryExplorer areaId={areaId} preset={preset} onSelect={chooseIndustryInArea} />}
             {drawerMode === "recommendations" && (
               recommendationLoading
@@ -775,10 +761,7 @@ export default function BrowsePage() {
                     data={recommendations}
                     priorityLabel={presetOptions?.presets.find((item) => item.key === preset)?.label ?? preset}
                     selectedAreaId={areaId}
-                    compareAreaIds={compareAreaIds}
-                    onShowOnMap={showRecommendationOnMap}
                     onOpenDetail={selectArea}
-                    onToggleCompare={toggleCompareArea}
                   />
             )}
             {drawerMode === "detail" && (
@@ -786,9 +769,8 @@ export default function BrowsePage() {
                 areaName={options?.areas?.find((area) => area.id === areaId)?.name}
                 industryName={options?.industries?.find((industry) => industry.id === industryId)?.name}
                 preset={preset} onSelect={selectArea} onBroaden={() => setDrawerMode("recommendations")}
-                onCompare={(otherId) => setCompareAreaIds([areaId, otherId])}
-                comparisonKey={compareAreaIds.length === 2 ? compareAreaIds.join(":") : ""}
-                comparison={compareAreaIds.length === 2 && !recommendationLoading && <ComparisonPanel data={recommendations} areaIds={compareAreaIds} />}>
+                activeTab={detailTab} onTabChange={setDetailTab}
+                costInput={costDrafts[costKey] ?? EMPTY_STARTUP_INPUT} onCostChange={updateCostDraft}>
                 <FitScorePanel
                   data={score}
                   loading={scoreLoading}

@@ -1,0 +1,33 @@
+.startup-wizard { scroll-margin-top: 8px; }
+.cost-heading { display: flex; justify-content: space-between; align-items: start; gap: 12px; }
+.cost-heading h3 { line-height: 1.5; }.cost-heading p { margin: 0 0 14px; }
+.cost-heading > span { font-size: 10px; white-space: nowrap; border-radius: 4px; padding: 5px; background: #f1f5f9; color: #64748b; }
+.cost-steps { display: flex; gap: 6px; margin: 5px 0 16px; }
+.cost-steps button { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 10px 3px; background: white; color: #64748b; font-size: 11px; }
+.cost-steps b { display: grid; place-items: center; width: 22px; height: 22px; border-radius: 50%; background: #e8eef6; font-size: 11px; }
+.cost-steps button[aria-current="step"] { border-color: #93b8ee; color: #174c98; background: #f0f6ff; font-weight: 700; }
+.cost-steps button[aria-current="step"] b { color: white; background: #2563eb; }
+.cost-live-summary { position: sticky; top: -18px; z-index: 3; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 15px; background: #102b4b; color: white; border-radius: 10px; box-shadow: 0 3px 9px #102b4b20; }
+.cost-live-summary div { display: grid; gap: 6px; }.cost-live-summary span { color: #b6cee9; font-size: 11px; }
+.cost-live-summary strong { font-size: 17px; overflow-wrap: anywhere; }
+.cost-live-summary small { color: #b6cee9; font-size: 10px; grid-column: 1 / -1; margin-top: 4px; }
+.cost-step-content { padding: 23px 0 8px; }.cost-step-content h4 { font-size: 14px; line-height: 1.65; margin-bottom: 17px; }
+.cost-field { display: flex; flex-direction: column; gap: 7px; min-width: 0; margin-bottom: 12px; }
+.cost-field > span { color: #334155; font-size: 12px; font-weight: 600; }.cost-field > small { font-size: 10px; line-height: 1.6; min-height: 0; }.cost-field > small:empty { display: none; }
+.cost-number { display: flex; align-items: center; background: #fff; border: 1px solid #cbd5e1; border-radius: 8px; overflow: hidden; }
+.cost-number:focus-within { border-color: #2563eb; box-shadow: 0 0 0 2px #dbeafe; }.cost-number:has([aria-invalid="true"]) { border-color: #dc2626; }
+.cost-number input { width: 100%; min-width: 0; padding: 12px 9px; background: none; border: none; outline: none; font: inherit; font-size: 15px; color: #172b4d; }
+.cost-number > span { padding-right: 10px; color: #64748b; font-size: 11px; white-space: nowrap; }
+.cost-field select { height: 43px; padding: 10px; border: 1px solid #cbd5e1; border-radius: 8px; background: white; color: #172b4d; font: inherit; font-size: 13px; }.cost-field .cost-field-error { color: #b91c1c; }
+.cost-size-options { display: flex; gap: 6px; margin: 0 0 22px; }.cost-size-options button { flex: 1; padding: 7px; font-size: 11px; }
+.cost-extra { padding: 12px; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; margin: 8px 0; }
+.cost-extra summary { font-size: 12px; color: #334155; cursor: pointer; }.cost-extra summary small { float: right; }.cost-extra[open] summary { margin-bottom: 15px; }
+.cost-range { display: grid; grid-template-columns: 1fr auto; gap: 7px; margin: 0 0 20px; font-size: 11px; color: #64748b; }
+.cost-range input { grid-column: 1 / -1; grid-row: 2; width: 100%; accent-color: #2563eb; }
+.cost-final-result { margin-top: 22px; padding: 20px; border: 1px solid #a9c7ed; border-radius: 12px; background: #f0f6ff; }
+.cost-final-result > span { display: block; font-size: 12px; color: #174c98; }.cost-final-result > strong { display: block; font-size: 27px; color: #174c98; margin: 10px 0; overflow-wrap: anywhere; }
+.cost-final-result > div { display: flex; justify-content: space-between; gap: 12px; padding: 13px 0; border-top: 1px solid #d1dff0; font-size: 12px; }
+.cost-loss { color: #b91c1c; }.cost-profit { color: #166534; }.cost-final-result dl { margin: 0; }.cost-final-result dl div { display: flex; justify-content: space-between; font-size: 11px; margin-top: 12px; color: #64748b; }.cost-final-result dd { margin: 0; }
+.cost-step-actions { display: flex; gap: 8px; padding: 12px 0; }.cost-step-actions button { flex: 1; }.cost-step-actions .cost-next { background: #2563eb; border-color: #2563eb; color: white; }.cost-step-actions button:disabled { opacity: .35; cursor: default; }
+.cost-explanation { margin-top: 15px; font-size: 11px; color: #64748b; }.cost-explanation summary { cursor: pointer; }
+.cost-draft-note { margin-top: 16px; padding-top: 15px; border-top: 1px solid #e2e8f0; display: flex; align-items: center; gap: 10px; }.cost-draft-note small { flex: 1; font-size: 10px; line-height: 1.6; }.cost-draft-note button { padding: 5px; background: transparent; font-size: 10px; }

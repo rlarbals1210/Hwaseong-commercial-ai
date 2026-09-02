@@ -1,4 +1,3 @@
-import { useEffect, useRef, useState } from "react";
 import usePublicQuery from "../../hooks/usePublicQuery";
 import StartupSimulator from "./StartupSimulator";
 
@@ -8,7 +7,7 @@ function QueryState({ query }) {
   return null;
 }
 
-function NearbyAreas({ areaId, industryId, preset, onCompare, onSelect, onBroaden }) {
+function NearbyAreas({ areaId, industryId, preset, onSelect, onBroaden }) {
   const query = usePublicQuery(`/api/recommend/nearby?area_id=${areaId}&industry_id=${industryId}&preset=${encodeURIComponent(preset)}`);
   const data = query.data;
   return <section className="explore-section">
@@ -16,12 +15,13 @@ function NearbyAreas({ areaId, industryId, preset, onCompare, onSelect, onBroade
     {data && <>
       <p>{data.neighbor_count}개 인접 지역 중 근거 충분 {data.eligible_count}곳 · {data.quarter_label}</p>
       {!data.results.length && <p className="explore-status">같은 업종으로 비교할 수 있는 인접 지역의 근거가 부족합니다.</p>}
-      {data.results.map((item) => <article className="explore-candidate" key={item.area_id}>
+      {data.results.map((item) => <article className="explore-candidate explore-click-card" key={item.area_id}
+        role="button" tabIndex={0} aria-label={`${item.area_name} 지도 이동 및 상세 보기`}
+        onClick={() => onSelect(item.area_id)} onKeyDown={(event) => { if (["Enter", " "].includes(event.key)) { event.preventDefault(); onSelect(item.area_id); } }}>
         <header><h4>{item.area_name}</h4><b>{item.score.toFixed(1)}점</b></header>
         <small>화성시 내 {item.rank}위 · 점포 {item.observed.store_count}곳</small>
         <p>{item.reason}</p>
-        <div className="explore-actions"><button type="button" onClick={() => onCompare(item.area_id)}>현재 지역과 비교</button>
-          <button type="button" onClick={() => onSelect(item.area_id)}>상세 보기</button></div>
+        <span className="explore-card-link">지도와 상세 보기 →</span>
       </article>)}
       <p>{data.notice}</p>
       <button type="button" className="explore-secondary" onClick={onBroaden}>화성시 전체로 넓혀 보기</button>
@@ -70,20 +70,15 @@ function SearchInterest({ industryId }) {
   </section>;
 }
 
-export default function ExplorationTools({ areaId, industryId, areaName, industryName, preset, children, comparison, comparisonKey, onCompare, onSelect, onBroaden }) {
-  const [tab, setTab] = useState("conditions");
-  const comparisonRef = useRef(null);
-  useEffect(() => {
-    if (comparisonKey) comparisonRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-  }, [comparisonKey]);
+export default function ExplorationTools({ areaId, industryId, areaName, industryName, preset, children, costInput, onCostChange, onSelect, onBroaden, activeTab: tab, onTabChange }) {
   return <>
     <h2 className="explore-detail-title">{areaName} <small>{industryName}</small></h2>
     <div className="explore-tabs" aria-label="상세 분석 종류">
-      {[["conditions", "입지·인근 비교"], ["visitors", "방문·검색 패턴"], ["costs", "창업비용"]].map(([key, label]) =>
-        <button type="button" key={key} aria-pressed={tab === key} onClick={() => setTab(key)}>{label}</button>)}
+      {[["conditions", "입지·인근 상권"], ["visitors", "방문·검색 패턴"], ["costs", "창업비용"]].map(([key, label]) =>
+        <button type="button" key={key} aria-pressed={tab === key} onClick={() => onTabChange(key)}>{label}</button>)}
     </div>
-    {tab === "conditions" && <>{children}<div ref={comparisonRef}>{comparison}</div><NearbyAreas {...{ areaId, industryId, preset, onCompare, onSelect, onBroaden }} /></>}
+    {tab === "conditions" && <>{children}<NearbyAreas {...{ areaId, industryId, preset, onSelect, onBroaden }} /></>}
     {tab === "visitors" && <><WeekdayFlow areaId={areaId} /><SearchInterest industryId={industryId} /></>}
-    <div hidden={tab !== "costs"}><StartupSimulator areaName={areaName} industryName={industryName} /></div>
+    <div hidden={tab !== "costs"}><StartupSimulator areaName={areaName} industryName={industryName} input={costInput} onChange={onCostChange} /></div>
   </>;
 }
