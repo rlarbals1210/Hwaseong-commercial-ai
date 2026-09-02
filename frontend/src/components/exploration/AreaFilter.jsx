@@ -12,7 +12,7 @@ export default function AreaFilter({ areas, selectedIds, onChange }) {
     ? selectedIds.filter((value) => value !== areaId) : [...selectedIds, areaId]);
 
   return <details className="explore-area-filter">
-    <summary><span><b>읍면동 필터</b><small>{summary}</small></span><span className="area-filter-count">{selected.length || areas.length}곳</span></summary>
+    <summary><span><b><span className="material-symbols-outlined" aria-hidden="true">filter_alt</span>읍면동 필터</b><small>{summary}</small></span><span className="area-filter-count">{selected.length || areas.length}곳</span></summary>
     <div className="area-filter-content">
       <label htmlFor={id} className="area-filter-search-label">지역 이름 검색</label>
       <input id={id} type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="예: 동탄, 봉담" />

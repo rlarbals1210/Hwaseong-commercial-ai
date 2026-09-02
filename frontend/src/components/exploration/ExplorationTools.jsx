@@ -1,5 +1,6 @@
 import usePublicQuery from "../../hooks/usePublicQuery";
 import StartupSimulator from "./StartupSimulator";
+import ToolHeading from "./ToolHeading";
 
 function QueryState({ query }) {
   if (query.loading) return <p role="status">자료를 불러오는 중…</p>;
@@ -10,8 +11,8 @@ function QueryState({ query }) {
 function NearbyAreas({ areaId, industryId, preset, onSelect, onBroaden }) {
   const query = usePublicQuery(`/api/recommend/nearby?area_id=${areaId}&industry_id=${industryId}&preset=${encodeURIComponent(preset)}`);
   const data = query.data;
-  return <section className="explore-section">
-    <h3>인근 대안 상권</h3><QueryState query={query} />
+  return <section className="explore-section explore-nearby">
+    <ToolHeading icon="near_me" title="인근 대안 상권" /><QueryState query={query} />
     {data && <>
       <p>{data.neighbor_count}개 인접 지역 중 근거 충분 {data.eligible_count}곳 · {data.quarter_label}</p>
       {!data.results.length && <p className="explore-status">같은 업종으로 비교할 수 있는 인접 지역의 근거가 부족합니다.</p>}
@@ -33,8 +34,8 @@ function WeekdayFlow({ areaId }) {
   const query = usePublicQuery(`/api/exploration/weekday-flow?area_id=${areaId}`);
   const data = query.data;
   const max = Math.max(100, ...(data?.points ?? []).map((point) => point.index));
-  return <section className="explore-section">
-    <h3>요일별 유동인구 패턴</h3><QueryState query={query} />
+  return <section className="explore-section explore-visitors">
+    <ToolHeading icon="calendar_month" title="요일별 유동인구 패턴" /><QueryState query={query} />
     {data && <>
       <p>{data.area_name} 전체 · 기준월 {data.month ?? "자료 없음"} · 요일 평균 100</p>
       {data.status === "ready" && <>
@@ -53,8 +54,8 @@ function WeekdayFlow({ areaId }) {
 function SearchInterest({ industryId }) {
   const query = usePublicQuery(`/api/exploration/search-trend?industry_id=${industryId}`);
   const data = query.data;
-  return <section className="explore-section">
-    <h3>업종 검색 트렌드</h3><QueryState query={query} />
+  return <section className="explore-section explore-search">
+    <ToolHeading icon="query_stats" title="업종 검색 트렌드" /><QueryState query={query} />
     {data && <>
       <p>{data.industry_name} · 전국 · {data.start_date.slice(0, 7)} ~ {data.end_date.slice(0, 7)}</p>
       {data.keywords.length > 0 && <p>대표 검색어: {data.keywords.join(" · ")}</p>}
@@ -71,14 +72,16 @@ function SearchInterest({ industryId }) {
 }
 
 export default function ExplorationTools({ areaId, industryId, areaName, industryName, preset, children, costInput, onCostChange, onSelect, onBroaden, activeTab: tab, onTabChange }) {
-  return <>
-    <h2 className="explore-detail-title">{areaName} <small>{industryName}</small></h2>
-    <div className="explore-tabs" aria-label="상세 분석 종류">
-      {[["conditions", "입지·인근 상권"], ["visitors", "방문·검색 패턴"], ["costs", "창업비용"]].map(([key, label]) =>
-        <button type="button" key={key} aria-pressed={tab === key} onClick={() => onTabChange(key)}>{label}</button>)}
+  return <div className="explore-detail-content" data-detail-kind={tab}>
+    <div className="explore-detail-heading"><span className="material-symbols-outlined" aria-hidden="true">location_on</span>
+      <h2 className="explore-detail-title">{areaName} <small>{industryName}</small></h2>
     </div>
-    {tab === "conditions" && <>{children}<NearbyAreas {...{ areaId, industryId, preset, onSelect, onBroaden }} /></>}
+    <div className="explore-tabs" aria-label="상세 분석 종류">
+      {[["conditions", "입지·인근 상권", "travel_explore"], ["visitors", "방문·검색 패턴", "monitoring"], ["costs", "창업비용", "calculate"]].map(([key, label, icon]) =>
+        <button type="button" key={key} data-tool={key} aria-pressed={tab === key} onClick={() => onTabChange(key)}><span className="material-symbols-outlined" aria-hidden="true">{icon}</span>{label}</button>)}
+    </div>
+    {tab === "conditions" && <><div className="explore-fit-section">{children}</div><NearbyAreas {...{ areaId, industryId, preset, onSelect, onBroaden }} /></>}
     {tab === "visitors" && <><WeekdayFlow areaId={areaId} /><SearchInterest industryId={industryId} /></>}
     <div hidden={tab !== "costs"}><StartupSimulator areaName={areaName} industryName={industryName} input={costInput} onChange={onCostChange} /></div>
-  </>;
+  </div>;
 }

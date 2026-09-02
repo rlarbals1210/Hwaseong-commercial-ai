@@ -1,3 +1,5 @@
+import ToolHeading from "./ToolHeading";
+
 const number = (value, suffix = "", digits = 1) => (
   typeof value === "number" && Number.isFinite(value) ? `${value.toLocaleString("ko-KR", { maximumFractionDigits: digits })}${suffix}` : "—"
 );
@@ -14,7 +16,7 @@ export default function AreaComparison({ data, loading, error, areaIds, onChange
     ["최근 개업률", (item) => number(item.observed.opening_rate_pct, "%")],
   ];
   return <section className="explore-section explore-comparison" aria-label="지역 비교">
-    <div className="nodaji-section-label">같은 업종 · 두 지역</div><h2>어느 지역이 더 맞을까요?</h2>
+    <ToolHeading icon="compare_arrows" title="어느 지역이 더 맞을까요?" level="h2"><p>같은 업종 · 두 지역 비교</p></ToolHeading>
     <p>{data ? `${data.industry_name} · ${data.quarter_label}` : "선택 업종의 자료를 불러옵니다."}</p>
     {loading && <p role="status">비교 자료를 불러오는 중…</p>}{error && <p role="alert">{error}</p>}
     {data && <>

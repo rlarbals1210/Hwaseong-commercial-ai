@@ -1,6 +1,7 @@
 import { useId, useRef, useState } from "react";
 import { calculateStartupCosts, EMPTY_STARTUP_INPUT, SQM_PER_PYEONG } from "../../lib/startupCosts";
 import "./startupSimulator.css";
+import ToolHeading from "./ToolHeading";
 
 const STEPS = ["매장·초기비용", "월 운영비", "매출·결과"];
 const STEP_FIELDS = [["area", "deposit", "interiorPerPyeong", "equipment", "inventory", "otherStartup", "reserve"],
@@ -48,7 +49,7 @@ export default function StartupSimulator({ areaName, industryName, input, onChan
     </label>;
   };
   return <section ref={sectionRef} className="explore-section startup-wizard" aria-label="창업비용 시뮬레이터">
-    <div className="cost-heading"><div><h3>창업비용, 하나씩 계산해볼까요?</h3><p>{areaName} · {industryName}</p></div><span>단위: 만원</span></div>
+    <div className="cost-heading"><ToolHeading icon="calculate" title="창업비용, 하나씩 계산해볼까요?"><p>{areaName} · {industryName}</p></ToolHeading><span>단위: 만원</span></div>
     <nav className="cost-steps" aria-label="비용 입력 단계">{STEPS.map((label, index) => <button type="button" key={label}
       aria-current={step === index ? "step" : undefined} onClick={() => go(index)}><b>{index + 1}</b><span>{label}</span></button>)}</nav>
     <div className="cost-live-summary" aria-live="polite">

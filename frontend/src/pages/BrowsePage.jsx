@@ -7,6 +7,7 @@ import { EMPTY_STARTUP_INPUT } from "../lib/startupCosts";
 import IndustryExplorer from "../components/exploration/IndustryExplorer";
 import ExplorationTools from "../components/exploration/ExplorationTools";
 import "../components/exploration/exploration.css";
+import "../components/exploration/browseSections.css";
 import usePublicQuery from "../hooks/usePublicQuery";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { NAVER_CLIENT_ID, loadNaverMap, featureName, featurePaths, fitBoundsTight } from "../lib/naverMap";
@@ -763,12 +764,12 @@ export default function BrowsePage() {
       </section>
 
       {drawerMode && (
-        <aside className="nodaji-map-drawer" aria-label={{ recommendations: "맞춤 상권 추천", compare: "지역 비교", industries: "업종 탐색", detail: "선택 상권 상세" }[drawerMode]}>
+        <aside className="nodaji-map-drawer" data-tool={drawerMode} aria-label={{ recommendations: "맞춤 상권 추천", compare: "지역 비교", industries: "업종 탐색", detail: "선택 상권 상세" }[drawerMode]}>
           <div className="nodaji-drawer-tabs explore-drawer-tabs">
-            <button type="button" className={drawerMode === "compare" ? "active" : ""} onClick={openComparison}>지역 비교</button>
-            <button type="button" className={drawerMode === "industries" ? "active" : ""} onClick={() => setDrawerMode("industries")} disabled={!areaId}>업종 탐색</button>
-            <button type="button" className={drawerMode === "recommendations" ? "active" : ""} onClick={() => setDrawerMode("recommendations")}>맞춤 추천</button>
-            <button type="button" className={drawerMode === "detail" ? "active" : ""} onClick={() => setDrawerMode("detail")} disabled={!areaId}>선택 상권</button>
+            <button type="button" data-tool="compare" className={drawerMode === "compare" ? "active" : ""} onClick={openComparison}>지역 비교</button>
+            <button type="button" data-tool="industries" className={drawerMode === "industries" ? "active" : ""} onClick={() => setDrawerMode("industries")} disabled={!areaId}>업종 탐색</button>
+            <button type="button" data-tool="recommendations" className={drawerMode === "recommendations" ? "active" : ""} onClick={() => setDrawerMode("recommendations")}>맞춤 추천</button>
+            <button type="button" data-tool="detail" className={drawerMode === "detail" ? "active" : ""} onClick={() => setDrawerMode("detail")} disabled={!areaId}>선택 상권</button>
             <button type="button" className="nodaji-drawer-close" onClick={() => setDrawerMode(null)} aria-label="패널 닫기">×</button>
           </div>
           <div ref={drawerScrollRef} className="nodaji-drawer-scroll">

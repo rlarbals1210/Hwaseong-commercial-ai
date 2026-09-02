@@ -1,0 +1,162 @@
+/* 지도와 패널의 배치는 유지하고 기능의 표면·제목·선택 상태를 구분한다. */
+.nodaji-map-page {
+  --tool-ink: #225b9a;
+  --tool-soft: #edf4fc;
+  --tool-line: #c7d9ed;
+  --browse-panel: #f3f5f9;
+}
+.nodaji-map-page [data-tool="conditions"], .nodaji-map-page [data-tool="recommendations"],
+.nodaji-map-page [data-tool="detail"] {
+  --tool-ink: #225b9a; --tool-soft: #edf4fc; --tool-line: #c7d9ed;
+}
+.nodaji-map-page [data-tool="compare"], .nodaji-map-page .explore-comparison {
+  --tool-ink: #6b5099; --tool-soft: #f2eef8; --tool-line: #d8cce9;
+}
+.nodaji-map-page [data-tool="industries"], .nodaji-map-page .explore-industries,
+.nodaji-map-page [data-tool="visitors"], .nodaji-map-page [data-detail-kind="visitors"] {
+  --tool-ink: #16766f; --tool-soft: #eaf5f2; --tool-line: #beded5;
+}
+.nodaji-map-page [data-tool="costs"], .nodaji-map-page .startup-wizard {
+  --tool-ink: #8b622a; --tool-soft: #faf3e7; --tool-line: #e7d6b8;
+}
+
+/* 왼쪽 조건 입력: 흰 입력면, 중립색 조건 그룹, 독립된 비교 진입점. */
+.nodaji-map-page .nodaji-control-card { background: #f8fafc; border-color: #d6dfeb; }
+.nodaji-map-page .nodaji-control-heading { padding: 16px 18px; background: #eaf0f8; border-bottom-color: #d4dfec; }
+.nodaji-map-page .nodaji-control-heading b { color: #183957; font-size: 14px; }
+.nodaji-map-page .nodaji-control-heading > span { padding: 4px 6px; background: white; border-radius: 5px; color: #526580; }
+.nodaji-map-page .explore-entry-mode { padding: 4px; border: 1px solid #d8e1ed; background: #e9eef5; margin-bottom: 16px; }
+.nodaji-map-page .explore-entry-mode button { min-height: 35px; color: #52647c; }
+.nodaji-map-page .explore-entry-mode button[aria-pressed="true"] { color: #fff; background: #234e7c; box-shadow: 0 2px 5px #18395720; }
+.nodaji-map-page .nodaji-field { margin: 0 18px 14px; padding: 12px; gap: 10px; border: 1px solid #d8e3f0; border-radius: 11px; background: white; }
+.nodaji-map-page .nodaji-field > .nodaji-step-label { color: #344861; font-weight: 600; font-size: 11px; }
+.nodaji-map-page .nodaji-industry-trigger { box-shadow: none; background: #f1f6fd; border-color: #c8d9f0; }
+.nodaji-map-page .nodaji-industry-trigger > em { display: none; }
+.nodaji-map-page .nodaji-industry-trigger { grid-template-columns: 32px minmax(0, 1fr) 20px; }
+.nodaji-map-page .nodaji-industry-icon { width: 32px; height: 32px; }
+.nodaji-map-page .explore-area-picker { padding: 12px; border: 1px solid #d5e3e2; border-radius: 11px; background: #eff6f5; color: #265e5b; font-weight: 600; }
+.nodaji-map-page .explore-area-picker select { border-color: #c6dcd8; font-weight: 400; }
+.nodaji-map-page .explore-area-filter { border-color: #d2dfde; background: #f0f6f5; }
+.nodaji-map-page .explore-area-filter summary b { display: flex; align-items: center; gap: 6px; color: #315d59; }
+.nodaji-map-page .explore-area-filter summary b > span { font-size: 17px; }
+.nodaji-map-page .area-filter-count { color: #315d59; background: #deeeea; }
+.nodaji-map-page .area-filter-content { background: white; border-top-color: #d2dfde; border-radius: 0 0 10px 10px; }
+.nodaji-map-page .area-filter-options label:has(:checked) { color: #166b62; background: #eaf5f2; }
+.nodaji-map-page .area-filter-options input { accent-color: #16766f; }
+.nodaji-map-page .nodaji-priority-block { padding: 12px; border: 1px solid #dce3ed; border-radius: 11px; background: #edf1f6; }
+.nodaji-map-page .nodaji-priority-block legend { float: left; width: 100%; margin-bottom: 10px; font-size: 11px; line-height: 1.5; }
+.nodaji-map-page .nodaji-priority-grid { clear: both; margin-top: 0; }
+.nodaji-map-page .nodaji-priority-grid button { background: white; min-height: 62px; padding-left: 6px; padding-right: 17px; }
+.nodaji-map-page .nodaji-priority-grid button b { font-size: 11px; }
+.nodaji-map-page .nodaji-priority-grid button.active { background: #e3eefc; border-color: #7da8db; box-shadow: inset 0 0 0 1px #b6ceeb; }
+.nodaji-map-page .nodaji-mini-stats > span { background: #fff; border: 1px solid #e0e6ee; }
+.nodaji-map-page .nodaji-mini-stats small { color: #64748b; }
+.nodaji-map-page .nodaji-analyze-button { background: #2862ad; min-height: 43px; box-shadow: 0 3px 8px #225b9a20; }
+.nodaji-map-page .nodaji-analyze-button:hover { background: #1e518f; }
+.nodaji-map-page .nodaji-analyze-button:disabled { background: #e2e7ee; color: #75849a; box-shadow: none; }
+.nodaji-map-page .explore-open-comparison { color: #684c96; background: #f2eef8; border-color: #d4c7e5; font-weight: 600; padding: 13px 10px; margin-top: 7px; }
+.nodaji-map-page .explore-open-comparison:hover { background: #eae2f4; }
+.nodaji-map-page .nodaji-selected-summary { padding: 14px; margin: 16px 18px; border-left: 3px solid #769bc5; border-radius: 0 8px 8px 0; background: #eaf0f7; }
+.nodaji-map-page .nodaji-card-legend { background: #edf1f5; border-top-color: #dce3eb; padding-top: 16px; }
+.nodaji-map-page .nodaji-section-label { color: #52647b; font-weight: 600; }
+
+/* 오른쪽 결과 패널과 상단 기능 이동. 색은 기능 식별에만 쓰며 등급 색을 바꾸지 않는다. */
+.nodaji-map-page .nodaji-map-drawer { border-color: #cdd8e5; background: var(--browse-panel); }
+.nodaji-map-page .nodaji-drawer-tabs { background: #e8edf4; border-bottom-color: var(--tool-line); }
+.nodaji-map-page .nodaji-drawer-tabs button { color: #52627a; }
+.nodaji-map-page .nodaji-drawer-tabs button.active { color: var(--tool-ink); background: var(--tool-soft); border-bottom: 3px solid var(--tool-ink); }
+.nodaji-map-page .nodaji-drawer-tabs button:not(.active):not(:disabled):hover { color: var(--tool-ink); background: #f8fafc; }
+.nodaji-map-page .nodaji-drawer-tabs button:disabled { color: #9ba8b9; }
+.nodaji-map-page .nodaji-drawer-tabs .nodaji-drawer-close { color: #64748b; }
+.nodaji-map-page .nodaji-drawer-scroll { background: var(--browse-panel); }
+.nodaji-map-page .nodaji-drawer-heading { padding: 14px; border-left: 3px solid #4a79b3; border-radius: 0 10px 10px 0; background: #e8f0fb; margin-bottom: 14px; }
+.nodaji-map-page .nodaji-drawer-heading h2 { color: #1c456f; font-size: 19px; }
+.nodaji-map-page .nodaji-drawer-heading small, .nodaji-map-page .nodaji-drawer-heading > span { color: #607087; }
+.nodaji-map-page .nodaji-comparison-notice { background: #f8fafc; border-style: dashed; margin-bottom: 16px; }
+.nodaji-map-page .nodaji-result-list { gap: 12px; }
+.nodaji-map-page .nodaji-result-list > article { padding: 15px; border-color: #d4deeb; box-shadow: 0 2px 5px #1d3b5910; }
+.nodaji-map-page .nodaji-result-list > article:hover { border-color: #87acd9; box-shadow: 0 4px 12px #1d3b591c; }
+.nodaji-map-page .nodaji-result-list > article.active { border-color: #6699d3; background: #f6faff; }
+.nodaji-map-page .nodaji-result-topline { padding-bottom: 12px; border-bottom: 1px solid #e7edf4; margin-bottom: 12px; }
+.nodaji-map-page .nodaji-result-score b { color: #225b9a; }
+.nodaji-map-page .nodaji-result-caution { background: #faf7f0; padding: 9px; border-radius: 6px; }
+.nodaji-map-page .nodaji-all-area-list { margin-top: 18px; border-color: #cbd5e1; }
+.nodaji-map-page .nodaji-all-area-list > summary { background: #e9eef5; }
+.nodaji-map-page .nodaji-drawer-note { color: #657388; line-height: 1.75; }
+
+/* 상세 내부: 지역 머리말 → 기능 탭 → 독립된 내용 카드. */
+.nodaji-map-page .explore-detail-heading { display: flex; align-items: center; gap: 11px; padding: 14px; margin-bottom: 16px; border: 1px solid #d0dceb; border-radius: 11px; background: #e8eff8; }
+.nodaji-map-page .explore-detail-heading > span { display: grid; place-items: center; width: 37px; height: 37px; border-radius: 9px; background: white; color: #416c9c; font-size: 22px; }
+.nodaji-map-page .explore-detail-title { margin: 0; color: #213f61; }
+.nodaji-map-page .explore-detail-title small { margin-top: 4px; color: #5a6b80; }
+.nodaji-map-page .explore-tabs { gap: 7px; padding: 0; background: transparent; margin-bottom: 18px; }
+.nodaji-map-page .explore-tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 66px; padding: 9px 3px; border: 1px solid #d8e0eb; border-radius: 9px; background: white; color: #59697e; font-size: 11px; box-shadow: none; }
+.nodaji-map-page .explore-tabs button > span { font-size: 21px; color: var(--tool-ink); }
+.nodaji-map-page .explore-tabs button[aria-pressed="true"] { color: var(--tool-ink); border-color: var(--tool-ink); background: var(--tool-soft); box-shadow: inset 0 -2px 0 var(--tool-ink); }
+.nodaji-map-page .explore-tabs button:hover { border-color: var(--tool-ink); }
+.nodaji-map-page .explore-fit-section { padding: 16px; border: 1px solid #d4deeb; border-top: 3px solid #527fac; border-radius: 11px; background: white; margin-bottom: 22px; }
+.nodaji-map-page .explore-fit-section .t-title { font-size: 17px; }
+.nodaji-map-page .nodaji-observation { margin: 20px -16px -16px; padding: 16px; background: #eff3f7; border-top-color: #d8e1eb; border-radius: 0 0 10px 10px; }
+.nodaji-map-page .nodaji-observation-grid > div { background: white; border: 1px solid #dce4ed; }
+.nodaji-map-page .nodaji-observation-grid span { color: #5d6c80; }
+.nodaji-map-page .explore-fit-section > .nodaji-drawer-note { margin: 16px 0 0; padding-top: 16px; }
+.nodaji-map-page .explore-section { margin-bottom: 20px; padding: 16px; border: 1px solid var(--tool-line); border-top: 3px solid var(--tool-ink); border-radius: 11px; background: white; }
+.nodaji-map-page .explore-tool-heading { display: flex; align-items: flex-start; gap: 10px; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid var(--tool-line); }
+.nodaji-map-page .explore-tool-heading > div { min-width: 0; }
+.nodaji-map-page .explore-tool-heading h2, .nodaji-map-page .explore-tool-heading h3 { margin: 2px 0 0; color: var(--tool-ink); line-height: 1.55; }
+.nodaji-map-page .explore-tool-heading h2 { font-size: 18px; }.nodaji-map-page .explore-tool-heading h3 { font-size: 15px; }
+.nodaji-map-page .explore-tool-heading p { margin: 4px 0 0; font-size: 11px; line-height: 1.6; color: #637086; }
+.nodaji-map-page .explore-tool-icon { display: grid; place-items: center; flex: 0 0 34px; width: 34px; height: 34px; font-size: 21px; border-radius: 9px; color: var(--tool-ink); background: var(--tool-soft); }
+.nodaji-map-page .explore-candidate { background: #fff; border-color: var(--tool-line); padding: 13px; }
+.nodaji-map-page .explore-candidate header b, .nodaji-map-page .explore-candidate .explore-card-link { color: var(--tool-ink); }
+.nodaji-map-page .explore-candidate:hover { border-color: var(--tool-ink); }
+.nodaji-map-page .explore-nearby { background: #edf3f9; }
+.nodaji-map-page .explore-section .explore-status { border: 1px solid var(--tool-line); background: var(--tool-soft); color: #45576c; }
+.nodaji-map-page .explore-section .explore-secondary { width: 100%; border-color: var(--tool-line); color: var(--tool-ink); }
+.nodaji-map-page .explore-visitors { background: #f5fbf9; }
+.nodaji-map-page .explore-search { background: white; }
+.nodaji-map-page .explore-visitors .explore-bar-track { background: #e2eeeb; }
+.nodaji-map-page .explore-visitors .explore-bar-track i { background: #3c938a; }
+.nodaji-map-page .explore-visitors .explore-bar-track i.weekend { background: #245d66; }
+.nodaji-map-page .explore-search-bars i { background: #3c938a; }
+.nodaji-map-page .explore-comparison { background: #fcfaff; }
+.nodaji-map-page .explore-comparison > .explore-form-grid:first-of-type { padding: 12px; border: 1px solid var(--tool-line); border-radius: 9px; background: var(--tool-soft); }
+.nodaji-map-page .explore-comparison .explore-input > span { color: #6b5099; font-weight: 600; }
+.nodaji-map-page .explore-comparison-table thead { color: #624b87; background: #eee7f7; }
+.nodaji-map-page .explore-comparison-table td + td { border-left: 1px solid #e1d9ec; }
+.nodaji-map-page .explore-comparison-table tbody tr:nth-child(even) { background: #f5f1f9; }
+.nodaji-map-page .explore-comparison button, .nodaji-map-page .explore-industries button { color: var(--tool-ink); background: var(--tool-soft); border-color: var(--tool-line); }
+.nodaji-map-page .explore-industries { background: #f5faf9; }
+
+/* 비용: 따뜻한 입력면과 진한 요약면. 적자·흑자 및 오류 표시는 기존 의미를 유지한다. */
+.nodaji-map-page .startup-wizard { background: #fffcf6; }
+.nodaji-map-page .cost-heading { display: block; position: relative; }
+.nodaji-map-page .cost-heading > span { display: inline-block; margin: 0 0 12px; color: #7a6548; background: #f0e6d5; }
+.nodaji-map-page .cost-heading .explore-tool-heading { margin-bottom: 10px; }
+.nodaji-map-page .cost-steps button { flex: 1 1 0; min-width: 0; padding: 10px 3px; background: white; color: #716955; font-size: 11px; }
+.nodaji-map-page .cost-steps button[aria-current="step"] { color: #805a27; background: #f5e9d6; border-color: #bf9962; }
+.nodaji-map-page .cost-steps button[aria-current="step"] b { color: white; background: #8b622a; }
+.nodaji-map-page .cost-steps b { background: #eee9df; }
+.nodaji-map-page .cost-live-summary { background: #4b4335; box-shadow: 0 3px 9px #4b43351c; }
+.nodaji-map-page .cost-live-summary span, .nodaji-map-page .cost-live-summary small { color: #e4d6bf; }
+.nodaji-map-page .cost-number:focus-within { border-color: #a27c42; box-shadow: 0 0 0 2px #efe2cc; }
+.nodaji-map-page .cost-number:has([aria-invalid="true"]) { border-color: #dc2626; }
+.nodaji-map-page .cost-size-options button { background: #f6edde; color: #805a27; border-color: #dfcfb4; }
+.nodaji-map-page .cost-extra { background: #f5efe4; border-color: #e4d8c6; }
+.nodaji-map-page .cost-range input { accent-color: #8b622a; }
+.nodaji-map-page .cost-final-result { background: #f8efde; border-color: #d9bc8d; }
+.nodaji-map-page .cost-final-result > span, .nodaji-map-page .cost-final-result > strong { color: #805a27; }
+.nodaji-map-page .cost-final-result > div { border-top-color: #e2cfac; }
+.nodaji-map-page .cost-step-actions .cost-next { background: #886029; border-color: #886029; }
+.nodaji-map-page .cost-step-actions .cost-next:hover { background: #6e4c20; }
+
+@media (max-width: 640px) {
+  .nodaji-map-page .nodaji-drawer-scroll { padding: 14px; }
+  .nodaji-map-page .explore-section, .nodaji-map-page .explore-fit-section { padding: 13px; }
+  .nodaji-map-page .nodaji-observation { margin-left: -13px; margin-right: -13px; margin-bottom: -13px; padding: 13px; }
+  .nodaji-map-page .explore-tabs { gap: 5px; }
+  .nodaji-map-page .explore-tabs button { min-height: 60px; font-size: 10px; }
+  .nodaji-map-page .explore-tool-heading h2 { font-size: 16px; }
+  .nodaji-map-page .explore-fit-section .t-title { font-size: 15px; }
+  .nodaji-map-page .explore-fit-section .nodaji-evidence { white-space: nowrap; }
+}

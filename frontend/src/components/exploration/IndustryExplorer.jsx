@@ -1,4 +1,5 @@
 import usePublicQuery from "../../hooks/usePublicQuery";
+import ToolHeading from "./ToolHeading";
 
 export default function IndustryExplorer({ areaId, preset, onSelect }) {
   const query = usePublicQuery(areaId ? `/api/recommend/industries?area_id=${areaId}&preset=${encodeURIComponent(preset)}&limit=5` : null);
@@ -7,9 +8,8 @@ export default function IndustryExplorer({ areaId, preset, onSelect }) {
   if (query.error) return <p role="alert">{query.error} <button type="button" onClick={query.retry}>다시 시도</button></p>;
   const data = query.data;
   if (!data) return null;
-  return <section className="explore-section">
-    <div className="nodaji-section-label">지역에서 업종으로</div>
-    <h2>{data.area_name} 업종 탐색</h2>
+  return <section className="explore-section explore-industries">
+    <ToolHeading icon="storefront" title={`${data.area_name} 업종 탐색`} level="h2"><p>지역에서 업종으로</p></ToolHeading>
     <p>{data.quarter_label} · {data.measured_count}개 업종 비교 · 표본 부족 {data.excluded_count}개 제외</p>
     <p>{data.grade_notice}</p>
     {!data.results.length && <p className="explore-status">표본이 충분한 업종이 없습니다. 다른 지역을 선택해보세요.</p>}
