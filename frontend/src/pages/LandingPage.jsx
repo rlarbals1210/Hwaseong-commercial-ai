@@ -18,6 +18,10 @@ import { useAuth } from "../context/auth-context";
 // 둘 중 하나라도 비어 있으면 안내 상자를 그리지 않는다(빈 상자가 나가는 사고 방지).
 const REVIEW_ACCOUNT = { username: "", password: "" };
 
+// 랜딩을 거쳐 /browse로 들어왔다는 표시. BrowsePage가 이 값을 보고 사용법 팝업을 띄운다.
+// 라우터 state로 넘기므로 주소를 직접 입력해 들어온 재방문자에게는 뜨지 않는다.
+const BROWSE_ENTRY_STATE = { fromLanding: true };
+
 // 파이프라인 산출값이 아니라 방법론 상수·행정구역 사실이다. 재실행해도 변하지 않는다.
 const HERO_FACTS = [
   { value: "29", label: "화성시 행정동 전체" },
@@ -339,7 +343,7 @@ export default function LandingPage() {
           </ul>
 
           <div className="lp-nav-right">
-            <Link to="/browse" className="lp-nav-ghost">상권 둘러보기</Link>
+            <Link to="/browse" state={BROWSE_ENTRY_STATE} className="lp-nav-ghost">상권 둘러보기</Link>
             <Link to={enterHref} className="lp-nav-cta">{enterLabel}</Link>
           </div>
         </div>
@@ -435,7 +439,7 @@ export default function LandingPage() {
               <Icon name={isOfficial ? "dashboard" : "login"} size={19} />
               {enterLabel}
             </Link>
-            <Link to="/browse" className="lp-btn-secondary">
+            <Link to="/browse" state={BROWSE_ENTRY_STATE} className="lp-btn-secondary">
               <Icon name="map_search" size={19} />
               상권 둘러보기
             </Link>

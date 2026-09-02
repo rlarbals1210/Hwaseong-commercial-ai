@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import BrowseIntroModal from "../components/BrowseIntroModal";
 import FitScorePanel from "../components/FitScorePanel";
 import AreaComparison from "../components/exploration/AreaComparison";
 import AreaFilter from "../components/exploration/AreaFilter";
@@ -409,6 +410,11 @@ function ObservationSummary({ cell, loading }) {
 }
 
 export default function BrowsePage() {
+  const location = useLocation();
+  const navigate = useNavigate();
+  // 랜딩을 거쳐 들어온 경우에만 사용법 팝업을 띄운다. 주소를 직접 친 재방문자는 방해받지 않는다.
+  // 마운트 시점의 라우터 state로 한 번만 정한다 — 효과 안에서 setState하면 연쇄 렌더가 된다.
+  const [showIntro, setShowIntro] = useState(() => Boolean(location.state?.fromLanding));
   const [options, setOptions] = useState(null);
   const [coverageByIndustry, setCoverageByIndustry] = useState({});
   const [industryId, setIndustryId] = useState(null);
@@ -424,6 +430,12 @@ export default function BrowsePage() {
   const [detailTab, setDetailTab] = useState("conditions");
   const [error, setError] = useState("");
   const [mapError, setMapError] = useState("");
+
+  const closeIntro = useCallback(() => {
+    setShowIntro(false);
+    // state를 지우지 않으면 새로고침·뒤로가기 때 같은 팝업이 다시 뜬다.
+    navigate(location.pathname + location.search, { replace: true, state: null });
+  }, [navigate, location.pathname, location.search]);
   const [tooltip, setTooltip] = useState(null);
 
   const mapQuery = usePublicQuery(industryId ? `/api/public/industry-map?industry_id=${industryId}` : null);
@@ -832,6 +844,8 @@ export default function BrowsePage() {
           {mapData.quarter_label} · 소상공인시장진흥공단 상가(상권)정보 · 읍면동 x 업종 집계
         </div>
       )}
+
+      {showIntro && <BrowseIntroModal onClose={closeIntro} />}
 
       {tooltip && (
         <div className="nodaji-map-tooltip" style={{ left: tooltip.x + 12, top: tooltip.y - 34 }}>
