@@ -10,10 +10,11 @@ export default function CellPickerDialog({ title, options, value, onApply, onClo
   const areas = options?.areas ?? [];
   const names = Object.fromEntries((options?.industries ?? []).map((industry) => [industry.id, industry.name]));
   const area = areas.find((item) => item.id === draft.areaId);
-  const industries = (area?.industries ?? []).map((industry) => ({
+  // 업종만 전달된 경우에도 선택 이름은 보여주고, 지역 선택 후 실제 조합을 검증한다.
+  const industries = (area?.industries ?? (names[draft.industryId] ? [{ id: draft.industryId }] : [])).map((industry) => ({
     value: industry.id, label: names[industry.id] ?? "업종명 없음", hint: industry.sample_insufficient ? "표본부족" : undefined,
   }));
-  const valid = industries.some((industry) => industry.value === draft.industryId);
+  const valid = Boolean(area) && industries.some((industry) => industry.value === draft.industryId);
 
   useEffect(() => {
     const dialog = dialogRef.current;
@@ -46,7 +47,7 @@ export default function CellPickerDialog({ title, options, value, onApply, onClo
           value={draft.industryId} placeholder={area ? "업종을 선택해주세요" : "지역을 먼저 선택해주세요"}
           disabled={!area} onChange={(industryId) => setDraft({ ...draft, industryId })} />
       </div>
-      <p className="cell-picker-selection" aria-live="polite">{area?.name ?? "지역 미선택"} · {valid ? names[draft.industryId] : "업종 미선택"}</p>
+      <p className="cell-picker-selection" aria-live="polite">{area?.name ?? "지역 미선택"} · {names[draft.industryId] ?? "업종 미선택"}</p>
       {peers.length > 0 && <section className="cell-picker-peers">
         <h3>기준 상권과 같은 업종의 추천 후보</h3>
         <div>{peers.slice(0, 6).map((peer) => <button key={`${peer.area_id}-${peer.industry_id}`} type="button"

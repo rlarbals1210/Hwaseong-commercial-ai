@@ -22,16 +22,16 @@ export const OFFICIAL_ROUTES = [
     summary: "관측된 폐업률과 영향 점포 수로 검토 순서를 정합니다.",
   },
   {
-    path: "/blindspots",
-    label: "사각지대",
-    icon: "visibility_off",
-    summary: "표본이 적어 통계 판단을 보류한 상권을 따로 봅니다.",
-  },
-  {
     path: "/compare",
     label: "상권 비교",
     icon: "compare_arrows",
     summary: "두 상권을 나란히 놓고 차이가 유의한지 확인합니다.",
+  },
+  {
+    path: "/blindspots",
+    label: "사각지대",
+    icon: "visibility_off",
+    summary: "표본이 적어 통계 판단을 보류한 상권을 따로 봅니다.",
   },
 ];
 

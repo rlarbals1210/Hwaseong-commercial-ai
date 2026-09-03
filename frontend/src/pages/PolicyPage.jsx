@@ -384,6 +384,9 @@ export default function PolicyPage() {
     : 0;
   const dangerThreshold = Number(data.meta?.danger_threshold_pct ?? gradeMeta?.danger_threshold_pct ?? 0);
   const medianStores = Number(data.meta?.median_store_count ?? fallbackMedian);
+  const compareParams = new URLSearchParams();
+  if (dong) compareParams.set("dong", dong);
+  if (category) compareParams.set("category", category);
 
   return (
     <div className="official-page official-policy-page">
@@ -508,6 +511,22 @@ export default function PolicyPage() {
           </p>
         </div>
       )}
+      <div style={{ marginTop: 20 }}>
+        {(dong || category) && (
+          <p className="t-caption" style={{ margin: "0 0 8px", color: "var(--ink-muted)" }}>
+            {dong || "지역 미선택"} · {category || "업종 미선택"}
+            {(!dong || !category) && " — 비교 화면에서 나머지 조건을 선택해주세요."}
+          </p>
+        )}
+        <Link
+          to={compareParams.size ? `/compare?${compareParams}` : "/compare"}
+          className="btn-utility"
+          style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", boxSizing: "border-box", textDecoration: "none", color: "var(--primary)" }}
+        >
+          상권 비교로 이어보기
+          <span className="material-symbols-outlined" aria-hidden="true" style={{ fontSize: 18 }}>arrow_forward</span>
+        </Link>
+      </div>
     </div>
   );
 }

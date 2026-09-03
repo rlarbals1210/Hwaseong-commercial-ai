@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import CellPickerDialog from "../components/CellPickerDialog";
 import usePublicQuery from "../hooks/usePublicQuery";
 import { apiFetchJson, describeApiError } from "../lib/api";
@@ -746,8 +747,16 @@ function MethodNote({ basis, notice, context }) {
 }
 
 export default function ComparePage() {
+  const [params] = useSearchParams();
+  const dong = params.get("dong") ?? "";
+  const category = params.get("category") ?? "";
+  return <CompareWorkspace key={JSON.stringify([dong, category])} initialDong={dong} initialCategory={category} />;
+}
+
+function CompareWorkspace({ initialDong, initialCategory }) {
   const [options, setOptions] = useState(null);
   const [base, setBase] = useState(null);       // 기준 상권 {areaId, industryId}
+  const [initialSelection, setInitialSelection] = useState(null);
   const [manualTarget, setManualTarget] = useState(null);
   const [manual, setManual] = useState(false);  // 비교 대상을 직접 고르는 모드
   const [picker, setPicker] = useState(null);   // "base" | "target" | null — 열려 있는 선택 창
@@ -755,10 +764,27 @@ export default function ComparePage() {
   const [optionsError, setOptionsError] = useState("");
 
   useEffect(() => {
-    apiFetchJson("/api/alerts/grade-notice").then(setThresholds).catch(() => setThresholds(null));
+    let active = true;
+    apiFetchJson("/api/alerts/grade-notice")
+      .then((d) => { if (active) setThresholds(d); })
+      .catch(() => { if (active) setThresholds(null); });
     apiFetchJson("/api/compare/options")
       .then((d) => {
+        if (!active) return;
         setOptions(d);
+        if (initialDong || initialCategory) {
+          const area = d.areas?.find((a) => a.name === initialDong);
+          const industry = d.industries?.find((i) => i.name === initialCategory);
+          const selection = { areaId: area?.id ?? null, industryId: industry?.id ?? null };
+          if (area?.industries.some((i) => i.id === selection.industryId)) {
+            setBase(selection);
+          } else {
+            // 전달된 조건을 임의의 첫 상권으로 바꾸지 않고 선택창에 유지한다.
+            setInitialSelection(selection);
+            setPicker("base");
+          }
+          return;
+        }
         // 기본 기준 상권은 표본충분인 첫 조합. 표본부족이 기본으로 걸리면 화면이 열리자마자
         // "판단보류"만 보여주게 되고 이 화면이 무엇을 하는 곳인지 전달되지 않는다.
         for (const a of d.areas ?? []) {
@@ -768,8 +794,9 @@ export default function ComparePage() {
         const first = (d.areas ?? [])[0];
         if (first) setBase({ areaId: first.id, industryId: first.industries[0]?.id });
       })
-      .catch((err) => setOptionsError(describeApiError(err)));
-  }, []);
+      .catch((err) => { if (active) setOptionsError(describeApiError(err)); });
+    return () => { active = false; };
+  }, [initialDong, initialCategory]);
 
   const contextQuery = usePublicQuery(base?.areaId && base?.industryId
     ? `/api/compare/context?cell=${base.areaId}:${base.industryId}` : null);
@@ -863,6 +890,16 @@ export default function ComparePage() {
 
       {error && <div className="t-body-sm" style={{ color: "var(--error)", marginBottom: 14 }}>{error}</div>}
       {loading && <div className="t-body-sm" style={{ color: "var(--ink-muted)", marginBottom: 14 }}>불러오는 중…</div>}
+      {!base && options && (initialDong || initialCategory) && (
+        <div className="card" style={{ marginBottom: 18 }}>
+          <p className="t-body-sm" style={{ margin: 0, color: "var(--ink-secondary)" }}>
+            전달된 조건: {initialDong || "지역 미선택"} · {initialCategory || "업종 미선택"}
+          </p>
+          <p className="t-caption" style={{ margin: "8px 0 0", color: "var(--ink-muted)" }}>
+            기준 상권의 지역·업종 선택을 완료하면 비교 결과를 확인할 수 있습니다.
+          </p>
+        </div>
+      )}
 
       {!loading && data && <VerdictHeadline data={data} />}
 
@@ -970,7 +1007,7 @@ export default function ComparePage() {
       )}
 
       {picker === "base" && <CellPickerDialog
-        title="기준 상권 선택" options={options} value={base}
+        title="기준 상권 선택" options={options} value={base ?? initialSelection}
         onApply={chooseBase}
         onClose={() => setPicker(null)}
       />}
