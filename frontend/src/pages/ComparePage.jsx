@@ -179,7 +179,7 @@ const CompareSlot = ({ cell, rank, role, onEdit }) => (
             <span className="t-caption" style={{ color: "var(--ink-muted)", fontWeight: 400, marginLeft: 6 }}>{cell.industry_name}</span>
           </div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 4, flexWrap: "wrap" }}>
-            <span className="t-metric" style={{ fontSize: 20 }}>{fmt(cell.cumulative_closure_rate_pct, 1)}%</span>
+            <span className="t-metric t-metric-sm">{fmt(cell.cumulative_closure_rate_pct, 1)}%</span>
             {rank && <span className="t-caption" style={{ color: "var(--ink-faint)" }}>{rank}</span>}
           </div>
         </>
@@ -326,7 +326,7 @@ function PeerCard({ peer, base, tone, caption, onPick }) {
       <div className="t-eyebrow" style={{ color: "var(--ink-faint)" }}>{caption}</div>
       <div className="t-h3" style={{ marginTop: 3 }}>{peer.area_name}</div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
-        <span className="t-metric" style={{ fontSize: 28, color: TONE.fg }}>
+        <span className="t-metric t-metric-md" style={{ color: TONE.fg }}>
           {fmt(peer.cumulative_closure_rate_pct, 2)}%
         </span>
         <span className="t-body-sm" style={{ color: "var(--ink-muted)" }}>
@@ -472,8 +472,17 @@ function DiffRows({ data }) {
  *  다르다. 배후인구는 등급·유형 판정에 관여하지 않는다 — 인구증감과 폐업률의 순위상관은
  *  +0.238로 약하고 부호도 직관과 반대다. 원인의 방향을 좁히는 참고 자료다.
  */
+/* 값 | 제목 | 값 3열. 예전에는 셋 다 비슷한 굵기의 글자라 어느 것이 상권 값이고 어느 것이
+   지표 이름인지 매번 다시 읽어야 했다. 값 둘만 판에 올리면 좌우로 같은 형태가 마주 서고
+   가운데 제목은 평범한 글자로 남아, 무엇을 비교하는 중인지가 형태로 먼저 잡힌다.
+   값이 없어도 판은 그린다 — 빼면 좌우 높이가 어긋나 행이 기울어 보인다. */
 function ConditionRow({ label, left, right, hint }) {
   if (left == null && right == null) return null;
+  const plate = (value, align) => (
+    <div style={{ display: "flex", justifyContent: align }}>
+      <span className={`value-plate${value == null ? " is-empty" : ""}`}>{value ?? "—"}</span>
+    </div>
+  );
   return (
     <div
       style={{
@@ -485,16 +494,12 @@ function ConditionRow({ label, left, right, hint }) {
         borderTop: "1px solid var(--hairline)",
       }}
     >
-      <div style={{ textAlign: "right", fontVariantNumeric: "tabular-nums" }}>
-        <b className="t-body">{left ?? "—"}</b>
-      </div>
+      {plate(left, "flex-end")}
       <div style={{ textAlign: "center" }}>
-        <div className="t-body-sm" style={{ color: "var(--ink-secondary)" }}>{label}</div>
+        <div className="value-label">{label}</div>
         {hint && <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 3 }}>{hint}</div>}
       </div>
-      <div style={{ fontVariantNumeric: "tabular-nums" }}>
-        <b className="t-body">{right ?? "—"}</b>
-      </div>
+      {plate(right, "flex-start")}
     </div>
   );
 }

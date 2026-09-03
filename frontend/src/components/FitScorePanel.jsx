@@ -87,7 +87,7 @@ export default function FitScorePanel({ data, loading, preferenceLabel }) {
       </div>
 
       {data.score_adjusted && data.adjustment_note && (
-        <div role="note" className="t-caption" style={{ color: "#1d4ed8", background: "#eff6ff", borderRadius: "var(--radius-md)", padding: "10px 12px", lineHeight: 1.6, marginTop: 10 }}>
+        <div role="note" className="t-caption" style={{ color: "var(--primary)", background: "var(--primary-soft)", borderRadius: "var(--radius-md)", padding: "10px 12px", lineHeight: 1.6, marginTop: 10 }}>
           {data.adjustment_note}
         </div>
       )}

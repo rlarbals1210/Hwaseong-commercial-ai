@@ -54,7 +54,7 @@ function Stat({ label, value, unit }) {
     <div className="card" style={{ padding: 18, flex: "1 1 160px" }}>
       <div className="t-eyebrow" style={{ color: "var(--ink-faint)" }}>{label}</div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 3, marginTop: 6 }}>
-        <span className="t-metric" style={{ fontSize: 28 }}>{value}</span>
+        <span className="t-metric t-metric-md">{value}</span>
         {unit && <span style={{ fontSize: 13, color: "var(--ink-faint)" }}>{unit}</span>}
       </div>
     </div>
@@ -69,7 +69,7 @@ function Hero({ data }) {
     <div className="card" style={{ padding: "26px 28px 22px", borderLeft: "4px solid var(--primary)" }}>
       <div className="t-eyebrow" style={{ color: "var(--ink-faint)" }}>판단 보류 점포 비중</div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 12, marginTop: 10, flexWrap: "wrap" }}>
-        <span className="t-metric" style={{ fontSize: 56, lineHeight: 1 }}>{fmt(blind)}%</span>
+        <span className="t-metric t-metric-lg">{fmt(blind)}%</span>
         <span className="t-body" style={{ color: "var(--ink-secondary)" }}>
           점포 {num(data.city_stores)}곳 중 <b>{num(data.total_stores)}곳</b> 판단 보류
         </span>
@@ -112,7 +112,7 @@ function HighlightCards({ items }) {
           <div className="t-eyebrow" style={{ color: "var(--ink-faint)" }}>{item.category}</div>
           <div className="t-h3" style={{ marginTop: 2 }}>{item.dong}</div>
           <div style={{ display: "flex", alignItems: "baseline", gap: 5, marginTop: 16 }}>
-            <span className="t-metric" style={{ fontSize: 42, lineHeight: 1 }}>{item.cumulative_closure_count}</span>
+            <span className="t-metric t-metric-lg">{item.cumulative_closure_count}</span>
             <span className="t-body-sm" style={{ color: "var(--ink-muted)" }}>/ {item.store_count}곳 폐업</span>
           </div>
         </Link>
@@ -279,7 +279,7 @@ function VerdictTile({ label, count, tone, active, disabled = false, onClick }) 
       }}
     >
       <div style={{ height: 3, width: 24, background: TONE.bar, borderRadius: 2 }} />
-      <div className="t-metric" style={{ fontSize: 28, marginTop: 9, color: active ? TONE.fg : "var(--on-surface)" }}>
+      <div className="t-metric t-metric-md" style={{ marginTop: 9, color: active ? TONE.fg : "var(--on-surface)" }}>
         {count}<span style={{ fontSize: 14, fontWeight: 400, color: "var(--ink-faint)" }}>곳</span>
       </div>
       <div className="t-caption" style={{ marginTop: 2, color: "var(--ink-muted)" }}>{label}</div>

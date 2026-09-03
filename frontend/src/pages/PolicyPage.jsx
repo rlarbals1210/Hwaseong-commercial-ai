@@ -7,6 +7,7 @@ import useCategories from "../hooks/useCategories";
 import useDongs from "../hooks/useDongs";
 import SearchableSelect from "../components/SearchableSelect";
 import useGradeNotice from "../hooks/useGradeNotice";
+import PageHeader from "../components/PageHeader";
 
 const EMPTY_DATA = {
   Q1: [], Q2: [], Q3: [], Q4: [],
@@ -74,21 +75,12 @@ function selectVisibleItems(items) {
   return [...selected.values()];
 }
 
-function PageHeader({ title, desc }) {
-  return (
-    <div className="official-page-header" style={{ marginBottom: 24 }}>
-      <h1 className="t-h1" style={{ margin: 0 }}>{title}</h1>
-      <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>{desc}</p>
-    </div>
-  );
-}
-
 function StatCard({ label, value, unit, tone }) {
   return (
     <div className="card" style={{ padding: 20 }}>
       <div className="t-eyebrow" style={{ color: "var(--ink-muted)", textTransform: "uppercase" }}>{label}</div>
       <div style={{ display: "flex", alignItems: "baseline", gap: 4, marginTop: 10 }}>
-        <span className="t-metric" style={{ fontSize: 28, color: tone ?? "var(--on-surface)" }}>{value}</span>
+        <span className="t-metric t-metric-md" style={{ color: tone ?? "var(--on-surface)" }}>{value}</span>
         {unit && <span style={{ fontSize: 14, color: "var(--ink-faint)", fontWeight: 500 }}>{unit}</span>}
       </div>
     </div>
@@ -286,7 +278,9 @@ function QuadrantDrawer({ quadrant, items, onClose }) {
           <h3 className="t-h3">{meta.label}</h3>
           <p>{meta.desc} · 폐업률 높은 순 {items.length}건</p>
         </div>
-        <button type="button" onClick={onClose} aria-label="전체 목록 닫기">×</button>
+        <button type="button" onClick={onClose} aria-label="전체 목록 닫기">
+          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>close</span>
+        </button>
       </div>
       <div className="policy-quadrant-drawer-list">
         {items.map((item) => (

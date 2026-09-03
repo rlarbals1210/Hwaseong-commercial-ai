@@ -110,7 +110,7 @@ function RankingTable({ rows, loading, error, category, categories, categoryErro
         </h3>
         <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           {/* 정렬 축 전환. 같은 데이터를 다른 질문으로 읽는 것이라 필터가 아니라 탭에 가깝다. */}
-          <div style={{ display: "flex", border: "1px solid var(--hairline)", borderRadius: 6, overflow: "hidden" }}>
+          <div className="seg">
             {[
               { key: "rate", label: "폐업률 높은 순" },
               { key: "excess", label: "업종 평균 대비" },
@@ -119,12 +119,8 @@ function RankingTable({ rows, loading, error, category, categories, categoryErro
                 key={option.key}
                 type="button"
                 onClick={() => onSortChange(option.key)}
-                className="t-caption"
-                style={{
-                  border: "none", cursor: "pointer", padding: "6px 12px", fontWeight: 600,
-                  background: sort === option.key ? "var(--on-surface)" : "transparent",
-                  color: sort === option.key ? "var(--surface, #fff)" : "var(--ink-secondary)",
-                }}
+                aria-pressed={sort === option.key}
+                className="seg-item"
               >
                 {option.label}
               </button>
@@ -136,15 +132,7 @@ function RankingTable({ rows, loading, error, category, categories, categoryErro
           {/* 서랍으로 열리는 표라 닫는 길이 표 안에도 있어야 한다. 지도 위 버튼까지
               마우스를 올려보내지 않게 한다. */}
           {onClose && (
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="순위표 닫기"
-              style={{
-                border: "none", background: "transparent", cursor: "pointer",
-                color: "var(--ink-muted)", display: "flex", alignItems: "center", padding: 4,
-              }}
-            >
+            <button type="button" onClick={onClose} aria-label="순위표 닫기" className="btn-ghost">
               <span className="material-symbols-outlined" style={{ fontSize: 20 }}>close</span>
             </button>
           )}
@@ -265,16 +253,31 @@ function RankingTable({ rows, loading, error, category, categories, categoryErro
  *    ③ 무엇이 안 보이는가   사각지대 규모
  *  배후인구는 등급·유형 판정에 관여하지 않는다. 원인의 방향을 좁히는 참고 자료다.
  */
-function Row({ label, children, hint }) {
+/* 한 줄에 세 가지가 들어간다 — 무엇을 재는가(label) / 값(children) / 단서(hint).
+ *
+ * 제목과 값을 크기·굵기로만 갈랐더니 "큰 글자 옆의 작은 글자"일 뿐 종류가 달라 보이지
+ * 않았다. 둘 다 결국 같은 축(강함↔약함) 위에 있어서다. 그래서 값은 아예 다른 물건으로
+ * 만든다 — 카드보다 한 톤 눌린 판 위에 hairline을 두르고 그 안에 올린다.
+ * 디자인 시스템의 "입체감은 그림자가 아니라 hairline + 톤 차이" 원칙을 그대로 쓴 것이다.
+ *
+ *   제목  카드 바탕 위의 굵은 글자   — 묻는 것
+ *   값    눌린 판 안의 고정폭 숫자   — 답. 테두리가 있어 형태로 먼저 구분된다
+ *   단서  연한 회색 잔글씨          — 배경
+ *
+ * after: 판 밖에 따로 붙는 것(등급 배지 등). 배지를 판 안에 넣으면 칩 안의 칩이 된다.
+ */
+function Row({ label, children, hint, after }) {
   return (
-    <div style={{ padding: "11px 0", borderTop: "1px solid var(--hairline)" }}>
-      <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
-        <span className="t-caption" style={{ color: "var(--ink-muted)" }}>{label}</span>
-        <span className="t-body-sm" style={{ marginLeft: "auto", color: "var(--on-surface)", fontWeight: 600, fontVariantNumeric: "tabular-nums", textAlign: "right" }}>
-          {children}
-        </span>
+    <div style={{ padding: "12px 0", borderTop: "1px solid var(--hairline)" }}>
+      {/* 패널이 360px이라 긴 제목과 긴 값이 만나면 한 줄에 안 들어간다(예: "주의가 필요한
+          업종" + "위험 3개 · 주의 2개"). 값은 nowrap으로 묶고 컨테이너만 접히게 해서,
+          모자랄 때 값이 통째로 아랫줄로 내려가도록 한다 — 값 중간이 끊기는 것보다 낫다. */}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+        <span className="value-label">{label}</span>
+        <span className="value-plate" style={{ marginLeft: "auto" }}>{children}</span>
+        {after}
       </div>
-      {hint && <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 3 }}>{hint}</div>}
+      {hint && <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 6, lineHeight: 1.5 }}>{hint}</div>}
     </div>
   );
 }
@@ -306,12 +309,8 @@ function AreaPanel({ selected, detail, loading, onClose }) {
             {detail ? `${detail.quarter_label} 기준 · 점포 ${detail.total_stores.toLocaleString()}곳` : " "}
           </div>
         </div>
-        <button
-          onClick={onClose}
-          aria-label="닫기"
-          style={{ background: "none", border: "none", cursor: "pointer", color: "var(--outline)", fontSize: 20, lineHeight: 1, padding: 0 }}
-        >
-          ×
+        <button type="button" onClick={onClose} aria-label="닫기" className="btn-ghost">
+          <span className="material-symbols-outlined" style={{ fontSize: 20 }}>close</span>
         </button>
       </div>
 
@@ -319,7 +318,7 @@ function AreaPanel({ selected, detail, loading, onClose }) {
       <div style={{ display: "flex", alignItems: "baseline", gap: 10, margin: "16px 0 4px", flexWrap: "wrap" }}>
         {judged ? (
           <>
-            <span className="t-metric" style={{ fontSize: 38, color: selected.color, lineHeight: 1 }}>
+            <span className="t-metric t-metric-lg" style={{ color: selected.color, lineHeight: 1 }}>
               {fmt(selected.risk_ratio)}%
             </span>
             <span
@@ -355,14 +354,14 @@ function AreaPanel({ selected, detail, loading, onClose }) {
               이 줄이 "커버율 0% = 아무것도 모른다"를 막는다. */}
           <Row
             label="동 전체 폐업률"
+            after={<span className={VS.cls}>{VS.label}</span>}
             hint={
               detail.city_pooled_closure_rate_pct != null
                 ? `업종 구분 없이 묶은 값 · 화성시 ${fmt(detail.city_pooled_closure_rate_pct, 2)}%`
                 : "업종 구분 없이 묶은 값"
             }
           >
-            {fmt(detail.pooled_closure_rate_pct, 2)}%{" "}
-            <span className={VS.cls} style={{ marginLeft: 4, fontWeight: 600 }}>{VS.label}</span>
+            {fmt(detail.pooled_closure_rate_pct, 2)}%
           </Row>
 
           <Row label="주의가 필요한 업종" hint={`점포 ${sampleMin}곳 이상인 ${detail.sample_sufficient_cells}개 업종 중`}>
@@ -415,7 +414,8 @@ function AreaPanel({ selected, detail, loading, onClose }) {
           {industries.length > 0 && (
             <div className="official-map-industry-list" style={{ marginTop: 16 }}>
               <div style={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginBottom: 8 }}>
-                <div className="t-eyebrow" style={{ color: "var(--ink-faint)" }}>
+                {/* Row의 label과 같은 성격(무엇을 재는가)이라 같은 무게로 맞춘다. */}
+                <div className="t-body-sm" style={{ color: "var(--on-surface)", fontWeight: 600 }}>
                   업종별 폐업률
                 </div>
                 <span className="t-caption" style={{ color: "var(--ink-faint)", flexShrink: 0 }}>

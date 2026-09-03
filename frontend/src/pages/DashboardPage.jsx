@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge, TypeBadge } from "../components/Badge";
 import { downloadCsv, csvNum } from "../lib/csv";
+import PageHeader from "../components/PageHeader";
 import useCategories from "../hooks/useCategories";
 import useDongs from "../hooks/useDongs";
 import SearchableSelect from "../components/SearchableSelect";
@@ -35,15 +36,6 @@ const fmtPct = (v, digits = 1) => {
   const n = num(v);
   return n === null ? "—" : n.toFixed(digits);
 };
-
-function PageHeader({ title, desc }) {
-  return (
-    <div style={{ marginBottom: 24 }}>
-      <h1 className="t-h1" style={{ margin: 0 }}>{title}</h1>
-      <p className="t-body-sm" style={{ color: "var(--ink-muted)", margin: "6px 0 0" }}>{desc}</p>
-    </div>
-  );
-}
 
 // AI 예측값(부풀려진 절대 수치)은 화면에 표시하지 않는다 — 순위만 신뢰할 수 있는 정보라
 // "예측 위험 #N"으로만 보여주고, 근거는 실제 관측 폐업률로 뒷받침한다.
@@ -111,8 +103,7 @@ function RiskCard({ item, beyondValidated = false }) {
       <div style={{ marginTop: "auto" }}>
         <div style={{ display: "flex", alignItems: "baseline", gap: 3 }}>
           <span
-            className="t-metric"
-            style={{ fontSize: 38, lineHeight: 1.05, letterSpacing: "-0.02em" }}
+            className="t-metric t-metric-lg"
           >
             {fmtPct(item.cumulative_closure_rate_pct)}
           </span>
@@ -325,7 +316,7 @@ export default function DashboardPage() {
                 <div key={row.label} style={{ marginBottom: 14 }}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 6 }}>
                     <span className="t-caption" style={{ color: "var(--ink-muted)" }}>{row.label}</span>
-                    <span className="t-metric" style={{ fontSize: 18 }}>{fmtPct(row.value)}%</span>
+                    <span className="t-metric t-metric-sm">{fmtPct(row.value)}%</span>
                   </div>
                   <div style={{ height: 8, background: "var(--surface-container)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
                     <div

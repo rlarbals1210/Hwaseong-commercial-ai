@@ -39,7 +39,7 @@ export default function Gauge({ value, grade, size = 176 }) {
           justifyContent: "center",
         }}
       >
-        <span className="t-metric" style={{ fontSize: 42, lineHeight: 1 }}>{safe.toFixed(1)}</span>
+        <span className="t-metric t-metric-lg" style={{ lineHeight: 1 }}>{safe.toFixed(1)}</span>
         <span className="t-caption" style={{ color: "var(--ink-muted)", marginTop: 5 }}>
           상대 적합도 · {grade ?? "등급 없음"}
         </span>

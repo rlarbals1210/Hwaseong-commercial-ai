@@ -753,7 +753,7 @@ export default function BrowsePage() {
             <button type="button" data-tool="industries" className={drawerMode === "industries" ? "active" : ""} onClick={() => setDrawerMode("industries")} disabled={!areaId}>업종 탐색</button>
             <button type="button" data-tool="recommendations" className={drawerMode === "recommendations" ? "active" : ""} onClick={() => setDrawerMode("recommendations")}>맞춤 추천</button>
             <button type="button" data-tool="detail" className={drawerMode === "detail" ? "active" : ""} onClick={() => setDrawerMode("detail")} disabled={!areaId}>선택 상권</button>
-            <button type="button" className="nodaji-drawer-close" onClick={() => setDrawerMode(null)} aria-label="패널 닫기">×</button>
+            <button type="button" className="nodaji-drawer-close" onClick={() => setDrawerMode(null)} aria-label="패널 닫기"><span className="material-symbols-outlined">close</span></button>
           </div>
           <div ref={drawerScrollRef} className="nodaji-drawer-scroll">
             {drawerMode === "compare" && <AreaComparison data={recommendations} loading={recommendationLoading} error={recommendationQuery.error}

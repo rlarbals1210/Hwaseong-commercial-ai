@@ -14,7 +14,7 @@
 }
 .nodaji-map-page [data-tool="industries"], .nodaji-map-page .explore-industries,
 .nodaji-map-page [data-tool="visitors"], .nodaji-map-page [data-detail-kind="visitors"] {
-  --tool-ink: #16766f; --tool-soft: #eaf5f2; --tool-line: #beded5;
+  --tool-ink: var(--primary); --tool-soft: var(--primary-soft); --tool-line: #beded5;
 }
 .nodaji-map-page [data-tool="costs"], .nodaji-map-page .startup-wizard {
   --tool-ink: #8b622a; --tool-soft: #faf3e7; --tool-line: #e7d6b8;
@@ -26,28 +26,30 @@
 .nodaji-map-page .nodaji-control-heading b { color: #183957; font-size: 14px; }
 .nodaji-map-page .nodaji-control-heading > span { padding: 4px 6px; background: white; border-radius: 5px; color: #526580; }
 .nodaji-map-page .explore-entry-mode { padding: 4px; border: 1px solid #d8e1ed; background: #e9eef5; margin-bottom: 16px; }
-.nodaji-map-page .explore-entry-mode button { min-height: 35px; color: #52647c; }
+/* 폭 330px 패널에 6글자 라벨 3개가 들어가야 한다. 14px에서는 버튼당 96px이 필요한데
+   가용 폭이 92px이라 줄이 바뀌었다. 이 자리만 한 단계 내려 한 줄로 유지한다. */
+.nodaji-map-page .explore-entry-mode button { min-height: 35px; padding: 8px 4px; font-size: 12px; color: #52647c; }
 .nodaji-map-page .explore-entry-mode button[aria-pressed="true"] { color: #fff; background: #234e7c; box-shadow: 0 2px 5px #18395720; }
 .nodaji-map-page .nodaji-field { margin: 0 18px 14px; padding: 12px; gap: 10px; border: 1px solid #d8e3f0; border-radius: 11px; background: white; }
-.nodaji-map-page .nodaji-field > .nodaji-step-label { color: #344861; font-weight: 600; font-size: 11px; }
+.nodaji-map-page .nodaji-field > .nodaji-step-label { color: #344861; font-weight: 600; font-size: 12px; }
 .nodaji-map-page .nodaji-industry-trigger { box-shadow: none; background: #f1f6fd; border-color: #c8d9f0; }
 .nodaji-map-page .nodaji-industry-trigger > em { display: none; }
 .nodaji-map-page .nodaji-industry-trigger { grid-template-columns: 32px minmax(0, 1fr) 20px; }
 .nodaji-map-page .nodaji-industry-icon { width: 32px; height: 32px; }
-.nodaji-map-page .explore-area-picker { padding: 12px; border: 1px solid #d5e3e2; border-radius: 11px; background: #eff6f5; color: #265e5b; font-weight: 600; }
+.nodaji-map-page .explore-area-picker { padding: 12px; border: 1px solid #d5e3e2; border-radius: 11px; background: var(--primary-soft); color: #265e5b; font-weight: 600; }
 .nodaji-map-page .explore-area-picker select { border-color: #c6dcd8; font-weight: 400; }
-.nodaji-map-page .explore-area-filter { border-color: #d2dfde; background: #f0f6f5; }
+.nodaji-map-page .explore-area-filter { border-color: #d2dfde; background: var(--primary-soft); }
 .nodaji-map-page .explore-area-filter summary b { display: flex; align-items: center; gap: 6px; color: #315d59; }
 .nodaji-map-page .explore-area-filter summary b > span { font-size: 17px; }
-.nodaji-map-page .area-filter-count { color: #315d59; background: #deeeea; }
+.nodaji-map-page .area-filter-count { color: #315d59; background: var(--primary-soft); }
 .nodaji-map-page .area-filter-content { background: white; border-top-color: #d2dfde; border-radius: 0 0 10px 10px; }
-.nodaji-map-page .area-filter-options label:has(:checked) { color: #166b62; background: #eaf5f2; }
-.nodaji-map-page .area-filter-options input { accent-color: #16766f; }
+.nodaji-map-page .area-filter-options label:has(:checked) { color: #166b62; background: var(--primary-soft); }
+.nodaji-map-page .area-filter-options input { accent-color: var(--primary); }
 .nodaji-map-page .nodaji-priority-block { padding: 12px; border: 1px solid #dce3ed; border-radius: 11px; background: #edf1f6; }
-.nodaji-map-page .nodaji-priority-block legend { float: left; width: 100%; margin-bottom: 10px; font-size: 11px; line-height: 1.5; }
+.nodaji-map-page .nodaji-priority-block legend { float: left; width: 100%; margin-bottom: 10px; font-size: 12px; line-height: 1.5; }
 .nodaji-map-page .nodaji-priority-grid { clear: both; margin-top: 0; }
 .nodaji-map-page .nodaji-priority-grid button { background: white; min-height: 62px; padding-left: 6px; padding-right: 17px; }
-.nodaji-map-page .nodaji-priority-grid button b { font-size: 11px; }
+.nodaji-map-page .nodaji-priority-grid button b { font-size: 12px; }
 .nodaji-map-page .nodaji-priority-grid button.active { background: #e3eefc; border-color: #7da8db; box-shadow: inset 0 0 0 1px #b6ceeb; }
 .nodaji-map-page .nodaji-mini-stats > span { background: #fff; border: 1px solid #e0e6ee; }
 .nodaji-map-page .nodaji-mini-stats small { color: #64748b; }
@@ -90,7 +92,7 @@
 .nodaji-map-page .explore-detail-title { margin: 0; color: #213f61; }
 .nodaji-map-page .explore-detail-title small { margin-top: 4px; color: #5a6b80; }
 .nodaji-map-page .explore-tabs { gap: 7px; padding: 0; background: transparent; margin-bottom: 18px; }
-.nodaji-map-page .explore-tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 66px; padding: 9px 3px; border: 1px solid #d8e0eb; border-radius: 9px; background: white; color: #59697e; font-size: 11px; box-shadow: none; }
+.nodaji-map-page .explore-tabs button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-height: 66px; padding: 9px 3px; border: 1px solid #d8e0eb; border-radius: 9px; background: white; color: #59697e; font-size: 12px; box-shadow: none; }
 .nodaji-map-page .explore-tabs button > span { font-size: 21px; color: var(--tool-ink); }
 .nodaji-map-page .explore-tabs button[aria-pressed="true"] { color: var(--tool-ink); border-color: var(--tool-ink); background: var(--tool-soft); box-shadow: inset 0 -2px 0 var(--tool-ink); }
 .nodaji-map-page .explore-tabs button:hover { border-color: var(--tool-ink); }
@@ -105,7 +107,7 @@
 .nodaji-map-page .explore-tool-heading > div { min-width: 0; }
 .nodaji-map-page .explore-tool-heading h2, .nodaji-map-page .explore-tool-heading h3 { margin: 2px 0 0; color: var(--tool-ink); line-height: 1.55; }
 .nodaji-map-page .explore-tool-heading h2 { font-size: 18px; }.nodaji-map-page .explore-tool-heading h3 { font-size: 15px; }
-.nodaji-map-page .explore-tool-heading p { margin: 4px 0 0; font-size: 11px; line-height: 1.6; color: #637086; }
+.nodaji-map-page .explore-tool-heading p { margin: 4px 0 0; font-size: 12px; line-height: 1.6; color: #637086; }
 .nodaji-map-page .explore-tool-icon { display: grid; place-items: center; flex: 0 0 34px; width: 34px; height: 34px; font-size: 21px; border-radius: 9px; color: var(--tool-ink); background: var(--tool-soft); }
 .nodaji-map-page .explore-candidate { background: #fff; border-color: var(--tool-line); padding: 13px; }
 .nodaji-map-page .explore-candidate header b, .nodaji-map-page .explore-candidate .explore-card-link { color: var(--tool-ink); }
@@ -133,7 +135,7 @@
 .nodaji-map-page .cost-heading { display: block; position: relative; }
 .nodaji-map-page .cost-heading > span { display: inline-block; margin: 0 0 12px; color: #7a6548; background: #f0e6d5; }
 .nodaji-map-page .cost-heading .explore-tool-heading { margin-bottom: 10px; }
-.nodaji-map-page .cost-steps button { flex: 1 1 0; min-width: 0; padding: 10px 3px; background: white; color: #716955; font-size: 11px; }
+.nodaji-map-page .cost-steps button { flex: 1 1 0; min-width: 0; padding: 10px 3px; background: white; color: #716955; font-size: 12px; }
 .nodaji-map-page .cost-steps button[aria-current="step"] { color: #805a27; background: #f5e9d6; border-color: #bf9962; }
 .nodaji-map-page .cost-steps button[aria-current="step"] b { color: white; background: #8b622a; }
 .nodaji-map-page .cost-steps b { background: #eee9df; }
@@ -155,7 +157,7 @@
   .nodaji-map-page .explore-section, .nodaji-map-page .explore-fit-section { padding: 13px; }
   .nodaji-map-page .nodaji-observation { margin-left: -13px; margin-right: -13px; margin-bottom: -13px; padding: 13px; }
   .nodaji-map-page .explore-tabs { gap: 5px; }
-  .nodaji-map-page .explore-tabs button { min-height: 60px; font-size: 10px; }
+  .nodaji-map-page .explore-tabs button { min-height: 60px; font-size: 12px; }
   .nodaji-map-page .explore-tool-heading h2 { font-size: 16px; }
   .nodaji-map-page .explore-fit-section .t-title { font-size: 15px; }
   .nodaji-map-page .explore-fit-section .nodaji-evidence { white-space: nowrap; }

@@ -38,6 +38,10 @@
   --on-primary-container: #fffeff;
   --primary-fixed: #d5e3ff;
   --primary-fixed-dim: #a8c8ff;
+  /* 연한 강조 배경 — 상태색의 *-soft와 같은 역할.
+     선택된 행·활성 토글처럼 primary를 배경으로 깔아야 하는 자리에 쓴다.
+     --primary-fixed(#d5e3ff)는 이 용도로는 너무 진해서 글자를 밀어낸다. */
+  --primary-soft: #e8f1fb;
 
   --secondary: #4958aa;
   --secondary-container: #dee0ff;
@@ -117,6 +121,15 @@ body {
   -moz-osx-font-smoothing: grayscale;
   /* lnum: 라이닝 숫자, tnum: 고정폭 숫자 → 표에서 자릿수가 흔들리지 않는다 */
   font-feature-settings: "lnum" 1, "tnum" 1;
+
+  /* 한글은 기본값(word-break: normal)에서 글자 단위로 끊긴다. 그래서 좁은 칸에 놓이면
+     "업종부터 찾 / 기"처럼 단어 한가운데가 잘렸다. keep-all은 띄어쓰기에서만 끊게 한다.
+     랜딩 페이지는 처음부터 이 값을 각 규칙마다 따로 넣고 있었는데, 앱 본문에는 없어서
+     두 트랙의 줄바꿈 품질이 달랐다.
+     keep-all만 두면 띄어쓰기 없는 긴 문자열(URL·영문 식별자)이 칸을 밀고 나가므로
+     break-word를 함께 둬서 달리 방법이 없을 때만 끊게 한다. */
+  word-break: keep-all;
+  overflow-wrap: break-word;
 }
 
 /* ── 타이포그래피 스케일 ──────────────────────────────────────────────
@@ -144,6 +157,13 @@ h1, h2, h3, h4 {
   letter-spacing: -0.5px;
   font-weight: 700;
 }
+
+/* 지표 크기는 3단이다. 이전에는 17·18·19·25·28·32·36·38·42·56px이 인라인으로 흩어져
+   한 화면 안에서만 네 가지 크기가 섞였고, 그러면 "무엇이 주인공인지"가 사라진다.
+   lg는 화면당 하나만 쓴다 — 둘이 되면 둘 다 주인공이 아니게 된다. */
+.t-metric-lg { font-size: 38px; line-height: 1.05; }
+.t-metric-md { font-size: 28px; line-height: 1.15; }
+.t-metric-sm { font-size: 18px; line-height: 1.3; }
 
 /* ── 재사용 표면 ─────────────────────────────────────────────────────── */
 .card {
@@ -215,6 +235,109 @@ h1, h2, h3, h4 {
 }
 .btn-utility:hover { background: var(--surface-container-low); }
 .btn-utility:disabled { color: var(--ink-faint); cursor: default; }
+
+/* 배경 없는 세 번째 등급 — 닫기·더보기처럼 화면의 주 행동과 경쟁하면 안 되는 버튼.
+   이전에는 이 자리마다 인라인으로 border:none/background:transparent를 다시 적었고,
+   그래서 같은 "닫기"가 화면마다 크기와 색이 달랐다. */
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+.btn-ghost:hover { background: var(--surface-container-low); color: var(--on-surface); }
+.btn-ghost:disabled { color: var(--ink-faint); cursor: default; }
+
+/* 값 판(plate) — "제목 + 결과값" 한 쌍에서 값 쪽에만 씌운다.
+   제목과 값을 크기·굵기로만 가르면 둘 다 같은 축(강함↔약함) 위에 있어서 "큰 글자 옆
+   작은 글자"로만 읽힌다. 값을 한 톤 눌린 판에 올리면 형태가 달라져 종류로 구분된다.
+   디자인 시스템 원칙 3("입체감은 그림자가 아니라 hairline + 톤 차이")을 그대로 쓴 것이다.
+   숫자는 고정폭이라 행이 여럿일 때 자릿수가 세로로 맞는다.
+   값이 없을 때는 .is-empty를 함께 붙인다 — 판은 유지해 정렬을 지키고 글자만 뒤로 뺀다. */
+.value-plate {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border: 1px solid var(--hairline);
+  border-radius: var(--radius-sm);
+  background: var(--surface-container-low);
+  color: var(--on-surface);
+  font-size: 15px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums lining-nums;
+  letter-spacing: -0.5px;
+  white-space: nowrap;
+}
+
+.value-plate.is-empty {
+  color: var(--ink-faint);
+  font-weight: 500;
+}
+
+/* 이미 한 톤 눌린 바탕(--surface-container-low) 안에서 쓰는 반전.
+   같은 톤끼리 겹치면 판이 사라지므로 밝은 쪽으로 뒤집는다. */
+.value-plate.on-muted {
+  background: var(--surface-container-lowest);
+}
+
+/* 값 판과 짝을 이루는 제목. 판이 구분을 맡으므로 크기는 본문과 같게 두고 무게만 준다. */
+.value-label {
+  color: var(--on-surface);
+  font-size: 15px;
+  font-weight: 700;
+}
+
+/* 세그먼트 컨트롤 — "같은 데이터를 다른 각도로 보는" 전환의 단일 표준.
+   이전에는 같은 동작이 네 가지 모양이었다(회색 트레이+흰 알약 / 밑줄 / 검정 채움 /
+   그림자 있는 알약). 트레이 위 흰 알약 하나로 통일한다 — 배경이 눌린 자리를 보여줘
+   "지금 어디"가 색 하나에 기대지 않는다.
+   드로어 머리글의 밑줄형 탭(.nodaji-drawer-tabs)만 예외로 둔다. 그쪽은 닫기 버튼과
+   한 줄을 나눠 쓰는 구조라 트레이를 씌우면 정렬이 무너진다. */
+.seg {
+  display: flex;
+  gap: 4px;
+  padding: 4px;
+  background: var(--surface-container-low);
+  border-radius: var(--radius-md);
+}
+
+.seg-item {
+  flex: 1;
+  min-width: 0;
+  padding: 8px 10px;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--ink-muted);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.seg-item:hover:not([aria-selected="true"]):not([aria-pressed="true"]) {
+  color: var(--ink-secondary);
+}
+
+.seg-item[aria-selected="true"],
+.seg-item[aria-pressed="true"],
+.seg-item.active {
+  border-color: var(--hairline);
+  background: var(--surface-container-lowest);
+  color: var(--primary);
+  font-weight: 600;
+}
 
 /* 입력 — CTA와 달리 각지게. 도구다운 정밀함. */
 input, select, textarea {
@@ -367,7 +490,7 @@ a { color: var(--primary); }
 
 .quickstart-tour-menu {
   color: var(--ink-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
 }
 
@@ -606,23 +729,8 @@ a { color: var(--primary); }
   border-radius: var(--radius-md);
 }
 
-.browse-panel-tabs button {
-  min-height: 36px;
-  padding: 7px 10px;
-  color: var(--ink-muted);
-  font-family: inherit;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  cursor: pointer;
-}
-
-.browse-panel-tabs button[aria-selected="true"] {
-  color: var(--primary);
-  font-weight: 600;
-  background: var(--surface-container-lowest);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
-}
+/* 모양은 .seg / .seg-item 이 정한다. 여기서는 이 자리에만 필요한 높이만 얹는다. */
+.browse-panel-tabs .seg-item { min-height: 36px; }
 
 .browse-panel-content {
   margin-top: 18px;
@@ -673,7 +781,7 @@ a { color: var(--primary); }
 
 .browse-disclosure summary small {
   color: var(--ink-faint);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 400;
 }
 
@@ -914,12 +1022,12 @@ a { color: var(--primary); }
 
 .nodaji-control-heading b {
   color: #111827;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .nodaji-control-heading span {
   color: #9ca3af;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .nodaji-control-intro {
@@ -938,7 +1046,7 @@ a { color: var(--primary); }
 
 .nodaji-selected-summary small {
   color: #9ca3af;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .nodaji-selected-summary strong {
@@ -949,7 +1057,7 @@ a { color: var(--primary); }
 
 .nodaji-selected-summary span {
   margin-top: 2px;
-  color: #2563eb;
+  color: var(--primary);
   font-size: 12px;
   font-weight: 600;
 }
@@ -963,12 +1071,12 @@ a { color: var(--primary); }
 .nodaji-field > span,
 .nodaji-section-label {
   color: #9ca3af;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
 }
 
 .nodaji-field em {
-  color: #3b82f6;
+  color: var(--primary);
   font-style: normal;
   font-weight: 600;
 }
@@ -991,8 +1099,8 @@ a { color: var(--primary); }
   flex: 0 0 20px;
   place-items: center;
   color: #fff;
-  font-size: 10px;
-  background: #3b82f6;
+  font-size: 12px;
+  background: var(--primary);
   border-radius: 999px;
 }
 
@@ -1001,7 +1109,7 @@ a { color: var(--primary); }
   min-height: 38px;
   padding: 7px 10px;
   color: #374151;
-  font-size: 13px;
+  font-size: 14px;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
   border-radius: 8px;
@@ -1041,7 +1149,7 @@ a { color: var(--primary); }
   height: 36px;
   display: grid;
   place-items: center;
-  color: #2563eb;
+  color: var(--primary);
   font-size: 20px;
   background: #eaf2ff;
   border-radius: 9px;
@@ -1055,7 +1163,7 @@ a { color: var(--primary); }
 
 .nodaji-industry-current small {
   color: #9ca3af;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .nodaji-industry-current strong {
@@ -1068,8 +1176,8 @@ a { color: var(--primary); }
 
 .nodaji-industry-trigger em {
   padding: 4px 7px;
-  color: #2563eb;
-  font-size: 9px;
+  color: var(--primary);
+  font-size: 12px;
   line-height: 1.2;
   white-space: nowrap;
   background: #eaf2ff;
@@ -1187,8 +1295,8 @@ a { color: var(--primary); }
 
 .nodaji-industry-options button:hover,
 .nodaji-industry-options button.active {
-  color: #1d4ed8;
-  background: #eff6ff;
+  color: var(--primary);
+  background: var(--primary-soft);
 }
 
 .nodaji-industry-options button > span:first-child {
@@ -1206,7 +1314,7 @@ a { color: var(--primary); }
 
 .nodaji-industry-options button small {
   color: #94a3b8;
-  font-size: 9px;
+  font-size: 12px;
 }
 
 .nodaji-industry-options button > .material-symbols-outlined {
@@ -1215,7 +1323,7 @@ a { color: var(--primary); }
 }
 
 .nodaji-industry-options button.active > .material-symbols-outlined {
-  color: #2563eb;
+  color: var(--primary);
 }
 
 .nodaji-industry-options > p {
@@ -1223,7 +1331,7 @@ a { color: var(--primary); }
   padding: 18px 8px;
   text-align: center;
   color: #9ca3af;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .nodaji-mini-stats {
@@ -1243,12 +1351,12 @@ a { color: var(--primary); }
 
 .nodaji-mini-stats small {
   color: #9ca3af;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .nodaji-mini-stats b {
   color: #374151;
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .nodaji-analyze-button {
@@ -1259,7 +1367,7 @@ a { color: var(--primary); }
   color: #fff;
   font-size: 14px;
   font-weight: 700;
-  background: #3b82f6;
+  background: var(--primary);
   border: 0;
   border-radius: 9px;
   cursor: pointer;
@@ -1267,7 +1375,7 @@ a { color: var(--primary); }
 }
 
 .nodaji-analyze-button:hover {
-  background: #2563eb;
+  background: var(--primary-active);
 }
 
 .nodaji-analyze-button:active {
@@ -1297,7 +1405,7 @@ a { color: var(--primary); }
   align-items: center;
   gap: 6px;
   color: #4b5563;
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -1311,7 +1419,7 @@ a { color: var(--primary); }
 .nodaji-card-legend p {
   margin: 8px 0 0;
   color: #9ca3af;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.5;
 }
 
@@ -1323,7 +1431,7 @@ a { color: var(--primary); }
   margin: 0 18px 14px;
   padding: 9px 10px;
   color: #b91c1c;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.5;
   background: #fef2f2;
   border-radius: 7px;
@@ -1362,7 +1470,7 @@ a { color: var(--primary); }
   padding: 0 10px;
   color: #9ca3af;
   font-family: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   background: transparent;
   border: 0;
@@ -1371,8 +1479,8 @@ a { color: var(--primary); }
 }
 
 .nodaji-drawer-tabs button.active {
-  color: #2563eb;
-  border-bottom-color: #3b82f6;
+  color: var(--primary);
+  border-bottom-color: var(--primary);
 }
 
 .nodaji-drawer-tabs button:disabled {
@@ -1381,8 +1489,8 @@ a { color: var(--primary); }
 }
 
 .nodaji-drawer-tabs .nodaji-drawer-close {
-  color: #9ca3af;
-  font-size: 24px;
+  color: var(--ink-faint);
+  font-size: 20px;
   border-bottom: 0;
 }
 
@@ -1437,8 +1545,8 @@ a { color: var(--primary); }
 
 .nodaji-priority-grid button:hover,
 .nodaji-priority-grid button.active {
-  color: #1d4ed8;
-  background: #eff6ff;
+  color: var(--primary);
+  background: var(--primary-soft);
   border-color: #93c5fd;
 }
 
@@ -1452,7 +1560,7 @@ a { color: var(--primary); }
   display: inline-grid;
   place-items: center;
   color: #9ca3af;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   background: #fff;
   border: 1px solid #d1d5db;
@@ -1461,7 +1569,7 @@ a { color: var(--primary); }
 }
 
 .nodaji-priority-grid button.active .nodaji-help-icon {
-  color: #1d4ed8;
+  color: var(--primary);
   border-color: #93c5fd;
 }
 
@@ -1474,7 +1582,7 @@ a { color: var(--primary); }
   width: 190px;
   padding: 8px 10px;
   color: #f9fafb;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 400;
   line-height: 1.5;
   text-align: left;
@@ -1495,7 +1603,7 @@ a { color: var(--primary); }
 
 .nodaji-drawer-heading small {
   color: #9ca3af;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .nodaji-drawer-heading h2 {
@@ -1507,14 +1615,14 @@ a { color: var(--primary); }
 
 .nodaji-drawer-heading > span {
   color: #6b7280;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .nodaji-drawer-alert {
   margin-bottom: 10px;
   padding: 9px 10px;
   color: #92400e;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
   background: #fffbeb;
   border-radius: 7px;
@@ -1524,7 +1632,7 @@ a { color: var(--primary); }
   margin-bottom: 10px;
   padding: 9px 10px;
   color: #475569;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.6;
   background: #f8fafc;
   border: 1px solid #e2e8f0;
@@ -1564,9 +1672,9 @@ a { color: var(--primary); }
   display: inline-grid;
   place-items: center;
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
-  background: #3b82f6;
+  background: var(--primary);
   border-radius: 999px;
 }
 
@@ -1586,7 +1694,7 @@ a { color: var(--primary); }
   align-items: center;
   padding: 2px 6px;
   color: #475569;
-  font-size: 9px;
+  font-size: 12px;
   font-style: normal;
   font-weight: 700;
   line-height: 1.25;
@@ -1602,7 +1710,7 @@ a { color: var(--primary); }
 }
 
 .nodaji-evidence.evidence-medium {
-  color: #1d4ed8;
+  color: var(--primary);
   background: #dbeafe;
 }
 
@@ -1619,14 +1727,14 @@ a { color: var(--primary); }
 .nodaji-result-copy small {
   overflow: hidden;
   color: #6b7280;
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .nodaji-result-copy em {
-  color: #3b82f6;
-  font-size: 10px;
+  color: var(--primary);
+  font-size: 12px;
   font-style: normal;
 }
 
@@ -1643,7 +1751,7 @@ a { color: var(--primary); }
 
 .nodaji-result-score small {
   color: #6b7280;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .nodaji-result-reason,
@@ -1653,14 +1761,14 @@ a { color: var(--primary); }
   gap: 7px;
   margin: 9px 0 0;
   color: #4b5563;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
 }
 
 .nodaji-result-reason b,
 .nodaji-result-caution b {
-  color: #2563eb;
-  font-size: 10px;
+  color: var(--primary);
+  font-size: 12px;
 }
 
 .nodaji-result-caution b {
@@ -1678,7 +1786,7 @@ a { color: var(--primary); }
   padding: 5px 8px;
   color: #4b5563;
   font-family: inherit;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 600;
   background: #f9fafb;
   border: 1px solid #e5e7eb;
@@ -1688,8 +1796,8 @@ a { color: var(--primary); }
 
 .nodaji-result-actions button:hover,
 .nodaji-result-actions button.active {
-  color: #2563eb;
-  background: #eff6ff;
+  color: var(--primary);
+  background: var(--primary-soft);
   border-color: #93c5fd;
 }
 
@@ -1715,7 +1823,7 @@ a { color: var(--primary); }
   gap: 10px;
   padding: 11px 12px;
   color: #334155;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
   cursor: pointer;
   list-style: none;
@@ -1740,14 +1848,16 @@ a { color: var(--primary); }
 .nodaji-all-area-list summary small {
   margin-left: auto;
   color: #94a3b8;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 500;
 }
 
 .nodaji-all-area-head,
 .nodaji-all-area-rows > div {
   display: grid;
-  grid-template-columns: 34px minmax(0, 1fr) 42px 42px;
+  /* 첫 칸이 34px일 때 머리글 "시 순위"(12px에서 약 39px)가 두 줄로 접혔다.
+     늘린 12px은 옆의 1fr(지역과 근거)에서 가져온다. */
+  grid-template-columns: 46px minmax(0, 1fr) 42px 42px;
   align-items: center;
   gap: 7px;
   padding: 7px 10px;
@@ -1755,7 +1865,7 @@ a { color: var(--primary); }
 
 .nodaji-all-area-head {
   color: #94a3b8;
-  font-size: 9px;
+  font-size: 12px;
   background: #f8fafc;
   border-top: 1px solid #e2e8f0;
   border-bottom: 1px solid #e2e8f0;
@@ -1769,7 +1879,7 @@ a { color: var(--primary); }
 .nodaji-all-area-rows > div {
   min-height: 45px;
   color: #64748b;
-  font-size: 10px;
+  font-size: 12px;
   border-bottom: 1px solid #f1f5f9;
 }
 
@@ -1792,7 +1902,7 @@ a { color: var(--primary); }
   overflow: hidden;
   max-width: 100%;
   color: #1f2937;
-  font-size: 11px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1800,14 +1910,14 @@ a { color: var(--primary); }
 .nodaji-all-area-rows strong {
   text-align: right;
   color: #111827;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .nodaji-all-area-rows button {
   padding: 4px 5px;
   color: #475569;
   font-family: inherit;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 700;
   background: #fff;
   border: 1px solid #cbd5e1;
@@ -1816,8 +1926,8 @@ a { color: var(--primary); }
 }
 
 .nodaji-all-area-rows button.active {
-  color: #2563eb;
-  background: #eff6ff;
+  color: var(--primary);
+  background: var(--primary-soft);
   border-color: #93c5fd;
 }
 
@@ -1833,7 +1943,7 @@ a { color: var(--primary); }
   margin-top: 12px;
   padding: 11px 12px;
   color: #4b5563;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.55;
   background: #f5f3ff;
   border: 1px solid #ddd6fe;
@@ -1852,7 +1962,7 @@ a { color: var(--primary); }
   padding: 6px;
   text-align: center;
   color: #5b21b6;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .nodaji-compare-row {
@@ -1872,20 +1982,20 @@ a { color: var(--primary); }
 .nodaji-compare-row strong {
   text-align: center;
   color: #111827;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .nodaji-compare-panel > p {
   margin: 9px 0 0;
   color: #7c7190;
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .nodaji-drawer-note,
 .nodaji-empty-copy {
   margin: 14px 0 0;
   color: #9ca3af;
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.65;
 }
 
@@ -1898,7 +2008,7 @@ a { color: var(--primary); }
 .nodaji-observation > p {
   margin: 8px 0 0;
   color: #4b5563;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.65;
 }
 
@@ -1919,7 +2029,7 @@ a { color: var(--primary); }
 
 .nodaji-observation-grid span {
   color: #9ca3af;
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.35;
 }
 
@@ -1948,7 +2058,7 @@ a { color: var(--primary); }
 .nodaji-map-ticker span {
   padding: 2px 6px;
   color: #fff;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
   background: #6b9fe4;
   border-radius: 4px;
@@ -1956,12 +2066,12 @@ a { color: var(--primary); }
 
 .nodaji-map-ticker b {
   color: #374151;
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .nodaji-map-ticker em {
   color: #9ca3af;
-  font-size: 10px;
+  font-size: 12px;
   font-style: normal;
 }
 
@@ -1993,7 +2103,7 @@ a { color: var(--primary); }
 }
 
 .nodaji-map-buttons button:hover {
-  color: #2563eb;
+  color: var(--primary);
   background: #f9fafb;
 }
 
@@ -2014,7 +2124,7 @@ a { color: var(--primary); }
   max-width: calc(100vw - 440px);
   overflow: hidden;
   color: #6b7280;
-  font-size: 10px;
+  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
   transform: translateX(-50%);
@@ -2029,7 +2139,7 @@ a { color: var(--primary); }
   gap: 8px;
   padding: 7px 10px;
   color: #fff;
-  font-size: 11px;
+  font-size: 12px;
   pointer-events: none;
   background: rgba(15, 23, 42, 0.92);
   border-radius: 7px;
@@ -2074,7 +2184,7 @@ a { color: var(--primary); }
 
   .nodaji-map-menu a {
     padding: 0 7px;
-    font-size: 11px;
+    font-size: 12px;
   }
 
   .nodaji-control-card {
@@ -2243,7 +2353,7 @@ a { color: var(--primary); }
 
 .official-brand-copy span {
   color: var(--ink-faint);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -2355,7 +2465,7 @@ a { color: var(--primary); }
   flex: 0 0 auto;
   place-items: center;
   color: #5eead4;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 750;
   background: rgba(45, 212, 191, 0.11);
   border: 1px solid rgba(45, 212, 191, 0.2);
@@ -2371,14 +2481,14 @@ a { color: var(--primary); }
 .official-account-copy strong {
   overflow: hidden;
   color: var(--on-surface);
-  font-size: 13px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .official-account-copy span {
   color: var(--ink-faint);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .official-logout-button:hover {
@@ -2466,9 +2576,8 @@ a { color: var(--primary); }
   position: absolute;
   inset: 3px auto 2px 0;
   width: 3px;
-  background: linear-gradient(to bottom, #38bdf8, #2dd4bf);
+  background: linear-gradient(to bottom, var(--primary), var(--primary-container));
   border-radius: 999px;
-  box-shadow: 0 0 14px rgba(56, 189, 248, 0.36);
 }
 
 .official-page-header .t-h1,
@@ -2525,7 +2634,7 @@ a { color: var(--primary); }
 
 .data-management-safety span:not(.material-symbols-outlined) {
   color: #64748b;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.55;
 }
 
@@ -2669,7 +2778,7 @@ a { color: var(--primary); }
 .data-current-sub {
   margin-top: -3px;
   color: var(--ink-faint);
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.1px;
 }
 
@@ -2700,7 +2809,7 @@ a { color: var(--primary); }
 
 .data-current-empty span {
   color: var(--ink-faint);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .data-current-note {
@@ -2925,7 +3034,7 @@ a { color: var(--primary); }
 .data-upload-latest > b {
   overflow: hidden;
   color: #334155;
-  font-size: 13px;
+  font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -2970,7 +3079,7 @@ a { color: var(--primary); }
 .data-upload-section-head p {
   margin: 3px 0 0;
   color: var(--ink-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .data-upload-table-wrap {
@@ -2991,7 +3100,7 @@ a { color: var(--primary); }
 }
 
 .data-upload-table th {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 650;
   letter-spacing: 0.02em;
 }
@@ -3014,7 +3123,7 @@ a { color: var(--primary); }
 .data-upload-table td > small {
   margin-top: 2px;
   color: var(--ink-faint);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .data-upload-table td b {
@@ -3159,7 +3268,7 @@ a { color: var(--primary); }
 
 .data-history-detail-grid dt {
   color: var(--ink-faint);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.1px;
 }
@@ -3168,7 +3277,7 @@ a { color: var(--primary); }
   margin: 3px 0 0;
   overflow-wrap: anywhere;
   color: #334155;
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.5;
 }
 
@@ -3218,7 +3327,7 @@ a { color: var(--primary); }
 
 .data-history-quarters span {
   color: var(--ink-muted);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -3230,7 +3339,7 @@ a { color: var(--primary); }
 
 .data-history-quarters small {
   color: var(--ink-faint);
-  font-size: 10px;
+  font-size: 12px;
 }
 
 .data-history-detail-loading {
@@ -3238,7 +3347,7 @@ a { color: var(--primary); }
   align-items: center;
   gap: 8px;
   color: var(--ink-muted);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .data-history-detail-loading .material-symbols-outlined {
@@ -3248,7 +3357,7 @@ a { color: var(--primary); }
 
 .data-history-detail-error {
   color: var(--on-error-container);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .data-upload-empty {
@@ -3258,7 +3367,7 @@ a { color: var(--primary); }
   justify-content: center;
   gap: 8px;
   color: var(--ink-faint);
-  font-size: 13px;
+  font-size: 14px;
 }
 
 .data-upload-empty .material-symbols-outlined {
@@ -3358,7 +3467,7 @@ a { color: var(--primary); }
   padding: 8px 14px;
   color: #0f172a;
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(15, 23, 42, 0.09);
@@ -3482,7 +3591,7 @@ a { color: var(--primary); }
   padding: 9px 12px;
   color: var(--primary);
   font: inherit;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   background: color-mix(in srgb, var(--primary) 6%, white);
   border: 1px solid color-mix(in srgb, var(--primary) 16%, white);
@@ -3622,7 +3731,7 @@ a { color: var(--primary); }
 
 .policy-scatter-axis-label {
   fill: var(--ink-muted);
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 700;
   pointer-events: none;
 }
@@ -3821,7 +3930,7 @@ a { color: var(--primary); }
 .policy-quadrant-drawer-metrics span {
   margin-top: 3px;
   color: var(--ink-faint);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .official-shell .btn-primary {

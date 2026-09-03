@@ -1,20 +1,20 @@
-.cell-picker-dialog { width: min(640px, calc(100% - 32px)); max-height: calc(100dvh - 40px); padding: 0; margin: auto; border: 1px solid #d4e1e5; border-radius: 16px; background: #fff; color: #19354a; box-shadow: 0 24px 80px #102b4b35; overflow: auto; }
+.cell-picker-dialog { width: min(640px, calc(100% - 32px)); max-height: calc(100dvh - 40px); padding: 0; margin: auto; border: 1px solid var(--hairline); border-radius: 16px; background: var(--surface-container-lowest); color: var(--on-surface); box-shadow: 0 24px 80px #102b4b35; overflow: auto; }
 .cell-picker-dialog::backdrop { background: #10203580; }
 .cell-picker-dialog > form { padding: 24px; }
 .cell-picker-dialog header { display: flex; align-items: center; gap: 12px; }
 .cell-picker-dialog h2 { margin: 0; font-size: 21px; }
-.cell-picker-dialog header > button { display: flex; padding: 5px; margin-left: auto; border: 0; color: #607586; background: transparent; cursor: pointer; }
-.cell-picker-hint { margin: 10px 0 18px; font-size: 12px; line-height: 1.7; color: #64748b; }
+.cell-picker-dialog header > button { display: flex; padding: 5px; margin-left: auto; border: 0; color: var(--ink-muted); background: transparent; cursor: pointer; }
+.cell-picker-hint { margin: 10px 0 18px; font-size: 12px; line-height: 1.7; color: var(--ink-muted); }
 .cell-picker-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-items: start; gap: 12px; }
 .cell-picker-fields > .search-select { width: 100%; }
-.cell-picker-selection { margin: 14px 0; padding: 11px; border-radius: 7px; background: #f1f5f9; font-size: 13px; }
-.cell-picker-peers h3 { margin: 18px 0 9px; color: #64748b; font-size: 12px; }
+.cell-picker-selection { margin: 14px 0; padding: 11px; border-radius: 7px; background: var(--surface-container-low); font-size: 14px; }
+.cell-picker-peers h3 { margin: 18px 0 9px; color: var(--ink-muted); font-size: 12px; }
 .cell-picker-peers > div { display: grid; gap: 6px; max-height: 200px; overflow: auto; }
-.cell-picker-peers button { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px; border: 1px solid #d7e4e1; border-radius: 8px; background: #fff; color: #264c49; text-align: left; cursor: pointer; }
+.cell-picker-peers button { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 11px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--surface-container-lowest); color: var(--ink-secondary); text-align: left; cursor: pointer; }
 .cell-picker-peers button[aria-pressed="true"] { border-color: #338a7c; background: #edf7f4; }
-.cell-picker-peers small { display: block; color: #64748b; margin-top: 4px; }
-.cell-picker-dialog footer { position: sticky; bottom: -24px; display: flex; justify-content: flex-end; gap: 9px; margin-top: 18px; padding: 14px 0 0; background: #fff; }
-.cell-picker-dialog footer button { padding: 11px 22px; font: inherit; font-size: 13px; border: 1px solid #cbd5e1; border-radius: 8px; background: #fff; color: #455a6b; cursor: pointer; }
-.cell-picker-dialog footer button[type="submit"] { border-color: #16766f; background: #16766f; color: #fff; font-weight: 600; }
-.cell-picker-dialog footer button:disabled { background: #e7efed; color: #829590; border-color: #d9e4e1; cursor: default; }
+.cell-picker-peers small { display: block; color: var(--ink-muted); margin-top: 4px; }
+.cell-picker-dialog footer { position: sticky; bottom: -24px; display: flex; justify-content: flex-end; gap: 9px; margin-top: 18px; padding: 14px 0 0; background: var(--surface-container-lowest); }
+.cell-picker-dialog footer button { padding: 11px 22px; font: inherit; font-size: 14px; border: 1px solid var(--outline-variant); border-radius: 8px; background: var(--surface-container-lowest); color: var(--ink-secondary); cursor: pointer; }
+.cell-picker-dialog footer button[type="submit"] { border-color: var(--primary); background: var(--primary); color: var(--surface-container-lowest); font-weight: 600; }
+.cell-picker-dialog footer button:disabled { background: var(--surface-container); color: var(--ink-faint); border-color: var(--hairline); cursor: default; }
 @media (max-width: 540px) { .cell-picker-dialog > form { padding: 18px; }.cell-picker-fields { grid-template-columns: 1fr; }.cell-picker-dialog footer { bottom: -18px; } }

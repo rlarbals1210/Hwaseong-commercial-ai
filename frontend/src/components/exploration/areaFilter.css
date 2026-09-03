@@ -1,22 +1,22 @@
-.explore-area-filter { border: 1px solid #dbe4ef; border-radius: 10px; background: #fff; margin-bottom: 18px; color: #334155; }
+.explore-area-filter { border: 1px solid var(--hairline); border-radius: 10px; background: var(--surface-container-lowest); margin-bottom: 18px; color: var(--ink-secondary); }
 .explore-area-filter > summary { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px; cursor: pointer; list-style: none; }
 .explore-area-filter > summary::-webkit-details-marker { display: none; }
-.explore-area-filter > summary::after { content: "+"; font-size: 19px; color: #64748b; }
+.explore-area-filter > summary::after { content: "+"; font-size: 19px; color: var(--ink-muted); }
 .explore-area-filter[open] > summary::after { content: "−"; }
 .explore-area-filter > summary > span:first-child { display: grid; gap: 5px; flex: 1; }
-.explore-area-filter summary b { font-size: 12px; }.explore-area-filter summary small { font-size: 11px; color: #64748b; }
-.area-filter-count { padding: 4px 7px; border-radius: 5px; background: #eff6ff; color: #1d4ed8; font-size: 11px; white-space: nowrap; }
-.area-filter-content { border-top: 1px solid #e2e8f0; padding: 12px; }
-.area-filter-search-label { display: block; font-size: 11px; margin-bottom: 7px; }
-.area-filter-content > input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid #cbd5e1; border-radius: 7px; font: inherit; font-size: 12px; }
-.area-filter-reset { width: 100%; margin: 9px 0 12px; padding: 9px; border: 1px solid #dbe4ef; border-radius: 7px; background: white; color: #2563eb; font: inherit; font-size: 11px; cursor: pointer; }
-.area-filter-reset[aria-pressed="true"] { background: #eff6ff; font-weight: 700; }
+.explore-area-filter summary b { font-size: 12px; }.explore-area-filter summary small { font-size: 12px; color: var(--ink-muted); }
+.area-filter-count { padding: 4px 7px; border-radius: 5px; background: var(--primary-soft); color: var(--primary); font-size: 12px; white-space: nowrap; }
+.area-filter-content { border-top: 1px solid var(--hairline); padding: 12px; }
+.area-filter-search-label { display: block; font-size: 12px; margin-bottom: 7px; }
+.area-filter-content > input { width: 100%; box-sizing: border-box; padding: 10px; border: 1px solid var(--outline-variant); border-radius: 7px; font: inherit; font-size: 12px; }
+.area-filter-reset { width: 100%; margin: 9px 0 12px; padding: 9px; border: 1px solid var(--hairline); border-radius: 7px; background: var(--surface-container-lowest); color: var(--primary); font: inherit; font-size: 12px; cursor: pointer; }
+.area-filter-reset[aria-pressed="true"] { background: var(--primary-soft); font-weight: 700; }
 .area-filter-content fieldset { padding: 0; margin: 0; border: 0; min-width: 0; }
-.area-filter-content legend { font-size: 11px; color: #64748b; padding: 0 0 8px; }
+.area-filter-content legend { font-size: 12px; color: var(--ink-muted); padding: 0 0 8px; }
 .area-filter-options { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; max-height: 210px; overflow-y: auto; overscroll-behavior: contain; }
 .area-filter-options label { display: flex; align-items: center; gap: 7px; padding: 10px 6px; border-radius: 5px; font-size: 12px; cursor: pointer; }
-.area-filter-options label:has(:checked) { background: #eff6ff; color: #1d4ed8; }
-.area-filter-options input { accent-color: #2563eb; margin: 0; width: 16px; height: 16px; }
-.area-filter-content p { font-size: 10px; line-height: 1.6; color: #64748b; margin: 10px 0 0; }.area-filter-options p { grid-column: 1 / -1; }
-.explore-area-filter :focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }
-.explore-filter-map-note { margin: 0 18px 16px; font-size: 11px; color: #64748b; line-height: 1.6; }
+.area-filter-options label:has(:checked) { background: var(--primary-soft); color: var(--primary); }
+.area-filter-options input { accent-color: var(--primary); margin: 0; width: 16px; height: 16px; }
+.area-filter-content p { font-size: 12px; line-height: 1.6; color: var(--ink-muted); margin: 10px 0 0; }.area-filter-options p { grid-column: 1 / -1; }
+.explore-area-filter :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+.explore-filter-map-note { margin: 0 18px 16px; font-size: 12px; color: var(--ink-muted); line-height: 1.6; }

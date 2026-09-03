@@ -266,7 +266,7 @@ function Comparison({ value, comparison }) {
         <div key={r.label} style={{ marginBottom: 10 }}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
             <span className="t-caption" style={{ color: "var(--ink-muted)" }}>{r.label}</span>
-            <span className="t-metric" style={{ fontSize: 16, fontVariantNumeric: "tabular-nums" }}>{fmt(r.value)}%</span>
+            <span className="t-metric t-metric-sm">{fmt(r.value)}%</span>
           </div>
           <div style={{ height: 7, background: "var(--surface-container)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
             <div style={{
@@ -522,7 +522,7 @@ export default function CellDetailPage() {
               <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
                 <span style={{ fontSize: 32, fontWeight: 400, color: "var(--on-surface)" }}>폐업</span>
                 <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-                  <span className="t-metric" style={{ fontSize: 38 }}>
+                  <span className="t-metric t-metric-lg">
                     {Number.isFinite(cell.cumulative_closure_count) ? cell.cumulative_closure_count.toLocaleString() : "—"}
                   </span>
                   <span style={{ fontSize: 16, color: "var(--ink-faint)" }}>곳 닫힘</span>
@@ -536,7 +536,7 @@ export default function CellDetailPage() {
           <div style={{ display: "flex", alignItems: "baseline", gap: 8 }}>
             <span style={{ fontSize: 32, fontWeight: 400, color: "var(--on-surface)" }}>폐업률</span>
             <div style={{ display: "flex", alignItems: "baseline", gap: 4 }}>
-              <span className="t-metric" style={{ fontSize: 38 }}>{fmt(cell.cumulative_closure_rate_pct)}</span>
+              <span className="t-metric t-metric-lg">{fmt(cell.cumulative_closure_rate_pct)}</span>
               <span style={{ fontSize: 16, color: "var(--ink-faint)" }}>%</span>
             </div>
           </div>
@@ -616,24 +616,40 @@ export default function CellDetailPage() {
                     background: "var(--surface-container-low)",
                     borderRadius: "var(--radius-md)",
                     color: "var(--ink-secondary)",
-                    lineHeight: 1.8,
+                    /* 예전에는 두 줄짜리 문장이라 1.8이 필요했다. 행으로 나눈 지금은
+                       행 간격(gap)이 그 역할을 하므로 줄간격을 되돌린다. */
+                    lineHeight: 1.5,
                   }}
                 >
                   {/* 이 칸만 소수 2자리다. 화면 전체는 1자리로 통일했지만 여기서는 값과 기준선의
                       대소가 결론이라 반올림이 모순을 만든다 — 개업률 1.98%와 기준 2.0%를 둘 다
                       "2.0%"로 찍으면 "2.0% — 기준 2.0% 미만"이 된다(실측 2셀, 그중 하나는
                       조기경보 예측 4위라 시연에서 눌릴 자리였다). */}
-                  <div style={{ color: "var(--ink-faint)", marginBottom: 4 }}>판정 근거</div>
-                  개업률{" "}
-                  <b style={{ color: "var(--on-surface)" }}>{fmt(cell.opening_rate_pct, 2)}%</b>
-                  {" "}— 기준 {fmt(cell.cell_type_open_cut_pct, 2)}%{" "}
-                  {cell.opening_rate_pct >= cell.cell_type_open_cut_pct ? "이상" : "미만"}
-                  <br />
-                  폐업률{" "}
-                  <b style={{ color: "var(--on-surface)" }}>{fmt(cell.cumulative_closure_rate_pct, 2)}%</b>
-                  {" "}— 기준 {fmt(cell.cell_type_close_cut_pct, 2)}%{" "}
-                  {cell.cumulative_closure_rate_pct >= cell.cell_type_close_cut_pct ? "이상" : "미만"}
-                  <div style={{ color: "var(--ink-faint)", marginTop: 6 }}>
+                  {/* 예전에는 지표명·측정값·기준값·판정 네 가지가 한 문장에 섞여 있어
+                      "무엇이 기준을 넘었는가"를 매번 문장에서 골라내야 했다. 열로 가르고
+                      측정값만 판에 올려, 눈이 가운데 열만 훑어도 답이 잡히게 한다. */}
+                  <div style={{ color: "var(--ink-faint)", marginBottom: 8 }}>판정 근거</div>
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {[
+                      { name: "개업률", value: cell.opening_rate_pct, cut: cell.cell_type_open_cut_pct },
+                      { name: "폐업률", value: cell.cumulative_closure_rate_pct, cut: cell.cell_type_close_cut_pct },
+                    ].map((row) => (
+                      <div
+                        key={row.name}
+                        style={{ display: "grid", gridTemplateColumns: "auto auto 1fr", alignItems: "center", gap: 10 }}
+                      >
+                        <span className="value-label" style={{ fontSize: 14 }}>{row.name}</span>
+                        <span className="value-plate on-muted">{fmt(row.value, 2)}%</span>
+                        <span style={{ color: "var(--ink-muted)" }}>
+                          기준 {fmt(row.cut, 2)}%{" "}
+                          <b style={{ color: "var(--ink-secondary)" }}>
+                            {row.value >= row.cut ? "이상" : "미만"}
+                          </b>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{ color: "var(--ink-faint)", marginTop: 10, lineHeight: 1.6 }}>
                     기준은 표본이 충분한 상권의 중위값입니다. 절대 임계가 아니라 화성시 안에서의 상대 위치입니다.
                   </div>
                 </div>
@@ -717,7 +733,7 @@ export default function CellDetailPage() {
               <div key={f.rank} style={{ marginBottom: 10 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", marginBottom: 4 }}>
                   <span className="t-caption" style={{ color: "var(--ink-muted)" }}>{f.factor_label}</span>
-                  <span className="t-metric" style={{ fontSize: 15, fontVariantNumeric: "tabular-nums" }}>{fmt(f.share_pct)}%</span>
+                  <span className="t-metric t-metric-sm">{fmt(f.share_pct)}%</span>
                 </div>
                 <div style={{ height: 7, background: "var(--surface-container)", borderRadius: "var(--radius-full)", overflow: "hidden" }}>
                   <div style={{ width: `${Math.min(100, f.share_pct)}%`, height: "100%", background: "var(--primary)", borderRadius: "var(--radius-full)" }} />
