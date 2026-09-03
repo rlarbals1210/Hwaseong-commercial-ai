@@ -282,7 +282,7 @@ function Row({ label, children, hint, after }) {
   );
 }
 
-function AreaPanel({ selected, detail, loading, onClose }) {
+function AreaPanel({ selected, detail, loading, category, onClose }) {
   const { sampleMin } = useGradeNotice();
   const [expandedArea, setExpandedArea] = useState(null);
   if (!selected) return null;
@@ -290,6 +290,8 @@ function AreaPanel({ selected, detail, loading, onClose }) {
   const industries = detail?.industries ?? [];
   const showAllIndustries = expandedArea === selected.name;
   const visibleIndustries = showAllIndustries ? industries : industries.slice(0, 3);
+  const dashboardParams = new URLSearchParams({ dong: selected.name });
+  if (category) dashboardParams.set("category", category);
   const trend = Number(selected.trend);
   const trendLabel = Number.isFinite(trend)
     ? `분기당 ${trend > 0 ? "+" : ""}${trend.toFixed(3)}%p`
@@ -460,6 +462,15 @@ function AreaPanel({ selected, detail, loading, onClose }) {
           )}
         </>
       )}
+      <div className="official-map-dashboard-action">
+        <div className="t-caption" style={{ color: "var(--ink-muted)" }}>
+          {selected.name} · {category || "전체 업종"}
+        </div>
+        <Link to={`/dashboard?${dashboardParams}`} className="btn-utility">
+          조기경보 대시보드 보기
+          <span className="material-symbols-outlined" aria-hidden="true">arrow_forward</span>
+        </Link>
+      </div>
     </div>
   );
 }
@@ -743,6 +754,7 @@ export default function MapPage() {
                 selected={selected}
                 detail={detailQuery.data}
                 loading={detailQuery.loading}
+                category={category}
                 onClose={() => setSelectedName(null)}
               />
             </div>

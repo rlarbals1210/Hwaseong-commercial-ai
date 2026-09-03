@@ -1,5 +1,5 @@
 import { useState, useEffect, Fragment } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { GradeBadge, TypeBadge } from "../components/Badge";
 import { downloadCsv, csvNum } from "../lib/csv";
@@ -179,12 +179,31 @@ function EmptyState({ icon, title, desc, tone }) {
 // "예측 상위 382개의 평균 폐업률은 시 전체의 1.00배"가 되어 배너가 자기 부정을 한다.
 // 머리 집단과 전체 목록은 다른 물건이라 계산 대상도 갈라 둔다.
 const HEADLINE_COUNT = 10;
+const LIST_PREVIEW_COUNT = 5;
 
 export default function DashboardPage() {
+  const [params, setParams] = useSearchParams();
+  const category = params.get("category") ?? "";
+  const dong = params.get("dong") ?? "";
+  const changeFilters = (changes) => {
+    const next = new URLSearchParams(params);
+    Object.entries(changes).forEach(([key, value]) => {
+      if (value) next.set(key, value);
+      else next.delete(key);
+    });
+    setParams(next);
+  };
+
+  // 지도 링크·새로고침·뒤로가기 모두 URL의 같은 조건으로 조회한다.
+  // 조건이 바뀌면 이전 결과와 펼침 상태를 함께 초기화한다.
+  return <DashboardResults key={JSON.stringify([dong, category])}
+    dong={dong} category={category} onFilterChange={changeFilters} />;
+}
+
+function DashboardResults({ dong, category, onFilterChange }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [category, setCategory] = useState("");
-  const [dong, setDong] = useState("");
+  const [listExpanded, setListExpanded] = useState(false);
   const { dongs, error: dongError } = useDongs();
   const [error, setError] = useState("");
   const { categories, error: categoryError } = useCategories("alert");
@@ -241,6 +260,8 @@ export default function DashboardPage() {
   const lookupMode = filtered;
   const headline = lookupMode ? [] : visible.slice(0, HEADLINE_COUNT);
   const listRows = lookupMode ? visible : visible.slice(HEADLINE_COUNT);
+  const displayedRows = listExpanded ? listRows : listRows.slice(0, LIST_PREVIEW_COUNT);
+  const canExpandList = listRows.length > LIST_PREVIEW_COUNT;
 
   // 상단 요약이 세는 집단. 순위 모드에서는 머리 10개, 조회 모드에서는 그 조건 전체다.
   const cohort = lookupMode ? visible : headline;
@@ -354,20 +375,15 @@ export default function DashboardPage() {
         <div>
           <div className="official-search-filters">
             <SearchableSelect label="업종" icon="storefront" options={categories.map((c) => ({ value: c, label: c }))}
-              value={category} emptyLabel="전체 업종" onChange={(next) => { setLoading(true); setError(""); setCategory(next); }} />
+              value={category} emptyLabel="전체 업종" onChange={(next) => onFilterChange({ category: next })} />
             <SearchableSelect label="읍면동" icon="location_on" unit="곳" options={dongs.map((d) => ({ value: d, label: d }))}
-              value={dong} emptyLabel="전체 읍면동" onChange={(next) => { setLoading(true); setError(""); setDong(next); }} />
+              value={dong} emptyLabel="전체 읍면동" onChange={(next) => onFilterChange({ dong: next })} />
 
             {filtered && (
               <button
                 type="button"
                 className="t-caption"
-                onClick={() => {
-                  setLoading(true);
-                  setError("");
-                  setCategory("");
-                  setDong("");
-                }}
+                onClick={() => onFilterChange({ category: "", dong: "" })}
                 style={{
                   border: "none", background: "transparent", cursor: "pointer",
                   color: "var(--primary)", fontWeight: 600, padding: "4px 2px",
@@ -445,7 +461,7 @@ export default function DashboardPage() {
                 <h3 className="t-h3" style={{ margin: 0 }}>
                   {filtered
                     ? `${[dong, category].filter(Boolean).join(" · ")} 상권 ${visible.length}곳`
-                    : `폐업 위험 상위 ${meta?.validated_top_pct ?? 10}% 상권`}
+                    : `AI 모델 순위 상위 ${meta?.validated_top_pct ?? 10}% 상권`}
                 </h3>
                 <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
                   <span
@@ -466,12 +482,7 @@ export default function DashboardPage() {
                     <button
                       type="button"
                       className="t-caption"
-                      onClick={() => {
-                        setLoading(true);
-                        setError("");
-                        setCategory("");
-                        setDong("");
-                      }}
+                      onClick={() => onFilterChange({ category: "", dong: "" })}
                       style={{
                         border: "none", background: "transparent", cursor: "pointer",
                         color: "var(--primary)", fontWeight: 600, padding: "4px 2px",
@@ -483,40 +494,11 @@ export default function DashboardPage() {
                 </div>
               </div>
               <p className="t-caption" style={{ color: "var(--ink-muted)", margin: "8px 0 0", lineHeight: 1.65 }}>
-                {lookupMode ? (
-                  <>
-                    해당 조건의 상권을 순위와 무관하게 모두 표시합니다. 시 전체 상위{" "}
-                    {meta?.validated_top_pct ?? 10}%{validatedRank ? `(${validatedRank}위)` : ""}{" "}
-                    밖은 흐리게 표시했으며, 그 구간의 순서는 검증 대상이 아닙니다.
-                  </>
-                ) : (
-                  <>
-                    AI가 2분기 뒤를 예측한{" "}
-                    {meta?.ranked_cells ? `${meta.ranked_cells.toLocaleString()}개` : "전체"} 상권 중
-                    상위 {visible.length}곳입니다.{" "}
-                    <b style={{ color: "var(--ink-secondary)" }}>
-                      {/* 리프트 수치는 뺐다(2026-08-31). 이 화면 값(validate_ranking.py, 순위를
-                          매기고 미래 4분기를 확인)과 발표에 쓰는 값(train_model.py, 고정 분할
-                          검증)은 측정 방식이 달라 숫자가 다르다. 한 자리에서 두 값이 부딪히면
-                          "왜 다르냐"에 시간을 쓰게 된다. 문장 뜻은 숫자 없이도 그대로다. */}
-                      이 집단이 나머지보다 실제로 더 많이 닫힌다는 것까지가 검증된 범위입니다.
-                    </b>
-                    {/* 검증 범위까지가 한 문단, 사용 안내는 다음 줄로 내린다.
-                        한 덩어리로 붙여 두면 정작 읽어야 할 "검증된 범위"가 안내에 묻힌다. */}
-                    <span style={{ display: "block", marginTop: 6 }}>
-                      아래 순위 안쪽의 순서는 참고 자료로만 보시기 바랍니다.
-                      {data.length > visible.length && (
-                        <>
-                          {" "}그 외 {(data.length - visible.length).toLocaleString()}개 상권은 위에서
-                          읍면동 또는 업종을 선택하시면 조회하실 수 있습니다.
-                        </>
-                      )}
-                    </span>
-                  </>
-                )}
+                순위는 AI 예측 기준이며, 등급·폐업률은 최근 1년 관측값입니다.
+                {!lookupMode && data.length > visible.length && " 다른 상권은 위 필터에서 조회하세요."}
               </p>
 
-              <div style={{ overflowX: "auto", marginTop: 14 }}>
+              <div id="dashboard-ranking-list" style={{ overflowX: "auto", marginTop: 14 }}>
                 <table style={{ minWidth: 620 }}>
                   <thead>
                     <tr>
@@ -529,12 +511,9 @@ export default function DashboardPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {listRows.map((item, index) => {
-                      // 검증 경계를 넘는 첫 줄 바로 앞에 선을 긋는다. 필터가 걸려 있어도
-                      // 기준은 시 전체 순위(predicted_rank)라 경계 자체는 움직이지 않는다.
-                      // 앞줄이 없을 때(조회 모드의 첫 줄)는 경계 안쪽으로 친다 — 순위 모드에서
-                      // 앞은 항상 카드 10장이고 그건 경계 안쪽이며, 조회 모드에서 첫 줄이
-                      // 이미 경계 밖이면 목록 맨 위에 선이 서는 게 맞다.
+                    {displayedRows.map((item, index) => {
+                      // 시 전체 모델 상위 구간을 벗어나는 첫 행에 구분선을 둔다.
+                      // 필터를 바꿔도 시 전체 순위 기준은 같고, 첫 행부터 밖이면 맨 위에 표시한다.
                       const beyond = validatedRank != null && item.predicted_rank > validatedRank;
                       const previousBeyond =
                         index > 0 &&
@@ -552,16 +531,12 @@ export default function DashboardPage() {
                                     className="t-caption"
                                     style={{ color: "var(--ink-muted)", whiteSpace: "nowrap", fontWeight: 600 }}
                                   >
-                                    검증된 구간은 여기까지 (상위 {meta?.validated_top_pct ?? 10}%
-                                    {meta?.validated_lift ? ` · 리프트 ${meta.validated_lift}배` : ""})
+                                    아래는 시 전체 모델 순위 상위 {meta?.validated_top_pct ?? 10}% 밖입니다
                                   </span>
                                   <span style={{ flex: 1, height: 1, background: "var(--hairline)" }} />
                                 </div>
                                 <div className="t-caption" style={{ color: "var(--ink-faint)", marginTop: 6, lineHeight: 1.6 }}>
-                                  아래부터는 참고용입니다. 검증한 것은 상위 {meta?.validated_top_pct ?? 10}%
-                                  집단이 나머지보다 실제로 더 많이 닫혔다는 사실이지, 이 구간 안의 순서가
-                                  맞는다는 것이 아닙니다. 예산·지원 대상 선정의 근거로는 위쪽 구간을 쓰고,
-                                  아래는 목록 확인 용도로만 보시기 바랍니다.
+                                  흐리게 표시해도 관측 위험등급은 그대로입니다. 모델 순위만으로 개별 상권의 위험이 확정되지는 않습니다.
                                 </div>
                               </td>
                             </tr>
@@ -597,6 +572,21 @@ export default function DashboardPage() {
                 </table>
               </div>
 
+              {canExpandList && (
+                <button
+                  type="button"
+                  className="btn-utility"
+                  aria-expanded={listExpanded}
+                  aria-controls="dashboard-ranking-list"
+                  onClick={() => setListExpanded((expanded) => !expanded)}
+                  style={{ width: "100%", marginTop: 16, display: "flex", alignItems: "center", justifyContent: "center", gap: 6, color: "var(--primary)" }}
+                >
+                  {listExpanded ? "간략히 보기" : `전체보기 (${listRows.length}곳)`}
+                  <span className="material-symbols-outlined" aria-hidden="true" style={{ fontSize: 18 }}>
+                    {listExpanded ? "expand_less" : "expand_more"}
+                  </span>
+                </button>
+              )}
             </div>
           )}
 
