@@ -15,6 +15,7 @@ shapely==2.1.2
 bcrypt==4.2.0
 PyJWT==2.9.0
 pytest==8.3.3
+reportlab==4.4.9
 ipykernel==6.29.5
 matplotlib==3.9.2
 nbconvert==7.17.1

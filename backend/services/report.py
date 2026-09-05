@@ -19,6 +19,10 @@ def _fmt(value, suffix: str = "", digits: int = 1) -> str:
     return f"{float(value):.{digits}f}{suffix}"
 
 
+def _count(value) -> str:
+    return "자료 없음" if value is None else f"{int(value):,}곳"
+
+
 def build_report(score: dict, observed: dict) -> dict:
     area = score["area_name"]
     industry = score["industry_name"]
@@ -29,13 +33,14 @@ def build_report(score: dict, observed: dict) -> dict:
         else f"{industry} {score['total']}개 읍면동 중 {score['rank']}위 · 상위 {score['percentile']}%"
     )
     observed_data = observed.get("comparison", {})
-    facts = [
-        f"최근 1년 누적 폐업률: {_fmt(observed.get('closure_rate_pct'), '%')}",
-        f"같은 기간 폐업 점포: {observed.get('closure_count') if observed.get('closure_count') is not None else '자료 없음'}곳",
-        f"현재 점포: {observed.get('store_count') if observed.get('store_count') is not None else '자료 없음'}곳",
-        f"보정 개업률: {_fmt(observed.get('opening_rate_pct'), '%')}",
-        f"화성시 표본충분 셀 평균: {_fmt(observed_data.get('city_avg_pct'), '%')}",
+    metrics = [
+        {"label": "최근 1년 누적 폐업률", "value": _fmt(observed.get("closure_rate_pct"), "%")},
+        {"label": "같은 기간 폐업 점포", "value": _count(observed.get("closure_count"))},
+        {"label": "현재 점포", "value": _count(observed.get("store_count"))},
+        {"label": "보정 개업률", "value": _fmt(observed.get("opening_rate_pct"), "%")},
+        {"label": "화성시 표본충분 셀 평균", "value": _fmt(observed_data.get("city_avg_pct"), "%")},
     ]
+    facts = [f"{metric['label']}: {metric['value']}" for metric in metrics]
     strengths = score.get("pros") or ["상대점수에서 70점 이상인 두드러진 축이 없습니다."]
     cautions = score.get("cons") or ["상대점수에서 40점 미만인 두드러진 축이 없습니다."]
     if observed.get("sample_insufficient"):
@@ -83,12 +88,20 @@ def build_report(score: dict, observed: dict) -> dict:
     )
     return {
         "title": f"{area} · {industry} 상권 요약",
+        "area_name": area,
+        "industry_name": industry,
         "quarter_code": quarter,
         "quarter_label": score["quarter_label"],
         "preset": preset,
         "cache_key": cache_key,
         "generated_by": REPORT_VERSION,
         "sections": sections,
+        "metrics": metrics,
+        "sources": [
+            "소상공인시장진흥공단 상가(상권)정보: 읍면동·업종별 점포와 개·폐업 집계",
+            "상대 적합도: 같은 업종 내 AI 예측·수요 여건·경쟁·포화도 비교",
+        ],
+        "provisional_notice": observed.get("provisional_notice", ""),
         "relative_notice": score["relative_notice"],
         "disclaimer": score["disclaimer"],
         "ai_disclosure": AI_DISCLOSURE,

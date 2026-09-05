@@ -39,7 +39,7 @@ const GUIDES = [
   {
     path: "/data-management",
     menu: "데이터 관리",
-    goal: "새로 받은 카드매출 파일을 추가하고 싶어요",
+    goal: "새로 받은 파일을 추가하고 싶어요",
     action: "데이터 유형에 맞는 CSV 또는 Excel 파일을 놓고 '업로드 후 검증'을 누르세요.",
     outcome: "기존 파일을 덮어쓰지 않고 형식 검증 결과와 업로드 이력을 남길 수 있습니다.",
   },
@@ -165,7 +165,7 @@ export default function OfficialQuickStart({ open, onClose, path }) {
         </div>
 
         <footer className="quickstart-tour-footer">
-          <span className="quickstart-tour-session-note">이 로그인 중에는 이 화면에서 다시 표시하지 않습니다.</span>
+          <span className="quickstart-tour-session-note">다른 화면에 갔다 돌아오면 이 안내가 다시 표시됩니다.</span>
           <button type="button" className="btn-primary" onClick={closeTour}>
             확인했어요 <span className="material-symbols-outlined" aria-hidden="true">check</span>
           </button>

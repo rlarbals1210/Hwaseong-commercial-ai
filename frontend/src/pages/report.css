@@ -1,0 +1,23 @@
+.report-actions { max-width: 340px; }
+.report-action-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
+.report-download-button, .report-preview-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 40px;
+  border: 1px solid var(--primary);
+  border-radius: var(--radius-full);
+  padding: 9px 15px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+.report-download-button { background: var(--primary); color: white; }
+.report-preview-button { background: var(--surface-container-lowest); color: var(--primary); }
+.report-download-button:hover:not(:disabled), .report-preview-button:hover:not(:disabled) { filter: brightness(.95); }
+.report-actions :focus-visible { outline: 2px solid var(--primary); outline-offset: 3px; }
+.report-actions button:disabled { opacity: .5; cursor: not-allowed; }
+.report-export-hint, .report-export-status { margin: 8px 0 0; line-height: 1.6; color: var(--ink-muted); }
+.report-export-status.is-error { color: var(--accent-orange); }

@@ -15,6 +15,7 @@ import DataManagementPage from "./pages/DataManagementPage";
 import RequireRole from "./components/RequireRole";
 import OfficialQuickStart from "./components/OfficialQuickStart";
 import { useAuth } from "./context/auth-context";
+import { QuickStartContext } from "./context/quickstart-context";
 import { apiFetchJson } from "./lib/api";
 import { DATA_MANAGEMENT_ROUTE, OFFICIAL_ROUTES, safeNext } from "./lib/officialRoutes";
 
@@ -172,19 +173,17 @@ function trackTitle(pathname) {
 }
 
 export default function App() {
-  const { pathname, search } = useLocation();
-  const { isAuthenticated, role, username, loginSequence, logout } = useAuth();
+  const { pathname, search, key: locationKey } = useLocation();
+  const { isAuthenticated, role, username, logout } = useAuth();
   const navigate = useNavigate();
   const isOfficial = isAuthenticated && role === "official";
   const isPublicPage = PUBLIC_PATHS.includes(pathname);
   const [manualQuickStartOpen, setManualQuickStartOpen] = useState(false);
-  const [dismissedQuickStartKeys, setDismissedQuickStartKeys] = useState(() => new Set());
+  // 닫은 기록은 이번 방문에만 남는다 — 라우터 key가 이동마다 새로 발급되므로
+  // 다른 탭에 갔다 돌아오면 안내가 다시 뜬다.
+  const [dismissedQuickStartKey, setDismissedQuickStartKey] = useState(null);
   const isGuidePath = NAV.some((item) => item.path === pathname) || pathname === DATA_MANAGEMENT_ROUTE.path;
-  const quickStartKey = `${loginSequence}:${pathname}`;
-  const shouldAutoOpenQuickStart = isOfficial
-    && loginSequence > 0
-    && isGuidePath
-    && !dismissedQuickStartKeys.has(quickStartKey);
+  const shouldAutoOpenQuickStart = isOfficial && isGuidePath && dismissedQuickStartKey !== locationKey;
   const quickStartOpen = isOfficial && isGuidePath && (manualQuickStartOpen || shouldAutoOpenQuickStart);
 
   useEffect(() => {
@@ -192,14 +191,7 @@ export default function App() {
   }, [pathname]);
 
   const closeQuickStart = () => {
-    if (loginSequence > 0 && isGuidePath) {
-      setDismissedQuickStartKeys((current) => {
-        if (current.has(quickStartKey)) return current;
-        const next = new Set(current);
-        next.add(quickStartKey);
-        return next;
-      });
-    }
+    setDismissedQuickStartKey(locationKey);
     setManualQuickStartOpen(false);
   };
 
@@ -260,26 +252,28 @@ export default function App() {
       ?? (pathname === DATA_MANAGEMENT_ROUTE.path ? DATA_MANAGEMENT_ROUTE : null);
     const topBarTitle = current?.label ?? (pathname.startsWith("/cells/") ? "상권 상세" : "조기경보 대시보드");
     return (
-      <div className="official-shell">
-        <Sidebar
-          nav={NAV}
-          pathname={pathname}
-          username={username}
-          onLogout={handleLogout}
-          onOpenQuickStart={() => {
-            if (isGuidePath) setManualQuickStartOpen(true);
-          }}
-        />
-        <div className="official-content">
-          <TopBar title={topBarTitle} />
-          <main key={pathname} className="official-main">{routes}</main>
+      <QuickStartContext.Provider value={quickStartOpen}>
+        <div className="official-shell">
+          <Sidebar
+            nav={NAV}
+            pathname={pathname}
+            username={username}
+            onLogout={handleLogout}
+            onOpenQuickStart={() => {
+              if (isGuidePath) setManualQuickStartOpen(true);
+            }}
+          />
+          <div className="official-content">
+            <TopBar title={topBarTitle} />
+            <main key={pathname} className="official-main">{routes}</main>
+          </div>
+          <OfficialQuickStart
+            open={quickStartOpen}
+            onClose={closeQuickStart}
+            path={pathname}
+          />
         </div>
-        <OfficialQuickStart
-          open={quickStartOpen}
-          onClose={closeQuickStart}
-          path={pathname}
-        />
-      </div>
+      </QuickStartContext.Provider>
     );
   }
 

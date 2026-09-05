@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import PublicNav from "../components/PublicNav";
 import SearchableSelect from "../components/SearchableSelect";
-import { apiFetchJson, describeApiError } from "../lib/api";
+import usePublicQuery from "../hooks/usePublicQuery";
+import { API, ApiError, apiFetch, apiFetchJson, describeApiError } from "../lib/api";
+import "./report.css";
 
 const SECTION_TONES = {
   overview: { background: "var(--primary-fixed)", accent: "var(--primary)" },
@@ -39,15 +41,17 @@ export default function ReportPage() {
   const [areaId, setAreaId] = useState(null);
   const [industryId, setIndustryId] = useState(null);
   const [preset, setPreset] = useState("균형");
-  const [report, setReport] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [optionError, setOptionError] = useState("");
+  const [downloading, setDownloading] = useState(false);
+  const [exportResult, setExportResult] = useState(null);
 
   useEffect(() => {
+    const controller = new AbortController();
     Promise.all([
-      apiFetchJson("/api/public/areas"),
-      apiFetchJson("/api/recommend/presets"),
+      apiFetchJson("/api/public/areas", { signal: controller.signal }),
+      apiFetchJson("/api/recommend/presets", { signal: controller.signal }),
     ]).then(([optionData, presetData]) => {
+      if (controller.signal.aborted) return;
       setOptions(optionData);
       setPresets(presetData);
       setPreset(presetData.default);
@@ -63,7 +67,10 @@ export default function ReportPage() {
       ) ?? optionData.areas[0];
       setIndustryId(firstIndustry ?? null);
       setAreaId(firstArea?.id ?? null);
-    }).catch((err) => setError(describeApiError(err)));
+    }).catch((err) => {
+      if (!controller.signal.aborted) setOptionError(describeApiError(err));
+    });
+    return () => controller.abort();
   }, []);
 
   const availableAreas = useMemo(() => (
@@ -82,22 +89,45 @@ export default function ReportPage() {
     }
   }, [areaId, availableAreas, industryId, options]);
 
-  useEffect(() => {
-    if (!areaId || !industryId) return;
-    setLoading(true);
-    setError("");
-    apiFetchJson(
-      `/api/report/summary?area_id=${areaId}&industry_id=${industryId}&preset=${encodeURIComponent(preset)}`,
-    ).then(setReport)
-      .catch((err) => { setReport(null); setError(describeApiError(err)); })
-      .finally(() => setLoading(false));
-  }, [areaId, industryId, preset]);
+  const query = areaId && industryId && availableAreas.some((area) => area.id === areaId)
+    ? new URLSearchParams({ area_id: areaId, industry_id: industryId, preset }).toString()
+    : "";
+  const { data: report, loading, error: reportError } = usePublicQuery(query ? `/api/report/summary?${query}` : null);
+  const error = optionError || reportError;
+  const ready = Boolean(report && !loading && !error);
+  const exportMessage = exportResult?.query === query ? exportResult : null;
+
+  async function downloadPdf() {
+    if (!ready || downloading) return;
+    setDownloading(true);
+    setExportResult(null);
+    try {
+      const response = await apiFetch(`/api/report/summary.pdf?${query}`);
+      if (!response.ok) throw new ApiError(response.status);
+      if (!response.headers.get("content-type")?.includes("application/pdf")) {
+        throw new Error("Unexpected document format");
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `상권보고서_${report.area_name}_${report.industry_name}_${report.quarter_label}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+      setExportResult({ query, text: "PDF 다운로드를 시작했습니다.", error: false });
+    } catch (err) {
+      setExportResult({ query, text: `PDF를 만들지 못했습니다. ${describeApiError(err)} 다시 시도해주세요.`, error: true });
+    } finally {
+      setDownloading(false);
+    }
+  }
 
   return (
     <div style={{ minHeight: "100vh", background: "var(--surface-gray)" }}>
       <style>{`
         @media print {
-          .report-controls, .public-report-nav, .report-print-button { display: none !important; }
+          .report-controls, .public-report-nav, .report-actions { display: none !important; }
           .report-page { padding: 0 !important; max-width: none !important; }
           .report-grid { gap: 10px !important; }
         }
@@ -112,14 +142,23 @@ export default function ReportPage() {
               관측 사실과 업종 내 상대 적합도를 5개 영역으로 정리합니다.
             </p>
           </div>
-          <button
-            type="button"
-            className="report-print-button"
-            onClick={() => window.print()}
-            style={{ background: "var(--primary)", color: "white", border: 0, borderRadius: "var(--radius-full)", padding: "10px 17px", cursor: "pointer" }}
-          >
-            인쇄·PDF 저장
-          </button>
+          <div className="report-actions">
+            <div className="report-action-buttons">
+              <button type="button" className="report-download-button" disabled={!ready || downloading}
+                aria-busy={downloading} onClick={downloadPdf}>
+                {downloading ? "PDF 만드는 중…" : "PDF 다운로드"}
+              </button>
+              {ready ? (
+                <a className="report-preview-button" href={`${API}/api/report/summary.pdf?${query}&download=false`}
+                  target="_blank" rel="noopener noreferrer" aria-label="인쇄용 미리보기 (새 탭)">
+                  인쇄용 미리보기
+                </a>
+              ) : <button type="button" className="report-preview-button" disabled>인쇄용 미리보기</button>}
+            </div>
+            <p className="t-caption report-export-hint">A4 보고서 · 핵심 지표와 현장 확인표</p>
+            {exportMessage && <p className={`t-caption report-export-status${exportMessage.error ? " is-error" : ""}`}
+              role={exportMessage.error ? "alert" : "status"}>{exportMessage.text}</p>}
+          </div>
         </header>
 
         <section className="card report-controls" style={{ marginTop: 24, padding: 20 }}>
@@ -140,7 +179,7 @@ export default function ReportPage() {
         </section>
 
         {error && <div role="alert" className="t-body-sm" style={{ color: "var(--accent-orange)", marginTop: 18 }}>{error}</div>}
-        {loading && <p className="t-body-sm" style={{ color: "var(--ink-muted)", marginTop: 24 }}>보고서를 조합하는 중…</p>}
+        {(loading || (!options && !optionError)) && <p className="t-body-sm" style={{ color: "var(--ink-muted)", marginTop: 24 }}>보고서를 조합하는 중…</p>}
 
         {report && !loading && (
           <article style={{ marginTop: 28 }}>

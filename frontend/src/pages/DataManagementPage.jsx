@@ -1,29 +1,8 @@
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { apiFetchJson, describeApiError } from "../lib/api";
-
-
-const formatBytes = (bytes) => {
-  const value = Number(bytes);
-  if (!Number.isFinite(value)) return "—";
-  if (value < 1024) return `${value.toLocaleString()} B`;
-  if (value < 1024 ** 2) return `${(value / 1024).toFixed(1)} KB`;
-  return `${(value / 1024 ** 2).toFixed(1)} MB`;
-};
-
-const formatDateTime = (value) => {
-  if (!value) return "—";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "—";
-  return date.toLocaleString("ko-KR", {
-    timeZone: "Asia/Seoul",
-    year: "numeric",
-    month: "2-digit",
-    day: "2-digit",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-};
+import { formatBytes, formatDateTime } from "../lib/format";
+import ReflectionPanel, { ReflectionDetail } from "../components/ReflectionPanel";
 
 function validationSummary(upload) {
   const validation = upload?.validation ?? {};
@@ -285,7 +264,7 @@ function CurrentDataSummary({ data }) {
 
 // 운영 반영 배치와 업로드 대기 파일을 한 표에 섞되, 시각으로만 정렬하고 상태
 // 배지로 구분한다. 두 표로 나누면 "무엇이 먼저 들어왔는가"를 눈으로 못 쫓는다.
-function historyRows(batches, uploads) {
+function historyRows(batches, uploads, runs) {
   const fromBatches = (batches ?? []).map((batch) => ({
     key: `batch:${batch.batch_key}`,
     at: batch.imported_at,
@@ -313,7 +292,25 @@ function historyRows(batches, uploads) {
     kind: "upload",
     upload,
   }));
-  return [...fromBatches, ...fromUploads].sort(
+  const fromRuns = (runs ?? []).map((run) => ({
+    key: `run:${run.run_id}`,
+    at: run.finished_at ?? run.started_at,
+    title: "모델 반영 실행",
+    detail: (run.inputs ?? []).map((input) => input.original_filename).join(", "),
+    detailSub: run.outputs?.selected_model,
+    result:
+      run.status === "applied"
+        ? `${Number(run.outputs?.score_rows ?? 0).toLocaleString("ko-KR")}개 셀 갱신`
+        : "게이트 미달 · 폐기",
+    actor: run.started_by,
+    status:
+      run.status === "applied"
+        ? { label: "모델 반영 완료", className: "data-status-live" }
+        : { label: "반영 취소", className: "data-status-discarded" },
+    kind: "run",
+    run,
+  }));
+  return [...fromBatches, ...fromUploads, ...fromRuns].sort(
     (a, b) => String(b.at ?? "").localeCompare(String(a.at ?? "")),
   );
 }
@@ -511,9 +508,9 @@ function HistoryDialog({ row, state, onClose }) {
           </button>
         </header>
         <div className="data-history-modal-body">
-          {row.kind === "batch"
-            ? <BatchDetail state={state} />
-            : <UploadDetail upload={row.upload} />}
+          {row.kind === "batch" && <BatchDetail state={state} />}
+          {row.kind === "upload" && <UploadDetail upload={row.upload} />}
+          {row.kind === "run" && <ReflectionDetail run={row.run} />}
         </div>
       </div>
     </div>,
@@ -521,8 +518,8 @@ function HistoryDialog({ row, state, onClose }) {
   );
 }
 
-function UploadHistory({ batches, uploads }) {
-  const rows = historyRows(batches, uploads);
+function UploadHistory({ batches, uploads, runs }) {
+  const rows = historyRows(batches, uploads, runs);
   const [openKey, setOpenKey] = useState(null);
   // 배치 상세는 처음 열 때 한 번만 받아 캐시한다. 닫았다 다시 열어도 재조회하지 않는다.
   const [details, setDetails] = useState({});
@@ -624,6 +621,7 @@ export default function DataManagementPage() {
   const [payload, setPayload] = useState({ current_data: null, operational_batches: [], datasets: [], uploads: [], notice: "" });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [reflectionRuns, setReflectionRuns] = useState([]);
 
   const refresh = useCallback(async () => {
     try {
@@ -661,7 +659,7 @@ export default function DataManagementPage() {
       <header className="official-page-header data-management-header">
         <h1 className="t-h1">데이터 관리</h1>
         <p className="t-body-sm">
-          API로 받지 못하는 카드매출 자료를 올리고, 반영 전 파일 형식을 검증합니다.
+          API로 받지 못하는 자료를 올리고, 반영 전 파일 형식을 검증합니다.
         </p>
       </header>
 
@@ -688,7 +686,12 @@ export default function DataManagementPage() {
               <UploadCard key={dataset.dataset_type} dataset={dataset} onUploaded={handleUploaded} />
             ))}
           </section>
-          <UploadHistory batches={payload.operational_batches ?? []} uploads={payload.uploads ?? []} />
+          <ReflectionPanel datasets={payload.datasets ?? []} onRunsChange={setReflectionRuns} />
+          <UploadHistory
+            batches={payload.operational_batches ?? []}
+            uploads={payload.uploads ?? []}
+            runs={reflectionRuns}
+          />
         </>
       )}
     </div>

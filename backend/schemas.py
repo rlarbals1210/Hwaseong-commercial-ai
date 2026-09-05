@@ -612,14 +612,24 @@ class RuleReportSection(BaseModel):
     body: list[str]
 
 
+class RuleReportMetric(BaseModel):
+    label: str
+    value: str
+
+
 class RuleReportResponse(BaseModel):
     title: str
+    area_name: str
+    industry_name: str
     quarter_code: int
     quarter_label: str
     preset: str
     cache_key: str
     generated_by: str
     sections: list[RuleReportSection]
+    metrics: list[RuleReportMetric]
+    sources: list[str]
+    provisional_notice: str
     relative_notice: str
     disclaimer: str
     ai_disclosure: str

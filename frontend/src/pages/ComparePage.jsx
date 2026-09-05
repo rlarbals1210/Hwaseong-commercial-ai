@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import CellPickerDialog from "../components/CellPickerDialog";
 import usePublicQuery from "../hooks/usePublicQuery";
+import { useQuickStartOpen } from "../context/quickstart-context";
 import { apiFetchJson, describeApiError } from "../lib/api";
 import { downloadCsv, csvNum } from "../lib/csv";
 
@@ -760,6 +761,10 @@ function CompareWorkspace({ initialDong, initialCategory }) {
   const [manualTarget, setManualTarget] = useState(null);
   const [manual, setManual] = useState(false);  // 비교 대상을 직접 고르는 모드
   const [picker, setPicker] = useState(null);   // "base" | "target" | null — 열려 있는 선택 창
+  // 다른 화면에서 조건을 넘겨받고 들어오면 선택 창이 저절로 열리는데, 이때 화면 안내와
+  // 겹친다. 안내를 먼저 읽고 닫은 뒤에 선택하도록 그동안은 선택 창을 띄우지 않는다.
+  const quickStartOpen = useQuickStartOpen();
+  const visiblePicker = quickStartOpen ? null : picker;
   const [thresholds, setThresholds] = useState(null);
   const [optionsError, setOptionsError] = useState("");
 
@@ -1006,12 +1011,12 @@ function CompareWorkspace({ initialDong, initialCategory }) {
         </div>
       )}
 
-      {picker === "base" && <CellPickerDialog
+      {visiblePicker === "base" && <CellPickerDialog
         title="기준 상권 선택" options={options} value={base ?? initialSelection}
         onApply={chooseBase}
         onClose={() => setPicker(null)}
       />}
-      {picker === "target" && <CellPickerDialog
+      {visiblePicker === "target" && <CellPickerDialog
         title="비교 상권 선택" options={options} value={target}
         onApply={setTarget}
         onClose={() => setPicker(null)} peers={context?.peers ?? []}
