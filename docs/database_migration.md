@@ -34,7 +34,7 @@ alembic upgrade head
 alembic current
 ```
 
-`20260818_0002 (head)`가 표시되어야 한다.
+기준 커밋 `8464099`의 migration head는 `20260902_0010`입니다. `alembic current` 결과를 `alembic heads`와 대조하세요.
 
 ## 3. 검증 산출물 적재
 
@@ -59,7 +59,7 @@ python ai/build_explanations.py
 - 지도용 29개 동 집계를 `area_quarter_summaries`에 저장
 - 기여 요인은 범주형 중첩 변수를 병합하고 M1 검증 통과 시에만 적재
 
-현재 산출물 기준 기대값:
+전환 당시 산출물 기준 기대값(아래 행 수는 전환 당시 기록이며 현재 DB의 보장값이 아닙니다):
 
 ```text
 admin_areas                29
@@ -85,7 +85,7 @@ policy_programs              4
 - `/api/alerts/closure-risk`: 표본충분 예측 순위
 - `/api/alerts/vacancy-risk/map`: 29개 동
 - `/api/alerts/{prediction_id}/contributions`: 상대 기여 요인(원 기여도 비노출)
-- `/api/policy/fund-priority`: Q1~Q4 결과
+- `/api/policy/inspection-priority`: Q1~Q4 결과
 - `/api/workflow/alerts/{alert_id}/contacts`: 접촉 이력 조회·추가
 - `/api/workflow/contacts/{contact_id}`: 접촉 이력 수정·삭제
 - `/api/workflow/*`: 경보 확인→근거·접촉 추가→정책 실행→성과 기록

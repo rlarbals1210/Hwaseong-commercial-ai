@@ -2,6 +2,8 @@
 
 화성시 소상공인 폐업 위험을 AI로 조기경보하고 현장점검 우선순위를 제시하는 웹앱.
 
+[DB 구조](#db-구조)
+
 ## 창업 탐색 도구
 
 공개 **상권 둘러보기(`/browse`)**에서 사용할 수 있습니다.
@@ -55,8 +57,28 @@ node --test frontend/tests/startupCosts.test.mjs
 
 - 프론트엔드: React 19 + Vite (포트 5174)
 - 백엔드: FastAPI + Uvicorn (포트 8000)
-- DB: PostgreSQL + SQLAlchemy
+- DB: PostgreSQL + SQLAlchemy, 스키마 변경은 Alembic
 - 지도: Naver Maps JS API v3 (NCP 다이나믹 맵)
+
+## DB 구조
+
+분기 단위 상권 지표와 모델 예측을 PostgreSQL 정규화 스키마로 관리합니다.
+테이블 정의는 [backend/models.py](backend/models.py), 스키마 변경 이력은
+[backend/migrations/versions](backend/migrations/versions)(Alembic)에 있습니다.
+전환 절차는 [docs/database_migration.md](docs/database_migration.md)를 참고하세요.
+
+| 테이블 | 단위 | 중복·무결성 보장 |
+|---|---|---|
+| `commercial_quarters` | 읍면동 × 업종 × 분기 관측값 | `(area_id, industry_id, quarter_code)` 유일, 적재 배치(`data_batches`) 참조 |
+| `risk_predictions` | 모델 실행 × 관측 셀 예측 | `(model_run_id, commercial_quarter_id)` 유일. 적재에 전달한 모델 버전 문자열 또는 관측분기가 달라지면 별도 실행의 예측 행을 유지하며, 동일 실행·셀 재적재 시 예측값을 갱신합니다 |
+| `prediction_contributions` | 예측별 상대 기여 요인 | 순위 1~5, 비중 0~100 CHECK 제약 |
+| `alert_evidences` | 경보 근거 | `evidence_type`을 확인된 신호(`confirmed_signal`) / 모델 기여(`model_contribution`) / 현장 확인(`field_check`)의 세 코드로 제한 |
+
+기존 3개 테이블(`commercial_data`·`score_data`·`risk_index`)은 롤백용으로 보존합니다.
+
+**알려진 한계**: `commercial_quarters`는 읍면동·업종·분기 복합키로 upsert하며, 기존 행의 관측값과 `batch_id`를 적재 입력값으로 갱신합니다. 덮어쓰기 이전 관측 버전을 별도로 보존하지 않아, 현재 정규화 테이블만으로는 당시 적재돼 있던 관측값 전체를 재현할 수 없습니다. 예측 행도 이렇게 갱신될 수 있는 관측 행을 참조합니다. `risk_grade`는 적재 입력의 최신 분기에만 계산하고, 함께 적재하는 과거 분기 행에는 NULL을 기록합니다.
+
+**모델 평가 해석**: 저장된 모델 평가값은 기존 고정 분할 산출물입니다. 이후 검증에서 입력·정답의 시점과 과거 평가 해석에 한계가 확인됐으므로 실제 운영 시점의 예측 성능으로 일반화하지 않습니다. 후속 검토는 [추천 점수 산식 점검](docs/recommendation-score-audit.md)과 [과거 관측 폐업률 입력 검증](docs/closure-history-validation.md)을 참고하세요.
 
 ## 실행 방법
 
@@ -110,7 +132,7 @@ JWT_EXPIRE_MINUTES=480
 
 ## 로그인 계정 — 팀원 필독
 
-**이 서비스는 공무원 전용이다.** 2026-08-18 설계 결정으로 시민(소상공인) 직접조회 기능과 시민 로그인을 제거했다 — 사유는 [CLAUDE.md](CLAUDE.md)의 '설계 결정' 절 참조. 앱에 접속하면 역할 선택 없이 바로 공무원 로그인 화면이 뜬다.
+공무원 업무 화면은 로그인이 필요하며, 공개 상권 둘러보기는 로그인 없이 이용할 수 있습니다. 시민 개인 로그인 기능은 제공하지 않습니다.
 
 ### 공무원 로그인
 - 아이디+비밀번호 방식. **계정은 각 팀원의 로컬 PostgreSQL DB에 저장되는 데이터라 git에 올라가지 않는다** — pull만 받으면 테이블(`officials`)은 생기지만 계정 데이터는 비어있음.

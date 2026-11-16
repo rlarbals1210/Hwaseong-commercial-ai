@@ -98,13 +98,13 @@ alembic upgrade head
 psql -d hwaseong_db -c "SELECT version_num FROM alembic_version;"
 ```
 
-→ `20260818_0002` 가 나와야 정상.
+→ 기준 커밋 `8464099`의 migration head는 `20260902_0010`입니다. `alembic current` 결과를 `alembic heads`와 대조하세요.
 
 ```bash
 psql -d hwaseong_db -c "\dt" | wc -l
 ```
 
-→ 테이블 20개 (레거시 4 + 정규화 15 + alembic_version 1)
+→ 테이블 20개 (레거시 4 + 정규화 15 + alembic_version 1) — 전환 당시 기록이며 현재 DB의 보장값이 아님.
 
 ---
 
@@ -119,7 +119,7 @@ python ai/build_explanations.py
 > `build_dataset.py`·`train_model.py`도 **돌릴 필요 없다** — 외장 SSD 원본이 필요한데,
 > 그 산출물을 CSV로 공유하고 있기 때문이다.
 
-기대 출력:
+기대 출력(아래 행 수는 전환 당시 기록이며 현재 DB의 보장값이 아닙니다):
 
 ```json
 { "areas": 29, "industries": 74, "commercial_quarters": 35513,
@@ -152,7 +152,7 @@ SELECT (SELECT count(*) FROM commercial_quarters)                        AS 상�
        (SELECT sample_min FROM risk_threshold_sets ORDER BY id DESC LIMIT 1) AS 표본기준;"
 ```
 
-**기준값 — 이 숫자가 나와야 팀원 간 상태가 동일하다.**
+**기준값 — 전환 당시 기록이며 현재 DB의 보장값이 아닙니다.** 당시에는 이 숫자로 팀원 간 상태가 동일한지 확인했다.
 
 | 항목 | 값 |
 |---|---|
