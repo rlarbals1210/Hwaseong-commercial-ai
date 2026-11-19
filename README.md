@@ -1,6 +1,6 @@
 # 화성시 소상공인 AI 정책지원 플랫폼
 
-화성시 소상공인 폐업 위험을 AI로 조기경보하고 현장점검 우선순위를 제시하는 웹앱.
+화성시 상권 데이터에서 점포 이탈 위험이 큰 읍면동×업종을 먼저 찾아 현장 확인 우선순위를 제시하는 웹앱. 위험은 두 분기 뒤 상가정보에서 관측되지 않을 가능성을 추정한 상대 순위이며, 폐업 확정이 아닙니다.
 
 [DB 구조](#db-구조)
 
@@ -185,13 +185,15 @@ python -m backend.scripts.create_official admin demo1234 "테스트관리자"
 ```
 
 `build_dataset.py`·`train_model.py`는 외장 SSD 원본이 필요하므로 **돌리지 않는다.**
-그 산출물 6개(6.5MB)를 리포에 포함해 두었다.
+그 산출물(공개 가공 자료)을 리포에 포함해 두었다.
 
 ---
 
 ## 데이터 정책
 
-### 리포에 포함하는 것 (읍면동 × 업종 집계 단위, 총 6.5MB)
+### 리포에 포함하는 것 (읍면동 × 업종 집계 단위)
+
+공개 가공 자료에는 상권 집계표, 업종 분류표, 학습 모델과 검증 결과가 포함됩니다. 정확한 목록은 `.gitignore`의 `!data/processed/...` 예외가 정본이다.
 
 ```
 data/processed/final_dataset.csv        상권 집계
@@ -201,6 +203,7 @@ data/processed/lgbm_model_cell.pkl      학습된 셀 모델
 data/processed/model_cell_results.json  모델 성능 지표
 data/processed/risk_thresholds.json     등급 기준선
 data/processed/industry_hierarchy.csv   업종 계층(대분류 10 × 중분류 74)
+data/processed/demand_*                 수요 점수(공개 추천에서 사용)·수요 모델·과거 피처와 검증 결과, 6개
 ```
 
 전부 **집계 단위라 개별 점포를 식별할 수 없다.** 이 저장소는 공개이므로 이 기준을 벗어나는 파일은 넣지 않는다.
@@ -214,7 +217,7 @@ data/processed/store_*.csv     개별 점포 단위 — 상가업소번호·지�
 .env                           DB 접속정보·JWT 비밀키
 ```
 
-`.gitignore`가 `data/processed/*`를 차단하고 위 6개만 `!` 예외로 허용한다.
+`.gitignore`가 `data/processed/*`를 차단하고 위 집계 파일만 `!` 예외로 허용한다.
 **개별 점포 파일을 예외 목록에 추가하지 말 것.**
 
 ### 대회 규정 (공모전 유의사항 Ⅴ-5)
